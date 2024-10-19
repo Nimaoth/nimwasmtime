@@ -2,8 +2,9 @@ import std/[os, macros, genasts, strformat, options, strutils]
 
 const nimWasmtimeStatic* {.booldefine.} = true
 const nimWasmtimeOverride* {.strdefine.} = ""
-const nimWasmtimeBuildDebug* {.strdefine.} = false
-const nimWasmtimeBuildMusl* {.strdefine.} = false
+const nimWasmtimeBuildDebug* {.booldefine.} = false
+const nimWasmtimeBuildMusl* {.booldefine.} = false
+const nimWasmtimeBuildCache* {.strdefine.} = "wasmtime-build-cache"
 
 const nimWasmtimeBuildType* = if nimWasmtimeBuildDebug:
   "debug"
@@ -57,7 +58,7 @@ when defined(nimWasmtimeBuild) or defined(nimWasmtimeBuildForce):
   static:
     echo "Configure and build wasmtime, this might take a while..."
     echo staticExec("nim " & args & " " & (currentSourcePath().splitPath.head / "build_wasmtime.nims"),
-      cache="wasmtime-build-cache")
+      cache=nimWasmtimeBuildCache)
     echo "Finished building wasmtime."
 
 const wasmH = "wasm.h"
