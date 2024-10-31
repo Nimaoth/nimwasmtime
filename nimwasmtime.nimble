@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.8"
+version       = "0.1.9"
 author        = "Nimaoth"
 description   = "Nim wrapper for wasmtime"
 license       = "MIT"
@@ -67,4 +67,3 @@ task wasmtime, "Build wasmtime":
 
 before install:
   nimgenTask()
-  # wasmtimeTask()

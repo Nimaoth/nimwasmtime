@@ -2,7 +2,7 @@ import std/[os, macros, genasts, strformat, options, strutils]
 
 const nimWasmtimeStatic* {.booldefine.} = true
 const nimWasmtimeOverride* {.strdefine.} = ""
-const nimWasmtimeBuildDebug* {.booldefine.} = false
+const nimWasmtimeBuildDebug* {.booldefine.} = true
 const nimWasmtimeBuildMusl* {.booldefine.} = false
 const nimWasmtimeBuildCache* {.strdefine.} = "wasmtime-build-cache"
 
@@ -255,6 +255,8 @@ type wasm_byte_t* = uint8
 wasmDeclareVec(byte)
 type wasm_name_t* = wasm_byte_vec_t
 
+proc strVal*(name: wasm_name_t): string
+
 # Config
 wasmDeclareOwn(config)
 proc wasm_config_new(): ptr wasm_config_t {.importc, header: wasmH.}
@@ -389,6 +391,19 @@ proc wasm_frame_module_offset*(self: wasm_frame_t): csize_t {.importc, header: w
 # Traps
 wasmDeclareRef(trap)
 # todo
+
+proc wasm_trap_message*(trap: ptr wasm_trap_t; res: ptr wasm_name_t) {.importc, header: wasmH.}
+proc wasm_trap_origin*(trap: ptr wasm_trap_t): ptr wasm_frame_t {.importc, header: wasmH.}
+proc wasm_trap_trace*(trap: ptr wasm_trap_t; res: ptr wasm_frame_vec_t) {.importc, header: wasmH.}
+
+proc msg*(err: ptr wasm_trap_t): string =
+  var name: wasm_name_t
+  wasm_trap_message(err, name.addr)
+  result = name.strVal
+  # todo: cleanup name?
+
+proc wasmTrace*(err: ptr wasm_trap_t): wasm_frame_vec_t =
+  wasm_trap_trace(err, result.addr)
 
 # Foreign Objects
 # todo
