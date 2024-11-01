@@ -1,24 +1,24 @@
 
 type
-  WasmMutability* {.size: sizeof(cint).} = enum
+  WasmMutability* {.size: sizeof(cuint).} = enum
     Const = 0, Var = 1
 type
-  WasmValkind* {.size: sizeof(cint).} = enum
+  WasmValkind* {.size: sizeof(cuint).} = enum
     I32 = 0, I64 = 1, F32 = 2, F64 = 3, Externref = 128, Funcref = 129
 type
-  WasmExternkind* {.size: sizeof(cint).} = enum
+  WasmExternkind* {.size: sizeof(cuint).} = enum
     ExternFunc = 0, ExternGlobal = 1, ExternTable = 2, ExternMemory = 3
 type
-  Strategy* {.size: sizeof(cint).} = enum
+  Strategy* {.size: sizeof(cuint).} = enum
     Auto = 0, Cranelift = 1
 type
-  OptLevel* {.size: sizeof(cint).} = enum
+  OptLevel* {.size: sizeof(cuint).} = enum
     OptLevelNone = 0, Speed = 1, SpeedAndSize = 2
 type
-  ProfilingStrategy* {.size: sizeof(cint).} = enum
+  ProfilingStrategy* {.size: sizeof(cuint).} = enum
     ProfilingStrategyNone = 0, Jitdump = 1, Vtune = 2, Perfmap = 3
 type
-  TrapCode* {.size: sizeof(cint).} = enum
+  TrapCode* {.size: sizeof(cuint).} = enum
     StackOverflow = 0, MemoryOutOfBounds = 1, HeapMisaligned = 2,
     TableOutOfBounds = 3, IndirectCallToNull = 4, BadSignature = 5,
     IntegerOverflow = 6, IntegerDivisionByZero = 7, BadConversionToInteger = 8,
@@ -34,8 +34,6 @@ type
 type
   StructWasmTabletypeT* = object
 type
-  StructCrtMultibyteData* = object
-type
   StructWasmtimeLinker* = object
 type
   StructWasmModuleT* = object
@@ -43,8 +41,6 @@ type
   StructWasmtimeCallFuture* = object
 type
   StructWasmInstanceT* = object
-type
-  StructCrtLocaleData* = object
 type
   StructWasmtimeCaller* = object
 type
@@ -96,66 +92,65 @@ type
 type
   StructWasmGlobalT* = object
 type
-  LocaleT* = ptr CrtLocalePointers ## Generated based on C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0\ucrt\corecrt.h:623:32
-  ByteT* = cschar            ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:43:14
-  Float32T* = cfloat         ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:44:15
-  Float64T* = cdouble        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:45:16
-  WasmByteT* = ByteT         ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:101:16
+  ByteT* = cschar            ## Generated based on wasmtime/crates/c-api/include/wasm.h:43:14
+  Float32T* = cfloat         ## Generated based on wasmtime/crates/c-api/include/wasm.h:44:15
+  Float64T* = cdouble        ## Generated based on wasmtime/crates/c-api/include/wasm.h:45:16
+  WasmByteT* = ByteT         ## Generated based on wasmtime/crates/c-api/include/wasm.h:101:16
   StructWasmByteVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:102:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:102:1
     data*: ptr WasmByteT
-  WasmByteVecT* = object of StructWasmByteVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:102:1
-  WasmNameT* = WasmByteVecT  ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:104:25
-  WasmConfigT* = StructWasmConfigT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:131:1
-  WasmEngineT* = StructWasmEngineT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:140:1
-  WasmStoreT* = StructWasmStoreT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:148:1
-  WasmMutabilityT* = uint8   ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:158:17
+  WasmByteVecT* = object of StructWasmByteVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:102:1
+  WasmNameT* = WasmByteVecT  ## Generated based on wasmtime/crates/c-api/include/wasm.h:104:25
+  WasmConfigT* = StructWasmConfigT ## Generated based on wasmtime/crates/c-api/include/wasm.h:131:1
+  WasmEngineT* = StructWasmEngineT ## Generated based on wasmtime/crates/c-api/include/wasm.h:140:1
+  WasmStoreT* = StructWasmStoreT ## Generated based on wasmtime/crates/c-api/include/wasm.h:148:1
+  WasmMutabilityT* = uint8   ## Generated based on wasmtime/crates/c-api/include/wasm.h:158:17
   StructWasmLimitsT* {.pure, inheritable, bycopy.} = object
-    min*: uint32             ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:164:16
+    min*: uint32             ## Generated based on wasmtime/crates/c-api/include/wasm.h:164:16
     max*: uint32
-  WasmLimitsT* = StructWasmLimitsT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:167:3
-  WasmValtypeT* = StructWasmValtypeT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:183:1
+  WasmLimitsT* = StructWasmLimitsT ## Generated based on wasmtime/crates/c-api/include/wasm.h:167:3
+  WasmValtypeT* = StructWasmValtypeT ## Generated based on wasmtime/crates/c-api/include/wasm.h:183:1
   StructWasmValtypeVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:183:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:183:1
     data*: ptr ptr WasmValtypeT
-  WasmValtypeVecT* = object of StructWasmValtypeVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:183:1
-  WasmValkindT* = uint8      ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:185:17
-  WasmFunctypeT* = StructWasmFunctypeT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:216:1
+  WasmValtypeVecT* = object of StructWasmValtypeVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:183:1
+  WasmValkindT* = uint8      ## Generated based on wasmtime/crates/c-api/include/wasm.h:185:17
+  WasmFunctypeT* = StructWasmFunctypeT ## Generated based on wasmtime/crates/c-api/include/wasm.h:216:1
   StructWasmFunctypeVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:216:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:216:1
     data*: ptr ptr WasmFunctypeT
-  WasmFunctypeVecT* = object of StructWasmFunctypeVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:216:1
-  WasmGlobaltypeT* = StructWasmGlobaltypeT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:227:1
+  WasmFunctypeVecT* = object of StructWasmFunctypeVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:216:1
+  WasmGlobaltypeT* = StructWasmGlobaltypeT ## Generated based on wasmtime/crates/c-api/include/wasm.h:227:1
   StructWasmGlobaltypeVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:227:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:227:1
     data*: ptr ptr WasmGlobaltypeT
-  WasmGlobaltypeVecT* = object of StructWasmGlobaltypeVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:227:1
-  WasmTabletypeT* = StructWasmTabletypeT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:238:1
+  WasmGlobaltypeVecT* = object of StructWasmGlobaltypeVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:227:1
+  WasmTabletypeT* = StructWasmTabletypeT ## Generated based on wasmtime/crates/c-api/include/wasm.h:238:1
   StructWasmTabletypeVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:238:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:238:1
     data*: ptr ptr WasmTabletypeT
-  WasmTabletypeVecT* = object of StructWasmTabletypeVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:238:1
-  WasmMemorytypeT* = StructWasmMemorytypeT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:249:1
+  WasmTabletypeVecT* = object of StructWasmTabletypeVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:238:1
+  WasmMemorytypeT* = StructWasmMemorytypeT ## Generated based on wasmtime/crates/c-api/include/wasm.h:249:1
   StructWasmMemorytypeVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:249:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:249:1
     data*: ptr ptr WasmMemorytypeT
-  WasmMemorytypeVecT* = object of StructWasmMemorytypeVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:249:1
-  WasmExterntypeT* = StructWasmExterntypeT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:258:1
+  WasmMemorytypeVecT* = object of StructWasmMemorytypeVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:249:1
+  WasmExterntypeT* = StructWasmExterntypeT ## Generated based on wasmtime/crates/c-api/include/wasm.h:258:1
   StructWasmExterntypeVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:258:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:258:1
     data*: ptr ptr WasmExterntypeT
-  WasmExterntypeVecT* = object of StructWasmExterntypeVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:258:1
-  WasmExternkindT* = uint8   ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:260:17
-  WasmImporttypeT* = StructWasmImporttypeT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:293:1
+  WasmExterntypeVecT* = object of StructWasmExterntypeVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:258:1
+  WasmExternkindT* = uint8   ## Generated based on wasmtime/crates/c-api/include/wasm.h:260:17
+  WasmImporttypeT* = StructWasmImporttypeT ## Generated based on wasmtime/crates/c-api/include/wasm.h:293:1
   StructWasmImporttypeVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:293:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:293:1
     data*: ptr ptr WasmImporttypeT
-  WasmImporttypeVecT* = object of StructWasmImporttypeVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:293:1
-  WasmExporttypeT* = StructWasmExporttypeT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:305:1
+  WasmImporttypeVecT* = object of StructWasmImporttypeVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:293:1
+  WasmExporttypeT* = StructWasmExporttypeT ## Generated based on wasmtime/crates/c-api/include/wasm.h:305:1
   StructWasmExporttypeVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:305:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:305:1
     data*: ptr ptr WasmExporttypeT
-  WasmExporttypeVecT* = object of StructWasmExporttypeVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:305:1
+  WasmExporttypeVecT* = object of StructWasmExporttypeVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:305:1
   StructWasmValT_of_field_t* {.union, bycopy.} = object
     i32*: int32
     i64*: int64
@@ -163,109 +158,109 @@ type
     f64*: Float64T
     ref_field*: ptr StructWasmRefT
   StructWasmValT* {.pure, inheritable, bycopy.} = object
-    kind*: WasmValkindT      ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:321:16
+    kind*: WasmValkindT      ## Generated based on wasmtime/crates/c-api/include/wasm.h:321:16
     of_field*: StructWasmValT_of_field_t
-  WasmValT* = StructWasmValT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:330:3
+  WasmValT* = StructWasmValT ## Generated based on wasmtime/crates/c-api/include/wasm.h:330:3
   StructWasmValVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:335:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:335:1
     data*: ptr WasmValT
-  WasmValVecT* = object of StructWasmValVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:335:1
-  WasmRefT* = StructWasmRefT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:367:1
-  WasmFrameT* = StructWasmFrameT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:372:1
+  WasmValVecT* = object of StructWasmValVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:335:1
+  WasmRefT* = StructWasmRefT ## Generated based on wasmtime/crates/c-api/include/wasm.h:367:1
+  WasmFrameT* = StructWasmFrameT ## Generated based on wasmtime/crates/c-api/include/wasm.h:372:1
   StructWasmFrameVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:373:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:373:1
     data*: ptr ptr WasmFrameT
-  WasmFrameVecT* = object of StructWasmFrameVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:373:1
-  WasmMessageT* = WasmNameT  ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:384:21
-  WasmTrapT* = StructWasmTrapT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:386:1
-  WasmForeignT* = StructWasmForeignT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:397:1
-  WasmModuleT* = StructWasmModuleT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:404:1
-  WasmSharedModuleT* = StructWasmSharedModuleT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:404:1
-  WasmFuncT* = StructWasmFuncT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:420:1
+  WasmFrameVecT* = object of StructWasmFrameVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:373:1
+  WasmMessageT* = WasmNameT  ## Generated based on wasmtime/crates/c-api/include/wasm.h:384:21
+  WasmTrapT* = StructWasmTrapT ## Generated based on wasmtime/crates/c-api/include/wasm.h:386:1
+  WasmForeignT* = StructWasmForeignT ## Generated based on wasmtime/crates/c-api/include/wasm.h:397:1
+  WasmModuleT* = StructWasmModuleT ## Generated based on wasmtime/crates/c-api/include/wasm.h:404:1
+  WasmSharedModuleT* = StructWasmSharedModuleT ## Generated based on wasmtime/crates/c-api/include/wasm.h:404:1
+  WasmFuncT* = StructWasmFuncT ## Generated based on wasmtime/crates/c-api/include/wasm.h:420:1
   WasmFuncCallbackT* = proc (a0: ptr WasmValVecT; a1: ptr WasmValVecT): ptr WasmTrapT {.
-      cdecl.}                ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:422:28
+      cdecl.}                ## Generated based on wasmtime/crates/c-api/include/wasm.h:422:28
   WasmFuncCallbackWithEnvT* = proc (a0: pointer; a1: ptr WasmValVecT;
-                                    a2: ptr WasmValVecT): ptr WasmTrapT {.cdecl.} ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:424:28
-  WasmGlobalT* = StructWasmGlobalT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:443:1
-  WasmTableT* = StructWasmTableT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:456:1
-  WasmTableSizeT* = uint32   ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:458:18
-  WasmMemoryT* = StructWasmMemoryT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:474:1
-  WasmMemoryPagesT* = uint32 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:476:18
-  WasmExternT* = StructWasmExternT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:493:1
+                                    a2: ptr WasmValVecT): ptr WasmTrapT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasm.h:424:28
+  WasmGlobalT* = StructWasmGlobalT ## Generated based on wasmtime/crates/c-api/include/wasm.h:443:1
+  WasmTableT* = StructWasmTableT ## Generated based on wasmtime/crates/c-api/include/wasm.h:456:1
+  WasmTableSizeT* = uint32   ## Generated based on wasmtime/crates/c-api/include/wasm.h:458:18
+  WasmMemoryT* = StructWasmMemoryT ## Generated based on wasmtime/crates/c-api/include/wasm.h:474:1
+  WasmMemoryPagesT* = uint32 ## Generated based on wasmtime/crates/c-api/include/wasm.h:476:18
+  WasmExternT* = StructWasmExternT ## Generated based on wasmtime/crates/c-api/include/wasm.h:493:1
   StructWasmExternVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:494:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasm.h:494:1
     data*: ptr ptr WasmExternT
-  WasmExternVecT* = object of StructWasmExternVecT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:494:1
-  WasmInstanceT* = StructWasmInstanceT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasm.h:522:1
-  ErrorT* = StructWasmtimeError ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\error.h:31:31
-  StrategyT* = uint8         ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:22:17
-  OptLevelT* = uint8         ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:44:17
-  ProfilingStrategyT* = uint8 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:66:17
+  WasmExternVecT* = object of StructWasmExternVecT ## Generated based on wasmtime/crates/c-api/include/wasm.h:494:1
+  WasmInstanceT* = StructWasmInstanceT ## Generated based on wasmtime/crates/c-api/include/wasm.h:522:1
+  ErrorT* = StructWasmtimeError ## Generated based on wasmtime/crates/c-api/include/wasmtime/error.h:31:31
+  StrategyT* = uint8         ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:22:17
+  OptLevelT* = uint8         ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:44:17
+  ProfilingStrategyT* = uint8 ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:66:17
   MemoryGetCallbackT* = proc (a0: pointer; a1: ptr csize_t; a2: ptr csize_t): ptr uint8 {.
-      cdecl.}                ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:446:20
-  MemoryGrowCallbackT* = proc (a0: pointer; a1: csize_t): ptr ErrorT {.cdecl.} ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:455:29
+      cdecl.}                ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:446:20
+  MemoryGrowCallbackT* = proc (a0: pointer; a1: csize_t): ptr ErrorT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:455:29
   StructWasmtimeLinearMemory* {.pure, inheritable, bycopy.} = object
-    env*: pointer            ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:464:16
+    env*: pointer            ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:464:16
     get_memory*: MemoryGetCallbackT
     grow_memory*: MemoryGrowCallbackT
     finalizer*: proc (a0: pointer): void {.cdecl.}
-  LinearMemoryT* = StructWasmtimeLinearMemory ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:473:3
+  LinearMemoryT* = StructWasmtimeLinearMemory ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:473:3
   NewMemoryCallbackT* = proc (a0: pointer; a1: ptr WasmMemorytypeT; a2: csize_t;
                               a3: csize_t; a4: csize_t; a5: csize_t;
-                              a6: ptr LinearMemoryT): ptr ErrorT {.cdecl.} ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:486:29
+                              a6: ptr LinearMemoryT): ptr ErrorT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:486:29
   StructWasmtimeMemoryCreator* {.pure, inheritable, bycopy.} = object
-    env*: pointer            ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:498:16
+    env*: pointer            ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:498:16
     new_memory*: NewMemoryCallbackT
     finalizer*: proc (a0: pointer): void {.cdecl.}
-  MemoryCreatorT* = StructWasmtimeMemoryCreator ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\config.h:505:3
-  WasiConfigT* = StructWasiConfigT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasi.h:44:1
-  StoreT* = StructWasmtimeStore ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\store.h:37:31
-  ContextT* = StructWasmtimeContext ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\store.h:58:33
-  UpdateDeadlineKindT* = uint8 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\store.h:212:17
-  ModuleT* = StructWasmtimeModule ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/module.h:28:32
-  SharedmemoryT* = StructWasmtimeSharedmemory ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/sharedmemory.h:24:38
+  MemoryCreatorT* = StructWasmtimeMemoryCreator ## Generated based on wasmtime/crates/c-api/include/wasmtime/config.h:505:3
+  WasiConfigT* = StructWasiConfigT ## Generated based on wasmtime/crates/c-api/include/wasi.h:44:1
+  StoreT* = StructWasmtimeStore ## Generated based on wasmtime/crates/c-api/include/wasmtime/store.h:37:31
+  ContextT* = StructWasmtimeContext ## Generated based on wasmtime/crates/c-api/include/wasmtime/store.h:58:33
+  UpdateDeadlineKindT* = uint8 ## Generated based on wasmtime/crates/c-api/include/wasmtime/store.h:212:17
+  ModuleT* = StructWasmtimeModule ## Generated based on wasmtime/crates/c-api/include/wasmtime/module.h:28:32
+  SharedmemoryT* = StructWasmtimeSharedmemory ## Generated based on wasmtime/crates/c-api/include/wasmtime/sharedmemory.h:24:38
   StructWasmtimeFunc* {.pure, inheritable, bycopy.} = object
-    store_id*: uint64        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:25:16
+    store_id*: uint64        ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:25:16
     compiler_private*: csize_t
-  FuncT* = StructWasmtimeFunc ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:34:3
+  FuncT* = StructWasmtimeFunc ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:34:3
   StructWasmtimeTable* {.pure, inheritable, bycopy.} = object
-    store_id*: uint64        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:43:16
+    store_id*: uint64        ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:43:16
     compiler_private*: csize_t
-  TableT* = StructWasmtimeTable ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:48:3
+  TableT* = StructWasmtimeTable ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:48:3
   StructWasmtimeMemory* {.pure, inheritable, bycopy.} = object
-    store_id*: uint64        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:57:16
+    store_id*: uint64        ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:57:16
     compiler_private*: csize_t
-  MemoryT* = StructWasmtimeMemory ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:62:3
+  MemoryT* = StructWasmtimeMemory ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:62:3
   StructWasmtimeGlobal* {.pure, inheritable, bycopy.} = object
-    store_id*: uint64        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:71:16
+    store_id*: uint64        ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:71:16
     compiler_private*: csize_t
-  GlobalT* = StructWasmtimeGlobal ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:76:3
-  ExternKindT* = uint8       ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:79:17
+  GlobalT* = StructWasmtimeGlobal ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:76:3
+  ExternKindT* = uint8       ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:79:17
   Extern* {.union, bycopy.} = object
-    func_field*: FuncT       ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:107:15
+    func_field*: FuncT       ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:107:15
     global*: GlobalT
     table*: TableT
     memory*: MemoryT
     sharedmemory*: ptr StructWasmtimeSharedmemory
-  ExternUnionT* = Extern     ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:118:3
+  ExternUnionT* = Extern     ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:118:3
   StructWasmtimeExtern* {.pure, inheritable, bycopy.} = object
-    kind*: ExternKindT       ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:133:16
+    kind*: ExternKindT       ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:133:16
     of_field*: ExternUnionT
-  ExternT* = StructWasmtimeExtern ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:138:3
+  ExternT* = StructWasmtimeExtern ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:138:3
   StructWasmtimeAnyref* {.pure, inheritable, bycopy.} = object
-    store_id*: uint64        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:39:16
+    store_id*: uint64        ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:39:16
     compiler_private1*: uint32
     compiler_private2*: uint32
-  AnyrefT* = StructWasmtimeAnyref ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:47:3
+  AnyrefT* = StructWasmtimeAnyref ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:47:3
   StructWasmtimeExternref* {.pure, inheritable, bycopy.} = object
-    store_id*: uint64        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:174:16
+    store_id*: uint64        ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:174:16
     compiler_private1*: uint32
     compiler_private2*: uint32
-  ExternrefT* = StructWasmtimeExternref ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:182:3
-  ValkindT* = uint8          ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:284:17
-  V128* = array[16'i64, uint8] ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:307:17
+  ExternrefT* = StructWasmtimeExternref ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:182:3
+  ValkindT* = uint8          ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:284:17
+  V128* = array[16'i64, uint8] ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:307:17
   Valunion* {.union, bycopy.} = object
-    i32*: int32              ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:319:15
+    i32*: int32              ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:319:15
     i64*: int64
     f32*: Float32T
     f64*: Float64T
@@ -273,9 +268,9 @@ type
     externref*: ExternrefT
     funcref*: FuncT
     v128*: V128
-  ValunionT* = Valunion      ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:339:3
+  ValunionT* = Valunion      ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:339:3
   ValRaw* {.union, bycopy.} = object
-    i32*: int32              ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:372:15
+    i32*: int32              ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:372:15
     i64*: int64
     f32*: Float32T
     f64*: Float64T
@@ -283,58 +278,54 @@ type
     anyref*: uint32
     externref*: uint32
     funcref*: pointer
-  ValRawT* = ValRaw          ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:416:3
+  ValRawT* = ValRaw          ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:416:3
   StructWasmtimeVal* {.pure, inheritable, bycopy.} = object
-    kind*: ValkindT          ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:441:16
+    kind*: ValkindT          ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:441:16
     of_field*: ValunionT
-  ValT* = StructWasmtimeVal  ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:446:3
-  CallerT* = StructWasmtimeCaller ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/func.h:33:32
+  ValT* = StructWasmtimeVal  ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:446:3
+  CallerT* = StructWasmtimeCaller ## Generated based on wasmtime/crates/c-api/include/wasmtime/func.h:33:32
   FuncCallbackT* = proc (a0: pointer; a1: ptr CallerT; a2: ptr ValT;
                          a3: csize_t; a4: ptr ValT; a5: csize_t): ptr WasmTrapT {.
-      cdecl.}                ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/func.h:57:24
+      cdecl.}                ## Generated based on wasmtime/crates/c-api/include/wasmtime/func.h:57:24
   FuncUncheckedCallbackT* = proc (a0: pointer; a1: ptr CallerT; a2: ptr ValRawT;
-                                  a3: csize_t): ptr WasmTrapT {.cdecl.} ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/func.h:116:24
+                                  a3: csize_t): ptr WasmTrapT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/func.h:116:24
   StructWasmtimeInstance* {.pure, inheritable, bycopy.} = object
-    store_id*: uint64        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/instance.h:26:16
+    store_id*: uint64        ## Generated based on wasmtime/crates/c-api/include/wasmtime/instance.h:26:16
     index*: csize_t
-  InstanceT* = StructWasmtimeInstance ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/instance.h:31:3
-  InstancePreT* = StructWasmtimeInstancePre ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/instance.h:121:38
-  LinkerT* = StructWasmtimeLinker ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/linker.h:38:32
-  FuncAsyncContinuationCallbackT* = proc (a0: pointer): bool {.cdecl.} ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:124:16
+  InstanceT* = StructWasmtimeInstance ## Generated based on wasmtime/crates/c-api/include/wasmtime/instance.h:31:3
+  InstancePreT* = StructWasmtimeInstancePre ## Generated based on wasmtime/crates/c-api/include/wasmtime/instance.h:121:38
+  LinkerT* = StructWasmtimeLinker ## Generated based on wasmtime/crates/c-api/include/wasmtime/linker.h:38:32
+  FuncAsyncContinuationCallbackT* = proc (a0: pointer): bool {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:124:16
   StructWasmtimeAsyncContinuationT* {.pure, inheritable, bycopy.} = object
-    callback*: FuncAsyncContinuationCallbackT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:129:16
+    callback*: FuncAsyncContinuationCallbackT ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:129:16
     env*: pointer
     finalizer*: proc (a0: pointer): void {.cdecl.}
-  AsyncContinuationT* = StructWasmtimeAsyncContinuationT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:136:3
+  AsyncContinuationT* = StructWasmtimeAsyncContinuationT ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:136:3
   FuncAsyncCallbackT* = proc (a0: pointer; a1: ptr CallerT; a2: ptr ValT;
                               a3: csize_t; a4: ptr ValT; a5: csize_t;
                               a6: ptr ptr WasmTrapT; a7: ptr AsyncContinuationT): void {.
-      cdecl.}                ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:164:16
-  CallFutureT* = StructWasmtimeCallFuture ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:178:37
+      cdecl.}                ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:164:16
+  CallFutureT* = StructWasmtimeCallFuture ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:178:37
   StackMemoryGetCallbackT* = proc (a0: pointer; a1: ptr csize_t): ptr uint8 {.
-      cdecl.}                ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:305:20
+      cdecl.}                ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:305:20
   StructWasmtimeStackMemoryT* {.pure, inheritable, bycopy.} = object
-    env*: pointer            ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:314:9
+    env*: pointer            ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:314:9
     get_stack_memory*: StackMemoryGetCallbackT
     finalizer*: proc (a0: pointer): void {.cdecl.}
-  StackMemoryT* = StructWasmtimeStackMemoryT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:321:3
+  StackMemoryT* = StructWasmtimeStackMemoryT ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:321:3
   NewStackMemoryCallbackT* = proc (a0: pointer; a1: csize_t;
-                                   a2: ptr StackMemoryT): ptr ErrorT {.cdecl.} ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:334:29
+                                   a2: ptr StackMemoryT): ptr ErrorT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:334:29
   StructWasmtimeStackCreatorT* {.pure, inheritable, bycopy.} = object
-    env*: pointer            ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:343:9
+    env*: pointer            ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:343:9
     new_stack*: NewStackMemoryCallbackT
     finalizer*: proc (a0: pointer): void {.cdecl.}
-  StackCreatorT* = StructWasmtimeStackCreatorT ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\async.h:350:3
-  GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\profiling.h:31:39
+  StackCreatorT* = StructWasmtimeStackCreatorT ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:350:3
+  GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
-    name*: ptr WasmNameT     ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\profiling.h:48:16
+    name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16
     mod_field*: ptr ModuleT
-  GuestprofilerModulesT* = StructWasmtimeGuestprofilerModules ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\profiling.h:52:3
-  TrapCodeT* = uint8         ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\trap.h:21:17
-  CrtLocalePointers* = StructCrtLocalePointers ## Generated based on C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0\ucrt\corecrt.h:621:3
-  StructCrtLocalePointers* {.pure, inheritable, bycopy.} = object
-    locinfo*: ptr StructCrtLocaleData ## Generated based on C:\Program Files (x86)\Windows Kits\10\Include\10.0.22000.0\ucrt\corecrt.h:617:16
-    mbcinfo*: ptr StructCrtMultibyteData
+  GuestprofilerModulesT* = StructWasmtimeGuestprofilerModules ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:52:3
+  TrapCodeT* = uint8         ## Generated based on wasmtime/crates/c-api/include/wasmtime/trap.h:21:17
 proc new*(out_arg: ptr WasmByteVecT; a1: csize_t;
           a2: ptr UncheckedArray[WasmByteT]): void {.cdecl,
     importc: "wasm_byte_vec_new".}
@@ -348,88 +339,79 @@ proc delete*(a0: ptr WasmByteVecT): void {.cdecl,
     importc: "wasm_byte_vec_delete".}
 when 0 is static:
   const
-    WASMTIME_UPDATE_DEADLINE_CONTINUE* = 0 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\store.h:214:9
+    WASMTIME_UPDATE_DEADLINE_CONTINUE* = 0 ## Generated based on wasmtime/crates/c-api/include/wasmtime/store.h:214:9
 else:
-  let WASMTIME_UPDATE_DEADLINE_CONTINUE* = 0 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\store.h:214:9
+  let WASMTIME_UPDATE_DEADLINE_CONTINUE* = 0 ## Generated based on wasmtime/crates/c-api/include/wasmtime/store.h:214:9
 when 1 is static:
   const
-    WASMTIME_UPDATE_DEADLINE_YIELD* = 1 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\store.h:216:9
+    WASMTIME_UPDATE_DEADLINE_YIELD* = 1 ## Generated based on wasmtime/crates/c-api/include/wasmtime/store.h:216:9
 else:
-  let WASMTIME_UPDATE_DEADLINE_YIELD* = 1 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime\store.h:216:9
+  let WASMTIME_UPDATE_DEADLINE_YIELD* = 1 ## Generated based on wasmtime/crates/c-api/include/wasmtime/store.h:216:9
 when 0 is static:
   const
-    WASMTIME_EXTERN_FUNC* = 0 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:83:9
+    WASMTIME_EXTERN_FUNC* = 0 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:83:9
 else:
-  let WASMTIME_EXTERN_FUNC* = 0 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:83:9
+  let WASMTIME_EXTERN_FUNC* = 0 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:83:9
 when 1 is static:
   const
-    WASMTIME_EXTERN_GLOBAL* = 1 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:86:9
+    WASMTIME_EXTERN_GLOBAL* = 1 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:86:9
 else:
-  let WASMTIME_EXTERN_GLOBAL* = 1 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:86:9
+  let WASMTIME_EXTERN_GLOBAL* = 1 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:86:9
 when 2 is static:
   const
-    WASMTIME_EXTERN_TABLE* = 2 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:89:9
+    WASMTIME_EXTERN_TABLE* = 2 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:89:9
 else:
-  let WASMTIME_EXTERN_TABLE* = 2 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:89:9
+  let WASMTIME_EXTERN_TABLE* = 2 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:89:9
 when 3 is static:
   const
-    WASMTIME_EXTERN_MEMORY* = 3 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:92:9
+    WASMTIME_EXTERN_MEMORY* = 3 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:92:9
 else:
-  let WASMTIME_EXTERN_MEMORY* = 3 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:92:9
+  let WASMTIME_EXTERN_MEMORY* = 3 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:92:9
 when 4 is static:
   const
-    WASMTIME_EXTERN_SHAREDMEMORY* = 4 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:95:9
+    WASMTIME_EXTERN_SHAREDMEMORY* = 4 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:95:9
 else:
-  let WASMTIME_EXTERN_SHAREDMEMORY* = 4 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/extern.h:95:9
+  let WASMTIME_EXTERN_SHAREDMEMORY* = 4 ## Generated based on wasmtime/crates/c-api/include/wasmtime/extern.h:95:9
 when 0 is static:
   const
-    WASMTIME_I32* = 0        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:286:9
+    WASMTIME_I32* = 0        ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:286:9
 else:
-  let WASMTIME_I32* = 0      ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:286:9
+  let WASMTIME_I32* = 0      ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:286:9
 when 1 is static:
   const
-    WASMTIME_I64* = 1        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:288:9
+    WASMTIME_I64* = 1        ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:288:9
 else:
-  let WASMTIME_I64* = 1      ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:288:9
+  let WASMTIME_I64* = 1      ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:288:9
 when 2 is static:
   const
-    WASMTIME_F32* = 2        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:290:9
+    WASMTIME_F32* = 2        ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:290:9
 else:
-  let WASMTIME_F32* = 2      ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:290:9
+  let WASMTIME_F32* = 2      ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:290:9
 when 3 is static:
   const
-    WASMTIME_F64* = 3        ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:292:9
+    WASMTIME_F64* = 3        ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:292:9
 else:
-  let WASMTIME_F64* = 3      ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:292:9
+  let WASMTIME_F64* = 3      ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:292:9
 when 4 is static:
   const
-    WASMTIME_V128* = 4       ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:294:9
+    WASMTIME_V128* = 4       ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:294:9
 else:
-  let WASMTIME_V128* = 4     ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:294:9
+  let WASMTIME_V128* = 4     ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:294:9
 when 5 is static:
   const
-    WASMTIME_FUNCREF* = 5    ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:297:9
+    WASMTIME_FUNCREF* = 5    ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:297:9
 else:
-  let WASMTIME_FUNCREF* = 5  ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:297:9
+  let WASMTIME_FUNCREF* = 5  ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:297:9
 when 6 is static:
   const
-    WASMTIME_EXTERNREF* = 6  ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:300:9
+    WASMTIME_EXTERNREF* = 6  ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:300:9
 else:
-  let WASMTIME_EXTERNREF* = 6 ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:300:9
+  let WASMTIME_EXTERNREF* = 6 ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:300:9
 when 7 is static:
   const
-    WASMTIME_ANYREF* = 7     ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:303:9
+    WASMTIME_ANYREF* = 7     ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:303:9
 else:
-  let WASMTIME_ANYREF* = 7   ## Generated based on D:\dev\Nim\nimwasmtime\src\wasmtime\crates\c-api\include\wasmtime/val.h:303:9
-proc Memicmp*(internal_Buf1: pointer; internal_Buf2: pointer;
-              internal_Size: csize_t): cint {.cdecl, importc: "_memicmp".}
-proc MemicmpL*(internal_Buf1: pointer; internal_Buf2: pointer;
-               internal_Size: csize_t; internal_Locale: LocaleT): cint {.cdecl,
-    importc: "_memicmp_l".}
-proc memccpy*(internal_Dst: pointer; internal_Src: pointer; internal_Val: cint;
-              internal_Size: culonglong): pointer {.cdecl, importc: "memccpy".}
-proc memicmp*(internal_Buf1: pointer; internal_Buf2: pointer;
-              internal_Size: csize_t): cint {.cdecl, importc: "memicmp".}
+  let WASMTIME_ANYREF* = 7   ## Generated based on wasmtime/crates/c-api/include/wasmtime/val.h:303:9
 proc delete*(a0: ptr WasmConfigT): void {.cdecl, importc: "wasm_config_delete".}
 proc newConfig*(): ptr WasmConfigT {.cdecl, importc: "wasm_config_new".}
 proc delete*(a0: ptr WasmEngineT): void {.cdecl, importc: "wasm_engine_delete".}
