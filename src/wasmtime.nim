@@ -26,6 +26,7 @@ const nimWasmtimeFeatureGC* {.booldefine.} = true
 const nimWasmtimeFeatureAsync* {.booldefine.} = true
 const nimWasmtimeFeatureCranelift* {.booldefine.} = true
 const nimWasmtimeFeatureWinch* {.booldefine.} = true
+const nimWasmtimeFeatureComponentModel* {.booldefine.} = true
 
 when nimWasmtimeOverride.len > 0:
   const wasmDir* = nimWasmtimeOverride
@@ -51,6 +52,7 @@ when defined(nimWasmtimeBuild) or defined(nimWasmtimeBuildForce):
     "-d:nimWasmtimeFeatureAsync=" & $nimWasmtimeFeatureAsync,
     "-d:nimWasmtimeFeatureCranelift=" & $nimWasmtimeFeatureCranelift,
     "-d:nimWasmtimeFeatureWinch=" & $nimWasmtimeFeatureWinch,
+    "-d:nimWasmtimeFeatureComponentModel=" & $nimWasmtimeFeatureComponentModel,
     "-d:nimWasmtimeBuildDebug=" & $nimWasmtimeBuildDebug,
     "-d:nimWasmtimeBuildMusl=" & $nimWasmtimeBuildMusl,
   ])
