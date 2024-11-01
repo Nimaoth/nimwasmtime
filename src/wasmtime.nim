@@ -152,6 +152,7 @@ proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, pa
       result.removePrefix("WASMTIME_OPT_LEVEL_")
       result.removePrefix("WASMTIME_PROFILING_STRATEGY_")
       result.removePrefix("WASMTIME_STRATEGY_")
+      result.removePrefix("WASMTIME_COMPONENT_VAL_KIND_")
     result.removePrefix("WASMTIME_")
     result = processName(result)
 
@@ -224,6 +225,8 @@ proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, pa
 
     result.removePrefix("wasmtime_component_linker_")
     result.removePrefix("wasmtime_component_store_")
+    result.removePrefix("wasmtime_component_instance_")
+    result.removePrefix("wasmtime_component_func_")
     result.removePrefix("wasmtime_component_val_flags_")
 
     result.removePrefix("wasmtime_anyref_")
@@ -283,7 +286,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
     "config.h"
     "store.h"
     "async.h"
-    # "component.h" # todo
+    "component.h"
     "engine.h"
     "extern.h"
     "func.h"
@@ -406,9 +409,9 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       vec(WasmValVecT)
       vec(WasmValtypeVecT)
 
-      # vec(ComponentValFlagsVecT, unchecked = false)
-      # vec(ComponentValRecordVecT, unchecked = false)
-      # vec(ComponentValVecT, unchecked = false)
+      vec(ComponentValFlagsVecT, unchecked = false)
+      vec(ComponentValRecordVecT, unchecked = false)
+      vec(ComponentValVecT, unchecked = false)
 
       # todo
       # owned(WasmConfigT)
@@ -463,9 +466,9 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       type WasmValVec* = WasmValVecT
       type WasmValtypeVec* = WasmValtypeVecT
 
-      # type ComponentValFlagsVec* = ComponentValFlagsVecT
-      # type ComponentValRecordVec* = ComponentValRecordVecT
-      # type ComponentValVec* = ComponentValVecT
+      type ComponentValFlagsVec* = ComponentValFlagsVecT
+      type ComponentValRecordVec* = ComponentValRecordVecT
+      type ComponentValVec* = ComponentValVecT
 
       proc strVal*(name: WasmNameT): string =
         result = newStringOfCap(name.size.int)

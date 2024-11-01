@@ -18,6 +18,12 @@ type
   ProfilingStrategy* {.size: sizeof(cuint).} = enum
     ProfilingStrategyNone = 0, Jitdump = 1, Vtune = 2, Perfmap = 3
 type
+  ComponentValKind* {.size: sizeof(cuint).} = enum
+    Bool = 0, S8 = 1, U8 = 2, S16 = 3, U16 = 4, S32 = 5, U32 = 6, S64 = 7,
+    U64 = 8, Float32 = 9, Float64 = 10, Char = 11, String = 12, List = 13,
+    Record = 14, Tuple = 15, Variant = 16, Enum = 17, Option = 18, Result = 19,
+    Flags = 20
+type
   TrapCode* {.size: sizeof(cuint).} = enum
     StackOverflow = 0, MemoryOutOfBounds = 1, HeapMisaligned = 2,
     TableOutOfBounds = 3, IndirectCallToNull = 4, BadSignature = 5,
@@ -32,11 +38,15 @@ type
 type
   StructWasmStoreT* = object
 type
+  StructWasmtimeComponentStore* = object
+type
   StructWasmTabletypeT* = object
 type
   StructWasmtimeLinker* = object
 type
   StructWasmModuleT* = object
+type
+  StructWasmtimeComponentT* = object
 type
   StructWasmtimeCallFuture* = object
 type
@@ -45,6 +55,8 @@ type
   StructWasmtimeCaller* = object
 type
   StructWasmEngineT* = object
+type
+  StructWasmtimeComponentContext* = object
 type
   StructWasmtimeModule* = object
 type
@@ -74,9 +86,15 @@ type
 type
   StructWasmExterntypeT* = object
 type
+  StructWasmtimeComponentLinkerT* = object
+type
   StructWasmImporttypeT* = object
 type
+  StructWasmtimeComponentInstanceT* = object
+type
   StructWasmMemorytypeT* = object
+type
+  StructWasmtimeComponentFuncT* = object
 type
   StructWasmtimeStore* = object
 type
@@ -320,6 +338,67 @@ type
     new_stack*: NewStackMemoryCallbackT
     finalizer*: proc (a0: pointer): void {.cdecl.}
   StackCreatorT* = StructWasmtimeStackCreatorT ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:350:3
+  ComponentStoreT* = StructWasmtimeComponentStore ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:30:41
+  ComponentContextT* = StructWasmtimeComponentContext ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:31:43
+  ComponentValKindT* = uint8 ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:35:17
+  ComponentValT* = StructWasmtimeComponentValT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:158:3
+  StructWasmtimeComponentValT* {.pure, inheritable, bycopy.} = object
+    kind*: ComponentValKindT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:155:16
+    payload*: ComponentValPayloadT_typedef
+  ComponentValRecordFieldT* = StructWasmtimeComponentValRecordFieldT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:164:3
+  StructWasmtimeComponentValRecordFieldT* {.pure, inheritable, bycopy.} = object
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:161:16
+    val*: ComponentValT
+  StructWasmtimeComponentValVecT* {.pure, inheritable, bycopy.} = object
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:102:1
+    data*: ptr ComponentValT
+  ComponentValVecT* = object of StructWasmtimeComponentValVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:102:1
+  StructWasmtimeComponentValRecordVecT* {.pure, inheritable, bycopy.} = object
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:105:1
+    data*: ptr ComponentValRecordFieldT
+  ComponentValRecordVecT* = object of StructWasmtimeComponentValRecordVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:105:1
+  StructWasmtimeComponentValFlagsVecT* {.pure, inheritable, bycopy.} = object
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:108:1
+    data*: ptr uint32
+  ComponentValFlagsVecT* = object of StructWasmtimeComponentValFlagsVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:108:1
+  StructWasmtimeComponentValVariantT* {.pure, inheritable, bycopy.} = object
+    index*: uint32           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:113:16
+    val*: ptr ComponentValT
+  ComponentValVariantT* = StructWasmtimeComponentValVariantT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:116:3
+  StructWasmtimeComponentValResultT* {.pure, inheritable, bycopy.} = object
+    val*: ptr ComponentValT  ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:120:16
+    error*: bool
+  ComponentValResultT* = StructWasmtimeComponentValResultT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:123:3
+  StructWasmtimeComponentValEnumT* {.pure, inheritable, bycopy.} = object
+    discriminant*: uint32    ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:126:16
+  ComponentValEnumT* = StructWasmtimeComponentValEnumT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:128:3
+  ComponentValPayloadT* {.union, bycopy.} = object
+    boolean*: bool           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:130:15
+    s8*: int8
+    u8*: uint8
+    s16*: int16
+    u16*: uint16
+    s32*: int32
+    u32*: uint32
+    s64*: int64
+    u64*: uint64
+    f32*: cfloat
+    f64*: cdouble
+    character*: uint8
+    string_field*: WasmNameT
+    list*: ComponentValVecT
+    record*: ComponentValRecordVecT
+    tuple_field*: ComponentValVecT
+    variant*: ComponentValVariantT
+    enumeration*: ComponentValEnumT
+    option*: ptr ComponentValT
+    result*: ComponentValResultT
+    flags*: ComponentValFlagsVecT
+  ComponentValPayloadT_typedef* = ComponentValPayloadT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:152:3
+  ComponentT* = StructWasmtimeComponentT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:178:37
+  ComponentLinkerT* = StructWasmtimeComponentLinkerT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:188:44
+  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:197:46
+  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:205:42
   GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
     name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16
@@ -1293,6 +1372,76 @@ proc preInstantiateAsync*(instance_pre: ptr InstancePreT; store: ptr ContextT;
     importc: "wasmtime_instance_pre_instantiate_async".}
 proc hostStackCreatorSet*(a0: ptr WasmConfigT; a1: ptr StackCreatorT): void {.
     cdecl, importc: "wasmtime_config_host_stack_creator_set".}
+proc componentModelSet*(a0: ptr WasmConfigT; a1: bool): void {.cdecl,
+    importc: "wasmtime_config_component_model_set".}
+proc newComponentStore*(engine: ptr WasmEngineT; data: pointer;
+                        finalizer: proc (a0: pointer): void {.cdecl.}): ptr ComponentStoreT {.
+    cdecl, importc: "wasmtime_component_store_new".}
+proc context*(store: ptr ComponentStoreT): ptr ComponentContextT {.cdecl,
+    importc: "wasmtime_component_store_context".}
+proc delete*(store: ptr ComponentStoreT): void {.cdecl,
+    importc: "wasmtime_component_store_delete".}
+proc limiter*(store: ptr ComponentStoreT; memory_size: int64;
+              table_elements: int64; instances: int64; tables: int64;
+              memories: int64): void {.cdecl, importc: "wasmtime_component_store_limiter".}
+proc newEmpty*(out_arg: ptr ComponentValVecT): void {.cdecl,
+    importc: "wasmtime_component_val_vec_new_empty".}
+proc newUninitialized*(out_arg: ptr ComponentValVecT; a1: csize_t): void {.
+    cdecl, importc: "wasmtime_component_val_vec_new_uninitialized".}
+proc new*(out_arg: ptr ComponentValVecT; a1: csize_t; a2: ptr ComponentValT): void {.
+    cdecl, importc: "wasmtime_component_val_vec_new".}
+proc copy*(out_arg: ptr ComponentValVecT; a1: ptr ComponentValVecT): void {.
+    cdecl, importc: "wasmtime_component_val_vec_copy".}
+proc delete*(a0: ptr ComponentValVecT): void {.cdecl,
+    importc: "wasmtime_component_val_vec_delete".}
+proc newEmpty*(out_arg: ptr ComponentValRecordVecT): void {.cdecl,
+    importc: "wasmtime_component_val_record_vec_new_empty".}
+proc newUninitialized*(out_arg: ptr ComponentValRecordVecT; a1: csize_t): void {.
+    cdecl, importc: "wasmtime_component_val_record_vec_new_uninitialized".}
+proc new*(out_arg: ptr ComponentValRecordVecT; a1: csize_t;
+          a2: ptr ComponentValRecordFieldT): void {.cdecl,
+    importc: "wasmtime_component_val_record_vec_new".}
+proc copy*(out_arg: ptr ComponentValRecordVecT; a1: ptr ComponentValRecordVecT): void {.
+    cdecl, importc: "wasmtime_component_val_record_vec_copy".}
+proc delete*(a0: ptr ComponentValRecordVecT): void {.cdecl,
+    importc: "wasmtime_component_val_record_vec_delete".}
+proc newEmpty*(out_arg: ptr ComponentValFlagsVecT): void {.cdecl,
+    importc: "wasmtime_component_val_flags_vec_new_empty".}
+proc newUninitialized*(out_arg: ptr ComponentValFlagsVecT; a1: csize_t): void {.
+    cdecl, importc: "wasmtime_component_val_flags_vec_new_uninitialized".}
+proc new*(out_arg: ptr ComponentValFlagsVecT; a1: csize_t; a2: ptr uint32): void {.
+    cdecl, importc: "wasmtime_component_val_flags_vec_new".}
+proc copy*(out_arg: ptr ComponentValFlagsVecT; a1: ptr ComponentValFlagsVecT): void {.
+    cdecl, importc: "wasmtime_component_val_flags_vec_copy".}
+proc delete*(a0: ptr ComponentValFlagsVecT): void {.cdecl,
+    importc: "wasmtime_component_val_flags_vec_delete".}
+proc set*(flags: ptr ComponentValFlagsVecT; index: uint32; enabled: bool): void {.
+    cdecl, importc: "wasmtime_component_val_flags_set".}
+proc test*(flags: ptr ComponentValFlagsVecT; index: uint32): bool {.cdecl,
+    importc: "wasmtime_component_val_flags_test".}
+proc fromBinary*(engine: ptr WasmEngineT; buf: ptr uint8; len: csize_t;
+                 component_out: ptr ptr ComponentT): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_from_binary".}
+proc delete*(a0: ptr ComponentT): void {.cdecl,
+    importc: "wasmtime_component_delete".}
+proc newComponentLinker*(engine: ptr WasmEngineT): ptr ComponentLinkerT {.cdecl,
+    importc: "wasmtime_component_linker_new".}
+proc linkWasi*(store: ptr ComponentLinkerT; trap_out: ptr ptr WasmTrapT): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_linker_link_wasi".}
+proc instantiate*(linker: ptr ComponentLinkerT; context: ptr ComponentContextT;
+                  component: ptr ComponentT;
+                  instance_out: ptr ptr ComponentInstanceT;
+                  trap_out: ptr ptr WasmTrapT): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_linker_instantiate".}
+proc getFunc*(instance: ptr ComponentInstanceT; context: ptr ComponentContextT;
+              name: ptr uint8; name_len: csize_t;
+              item_out: ptr ptr ComponentFuncT): bool {.cdecl,
+    importc: "wasmtime_component_instance_get_func".}
+proc call*(func_arg: ptr ComponentFuncT; context: ptr ComponentContextT;
+           params: ptr ComponentValT; params_len: csize_t;
+           results: ptr ComponentValT; results_len: csize_t;
+           trap_out: ptr ptr WasmTrapT): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_func_call".}
 proc clone*(engine: ptr WasmEngineT): ptr WasmEngineT {.cdecl,
     importc: "wasmtime_engine_clone".}
 proc incrementEpoch*(engine: ptr WasmEngineT): void {.cdecl,
@@ -1445,6 +1594,9 @@ vec(WasmMemorytypeVecT)
 vec(WasmTabletypeVecT)
 vec(WasmValVecT)
 vec(WasmValtypeVecT)
+vec(ComponentValFlagsVecT, unchecked = false)
+vec(ComponentValRecordVecT, unchecked = false)
+vec(ComponentValVecT, unchecked = false)
 type
   WasmByte* = WasmByteT
 type
@@ -1471,6 +1623,12 @@ type
   WasmValVec* = WasmValVecT
 type
   WasmValtypeVec* = WasmValtypeVecT
+type
+  ComponentValFlagsVec* = ComponentValFlagsVecT
+type
+  ComponentValRecordVec* = ComponentValRecordVecT
+type
+  ComponentValVec* = ComponentValVecT
 proc strVal*(name: WasmNameT): string =
   result = newStringOfCap(name.size.int)
   for i in 0 ..< name.size.int:
