@@ -93,7 +93,7 @@ func camelName(str: string): string =
 
 var enums {.compiletime.} = initHashSet[string]()
 
-proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, partof = ""): string = 
+proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, partof = ""): string =
   result = name
 
   var nameMap = toTable {
@@ -252,7 +252,7 @@ proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, pa
   else:
     discard
 
-proc opirCallback*(data: JsonNode): JsonNode = 
+proc opirCallback*(data: JsonNode): JsonNode =
   result = newJArray()
   for v in data:
     if v["kind"].getStr == "const" and v["name"].getStr == "wasm_name":
@@ -264,9 +264,12 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
   import futhark
 
   const outputPath = currentSourcePath().splitPath.head / "wrapper.nim"
+  const llvmIncludePath = staticExec("clang -print-resource-dir").strip() / "../../../include"
+  static:
+    echo "Using LLVM from ", llvmIncludePath
 
   importc:
-    sysPath "D:/llvm/include"
+    sysPath llvmIncludePath
     path wasmDir / "crates/c-api/include"
     path wasmDir / "crates/c-api/include/wasmtime"
     outputPath outputPath
@@ -545,7 +548,6 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
         var name: WasmNameT
         err.message(name.addr)
         result = name.strVal
-        # todo: cleanup name?
 
       proc exitStatus*(err: ptr ErrorT): int =
         var exitStatus: cint
@@ -582,7 +584,6 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           WasmtimeResult[T](kind: Ok)
         else:
           let msg = err.msg()
-          echo "--- error: ", msg
           let exitStatus = err.exitStatus()
           let trace = err.getWasmTrace()
           WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
@@ -592,10 +593,8 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           WasmtimeResult[T](kind: Ok)
         else:
           let msg = err.msg()
-          echo "--- trap: ", msg
           let exitStatus = err.exitStatus()
           let trace = err.getWasmTrace()
-          echo trace
           WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
 
       template okOr*[T](res: WasmtimeResult[T], body: untyped): T =

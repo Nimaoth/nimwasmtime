@@ -1600,7 +1600,6 @@ proc toResult*(err: ptr ErrorT; T: typedesc): WasmtimeResult[T] =
     WasmtimeResult[T](kind: Ok)
   else:
     let msg = err.msg()
-    echo "--- error: ", msg
     let exitStatus = err.exitStatus()
     let trace = err.getWasmTrace()
     WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
@@ -1610,10 +1609,8 @@ proc toResult*(err: ptr WasmTrapT; T: typedesc): WasmtimeResult[T] =
     WasmtimeResult[T](kind: Ok)
   else:
     let msg = err.msg()
-    echo "--- trap: ", msg
     let exitStatus = err.exitStatus()
     let trace = err.getWasmTrace()
-    echo trace
     WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
 
 template okOr*[T](res: WasmtimeResult[T]; body: untyped): T =
