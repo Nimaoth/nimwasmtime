@@ -31,6 +31,8 @@ when nimWasmtimeOverride.len > 0:
   const wasmDir* = nimWasmtimeOverride
 else:
   const wasmDir* = currentSourcePath().splitPath.head / "wasmtime"
+static:
+  echo "Using wasmtime repository ", wasmDir
 
 when defined(nimWasmtimeBuild) or defined(nimWasmtimeBuildForce):
   import std/[os]
@@ -53,6 +55,7 @@ when defined(nimWasmtimeBuild) or defined(nimWasmtimeBuildForce):
     "-d:nimWasmtimeFeatureWinch=" & $nimWasmtimeFeatureWinch,
     "-d:nimWasmtimeBuildDebug=" & $nimWasmtimeBuildDebug,
     "-d:nimWasmtimeBuildMusl=" & $nimWasmtimeBuildMusl,
+    "-d:nimWasmtimeOverride=" & $nimWasmtimeOverride,
   ])
 
   static:
@@ -61,13 +64,10 @@ when defined(nimWasmtimeBuild) or defined(nimWasmtimeBuildForce):
       cache=nimWasmtimeBuildCache)
     echo "Finished building wasmtime."
 
-{.passL: "-L" & wasmDir / "crates/c-api/lib".}
-
-when nimWasmtimeOverride == "":
-  when defined(musl):
-    {.passL: "-L" & wasmDir / "target/x86_64-unknown-linux-musl" / nimWasmtimeBuildType.}
-  else:
-    {.passL: "-L" & wasmDir / "target" / nimWasmtimeBuildType.}
+when defined(musl):
+  {.passL: "-L" & wasmDir / "target/x86_64-unknown-linux-musl" / nimWasmtimeBuildType.}
+else:
+  {.passL: "-L" & wasmDir / "target" / nimWasmtimeBuildType.}
 
 when nimWasmtimeStatic:
   when defined(windows):
@@ -303,6 +303,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       echo "========================== Post process wrapper.nim"
       var content = readFile(outputPath)
       content = content.replace("VecT* = ", "VecT* = object of ")
+      content = content.replace("Generated based on " & wasmDir, "Generated based on wasmtime")
       content.add "\n"
       content.add suffix
       writeFile(outputPath, content)

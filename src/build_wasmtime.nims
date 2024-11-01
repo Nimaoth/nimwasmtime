@@ -4,6 +4,7 @@ echo "build wasmtime"
 
 const nimWasmtimeBuildMusl* {.booldefine.} = false
 const nimWasmtimeBuildDebug* {.booldefine.} = true
+const nimWasmtimeOverride* {.strdefine.} = ""
 
 const nimWasmtimeFeatureProfiling* {.booldefine.} = true
 const nimWasmtimeFeatureWat* {.booldefine.} = true
@@ -40,7 +41,12 @@ const wasmtimeFeatures = [
 ]
 
 proc buildWasmtime() =
-  withDir("wasmtime"):
+  let wasmtimeDir = if nimWasmtimeOverride != "":
+    nimWasmtimeOverride
+  else:
+    "wasmtime"
+
+  withDir(wasmtimeDir):
     var features: seq[string] = @[]
     var conf = readFile("crates/c-api/include/wasmtime/conf.h.in")
 
