@@ -353,10 +353,10 @@ type
     size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:102:1
     data*: ptr ComponentValT
   ComponentValVecT* = object of StructWasmtimeComponentValVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:102:1
-  StructWasmtimeComponentValRecordVecT* {.pure, inheritable, bycopy.} = object
+  StructWasmtimeComponentValRecordFieldVecT* {.pure, inheritable, bycopy.} = object
     size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:105:1
     data*: ptr ComponentValRecordFieldT
-  ComponentValRecordVecT* = object of StructWasmtimeComponentValRecordVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:105:1
+  ComponentValRecordFieldVecT* = object of StructWasmtimeComponentValRecordFieldVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:105:1
   StructWasmtimeComponentValFlagsVecT* {.pure, inheritable, bycopy.} = object
     size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:108:1
     data*: ptr uint32
@@ -387,7 +387,7 @@ type
     character*: uint8
     string_field*: WasmNameT
     list*: ComponentValVecT
-    record*: ComponentValRecordVecT
+    record*: ComponentValRecordFieldVecT
     tuple_field*: ComponentValVecT
     variant*: ComponentValVariantT
     enumeration*: ComponentValEnumT
@@ -1394,17 +1394,18 @@ proc copy*(out_arg: ptr ComponentValVecT; a1: ptr ComponentValVecT): void {.
     cdecl, importc: "wasmtime_component_val_vec_copy".}
 proc delete*(a0: ptr ComponentValVecT): void {.cdecl,
     importc: "wasmtime_component_val_vec_delete".}
-proc newEmpty*(out_arg: ptr ComponentValRecordVecT): void {.cdecl,
-    importc: "wasmtime_component_val_record_vec_new_empty".}
-proc newUninitialized*(out_arg: ptr ComponentValRecordVecT; a1: csize_t): void {.
-    cdecl, importc: "wasmtime_component_val_record_vec_new_uninitialized".}
-proc new*(out_arg: ptr ComponentValRecordVecT; a1: csize_t;
+proc newEmpty*(out_arg: ptr ComponentValRecordFieldVecT): void {.cdecl,
+    importc: "wasmtime_component_val_record_field_vec_new_empty".}
+proc newUninitialized*(out_arg: ptr ComponentValRecordFieldVecT; a1: csize_t): void {.
+    cdecl, importc: "wasmtime_component_val_record_field_vec_new_uninitialized".}
+proc new*(out_arg: ptr ComponentValRecordFieldVecT; a1: csize_t;
           a2: ptr ComponentValRecordFieldT): void {.cdecl,
-    importc: "wasmtime_component_val_record_vec_new".}
-proc copy*(out_arg: ptr ComponentValRecordVecT; a1: ptr ComponentValRecordVecT): void {.
-    cdecl, importc: "wasmtime_component_val_record_vec_copy".}
-proc delete*(a0: ptr ComponentValRecordVecT): void {.cdecl,
-    importc: "wasmtime_component_val_record_vec_delete".}
+    importc: "wasmtime_component_val_record_field_vec_new".}
+proc copy*(out_arg: ptr ComponentValRecordFieldVecT;
+           a1: ptr ComponentValRecordFieldVecT): void {.cdecl,
+    importc: "wasmtime_component_val_record_field_vec_copy".}
+proc delete*(a0: ptr ComponentValRecordFieldVecT): void {.cdecl,
+    importc: "wasmtime_component_val_record_field_vec_delete".}
 proc newEmpty*(out_arg: ptr ComponentValFlagsVecT): void {.cdecl,
     importc: "wasmtime_component_val_flags_vec_new_empty".}
 proc newUninitialized*(out_arg: ptr ComponentValFlagsVecT; a1: csize_t): void {.
@@ -1514,6 +1515,7 @@ proc wasmtimeFrameModuleName*(a0: ptr WasmFrameT): ptr WasmNameT {.cdecl,
 import
   std / [options]
 
+proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.}
 template vec(T: untyped; unchecked: bool = true): untyped =
   type
     ItemType = typeof(T().data[])
@@ -1595,8 +1597,23 @@ vec(WasmTabletypeVecT)
 vec(WasmValVecT)
 vec(WasmValtypeVecT)
 vec(ComponentValFlagsVecT, unchecked = false)
-vec(ComponentValRecordVecT, unchecked = false)
+vec(ComponentValRecordFieldVecT, unchecked = false)
 vec(ComponentValVecT, unchecked = false)
+proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.} =
+  case self.kind.ComponentValKind
+  of String:
+    `=destroy`(self.payload.string_field)
+  of List:
+    `=destroy`(self.payload.list)
+  of Record:
+    `=destroy`(self.payload.record)
+  of Tuple:
+    `=destroy`(self.payload.tuple_field)
+  of Flags:
+    `=destroy`(self.payload.flags)
+  else:
+    discard
+
 type
   WasmByte* = WasmByteT
 type
@@ -1626,13 +1643,17 @@ type
 type
   ComponentValFlagsVec* = ComponentValFlagsVecT
 type
-  ComponentValRecordVec* = ComponentValRecordVecT
+  ComponentValRecordFieldVec* = ComponentValRecordFieldVecT
 type
   ComponentValVec* = ComponentValVecT
 proc strVal*(name: WasmNameT): string =
   result = newStringOfCap(name.size.int)
   for i in 0 ..< name.size.int:
     result.add cast[ptr UncheckedArray[char]](name.data)[i]
+
+proc toName*(name: string): WasmNameT =
+  result.addr.new(name.len.csize_t,
+                  cast[ptr UncheckedArray[WasmByteT]](name[0].addr))
 
 proc `$`*(self: ptr WasmExterntypeT): string =
   if self == nil:
@@ -1841,3 +1862,54 @@ proc call*(f: ptr FuncT; store: ptr ContextT; args: openArray[ValT];
            results: openArray[ValT]; trap: ptr ptr WasmTrapT): ptr ErrorT =
   store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t,
              trap)
+
+proc `$`*(a: ComponentValT): string =
+  case a.kind.ComponentValKind
+  of Bool:
+    $a.payload.boolean
+  of S8:
+    $a.payload.s8
+  of U8:
+    $a.payload.u8
+  of S16:
+    $a.payload.s16
+  of U16:
+    $a.payload.u16
+  of S32:
+    $a.payload.s32
+  of U32:
+    $a.payload.u32
+  of S64:
+    $a.payload.s64
+  of U64:
+    $a.payload.u64
+  of Float32:
+    $a.payload.f32
+  of Float64:
+    $a.payload.f64
+  of Char:
+    $a.payload.character
+  of String:
+    "\"" & $a.payload.string_field & "\""
+  of List:
+    var str = "["
+    for i, v in a.payload.list:
+      if i > 0:
+        str.add ", "
+      str.add $v
+    str.add "]"
+    str
+  of Record:
+    var str = "{"
+    for i, v in a.payload.record:
+      if i > 0:
+        str.add ", "
+      str.add v.name.strVal
+      str.add ": "
+      str.add $v.val
+    str.add "}"
+    str
+  of Enum:
+    $a.payload.enumeration
+  else:
+    "Unknown"

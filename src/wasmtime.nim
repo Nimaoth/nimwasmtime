@@ -219,7 +219,7 @@ proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, pa
     result.removePrefix("wasm_val_")
     result.removePrefix("wasm_valtype_")
 
-    result.removePrefix("wasmtime_component_val_record_vec_")
+    result.removePrefix("wasmtime_component_val_record_field_vec_")
     result.removePrefix("wasmtime_component_val_vec_")
     result.removePrefix("wasmtime_component_val_flags_vec_")
 
@@ -319,6 +319,8 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
     suffixWrapper:
       import std/[options]
 
+      proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.}
+
       # todo
       # template owned(T: typed): untyped =
       #   proc `=copy`*(self: var T, src: T) {.error.}
@@ -410,7 +412,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       vec(WasmValtypeVecT)
 
       vec(ComponentValFlagsVecT, unchecked = false)
-      vec(ComponentValRecordVecT, unchecked = false)
+      vec(ComponentValRecordFieldVecT, unchecked = false)
       vec(ComponentValVecT, unchecked = false)
 
       # todo
@@ -451,6 +453,18 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       # owned(ComponentStoreT)
       # owned(ComponentT)
 
+      proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.} =
+        case self.kind.ComponentValKind
+        of String: `=destroy`(self.payload.string_field)
+        of List: `=destroy`(self.payload.list)
+        of Record: `=destroy`(self.payload.record)
+        of Tuple: `=destroy`(self.payload.tuple_field)
+        # of Variant: `=destroy`(self.payload.variant) # todo
+        # of Option: `=destroy`(self.payload.option) # todo
+        # of Result: `=destroy`(self.payload.result) # todo
+        of Flags: `=destroy`(self.payload.flags)
+        else: discard
+
       type WasmByte* = WasmByteT
 
       type WasmByteVec* = WasmByteVecT
@@ -467,13 +481,16 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       type WasmValtypeVec* = WasmValtypeVecT
 
       type ComponentValFlagsVec* = ComponentValFlagsVecT
-      type ComponentValRecordVec* = ComponentValRecordVecT
+      type ComponentValRecordFieldVec* = ComponentValRecordFieldVecT
       type ComponentValVec* = ComponentValVecT
 
       proc strVal*(name: WasmNameT): string =
         result = newStringOfCap(name.size.int)
         for i in 0..<name.size.int:
           result.add cast[ptr UncheckedArray[char]](name.data)[i]
+
+      proc toName*(name: string): WasmNameT =
+        result.addr.new(name.len.csize_t, cast[ptr UncheckedArray[WasmByteT]](name[0].addr))
 
       proc `$`*(self: ptr WasmExterntypeT): string =
         if self == nil:
@@ -686,6 +703,48 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           results: openArray[ValT], trap: ptr ptr WasmTrapT): ptr ErrorT =
         store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t, trap)
 
+      proc `$`*(a: ComponentValT): string =
+        case a.kind.ComponentValKind
+        of Bool: $a.payload.boolean
+        of S8: $a.payload.s8
+        of U8: $a.payload.u8
+        of S16: $a.payload.s16
+        of U16: $a.payload.u16
+        of S32: $a.payload.s32
+        of U32: $a.payload.u32
+        of S64: $a.payload.s64
+        of U64: $a.payload.u64
+        of Float32: $a.payload.f32
+        of Float64: $a.payload.f64
+        of Char: $a.payload.character
+        of String: "\"" & $a.payload.string_field & "\""
+
+        of List:
+          var str = "["
+          for i, v in a.payload.list:
+            if i > 0: str.add ", "
+            str.add $v
+          str.add "]"
+          str
+
+        of Record:
+          var str = "{"
+          for i, v in a.payload.record:
+            if i > 0: str.add ", "
+            str.add v.name.strVal
+            str.add ": "
+            str.add $v.val
+          str.add "}"
+          str
+
+        # todo
+        # of Tuple: $a.payload.tuple_field
+        # of Variant: $a.payload.variant
+        of Enum: $a.payload.enumeration
+        # of Option: $a.payload.option
+        # of Result: $a.payload.result
+        # of Flags: $a.payload.flags
+        else: "Unknown"
 
     static:
       postProcess()
