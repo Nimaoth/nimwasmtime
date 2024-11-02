@@ -1,4 +1,5 @@
-import std/[strformat, options]
+import std/[strformat, options, strutils, macros, genasts]
+import results
 import wasmtime
 
 proc main() =
@@ -78,6 +79,7 @@ proc main() =
   echo "Called hello"
 
 proc toVal*[T](a: T): ComponentValT =
+  # echo &"toVal {a}"
   when T is object:
     result.kind = ComponentValKind.Record.ComponentValKindT
     var numFields = 0
@@ -90,6 +92,9 @@ proc toVal*[T](a: T): ComponentValT =
     for k, v in a.fieldPairs:
       result.payload.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
       inc i
+
+    # echo result.payload.record.data.isNil
+    # echo result.payload.record.size
 
   elif T is int32:
     result.kind = ComponentValKind.S32.ComponentValKindT
@@ -110,6 +115,102 @@ proc toVal*[T](a: T): ComponentValT =
   else:
     {.error: "Can't convert type " & $T & " to ComponentValT".}
 
+proc to*(a: ComponentValT, T: typedesc): T =
+  # echo a, ", ", a.kind.ComponentValKind, " to ", T
+  when T is int32:
+    assert a.kind == ComponentValKind.S32.ComponentValKindT
+    result = a.payload.s32
+
+  elif T is int64:
+    assert a.kind == ComponentValKind.S64.ComponentValKindT
+    result = a.payload.s64
+
+  elif T is float32:
+    assert a.kind == ComponentValKind.Float32.ComponentValKindT
+    result = a.payload.f32
+
+  elif T is float64:
+    assert a.kind == ComponentValKind.Float64.ComponentValKindT
+    result = a.payload.f64
+
+  elif T is string:
+    assert a.kind == ComponentValKind.String.ComponentValKindT
+    result = a.payload.string_field.strVal
+
+  elif T is bool:
+    assert a.kind == ComponentValKind.Bool.ComponentValKindT
+    result = a.payload.boolean
+
+  elif T is seq:
+    assert a.kind == ComponentValKind.List.ComponentValKindT
+    for v in a.payload.list:
+      result.add v.to(typeof(result[0]))
+
+  elif T is options.Option:
+    assert a.kind == ComponentValKind.Option.ComponentValKindT
+    if a.payload.option != nil:
+      result = a.payload.option[].to(typeof(result.get)).some
+
+  elif T is object:
+    if a.kind == ComponentValKind.Record.ComponentValKindT:
+      var i = 0
+      for k, v in result.fieldPairs:
+        v = a.payload.record[i].val.to(typeof(v))
+        inc i
+
+    elif a.kind == ComponentValKind.Variant.ComponentValKindT:
+      when compiles(result.kind):
+        type Kind = typeof(result.kind)
+        let tag = parseEnum[Kind](a.payload.variant.name.strVal)
+        result = T(kind: tag)
+
+        macro convertField(res: typed, val: untyped): untyped =
+          var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(res, ident"kind"))
+          var addElse = false
+
+          for v in Kind:
+            var caseCode = genAst(res, val, field = ident($v)):
+              # todo: check this `when` in the macro instead of in the returned code
+              when compiles(res.field):
+                res.field = val.to(typeof(res.field))
+            cases.add nnkOfBranch.newTree(ident(capitalizeAscii($v)), caseCode)
+
+          return nnkStmtList.newTree(cases)
+
+        result.convertField(a.payload.variant.val[])
+
+  elif T is enum:
+    assert a.kind == ComponentValKind.Enum.ComponentValKindT
+    parseEnum[T](a.payload.enumeration.name.strVal)
+
+  else:
+    {.error: "Can't convert ComponentValT to " & $T.}
+
+type
+  Bar = object
+    a*: int32
+    b*: float32
+  Foo = object
+    x*: string
+  VoodooKind = enum
+    Unpossesed = "unpossesed", Possesed = "possesed"
+  Voodoo = object
+    case kind*: VoodooKind
+    of Possesed:
+      possesed: string
+    else:
+      nil
+  Baz = object
+    x*: string
+    c*: Foo
+    d*: Option[string]
+    e*: Option[Voodoo]
+    f*: seq[int32]
+    # h*: Result[Bar, void]
+  DescriptorType = enum
+    Unknown, BlockDevice, CharacterDevice, Directory, Fifo, SymbolicLink,
+    RegularFile, Socket
+
 proc main2() =
   echo "Start main2"
   let config = newConfig()
@@ -123,6 +224,45 @@ proc main2() =
   linker.linkWasi(trap.addr).okOr(err):
     echo "Failed to link wasi: ", err.msg
     return
+
+  block:
+    proc cb(data: pointer, params: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
+      let params = cast[ptr UncheckedArray[ComponentValT]](params)
+      let results = cast[ptr UncheckedArray[ComponentValT]](results)
+      echo &"cb: {paramsLen} -> {resultsLen}"
+      for i in 0..<paramsLen:
+        echo &"cb: {params[i]}"
+
+      let a = params[0].to(int32)
+      let b = params[1].to(float32)
+      results[0] = (a.float32 - b).toVal
+      nil
+
+    let funcName = "bar-baz"
+    echo &"link {funcName}"
+    linker.funcNew(funcName.cstring, funcName.len.csize_t, cb, nil, nil).okOr(err):
+      echo &"[trap] Failed to link func {funcName}: ", err.msg
+
+  block:
+    proc cb(ctx: pointer, params: openArray[ComponentValT], results: openArray[ComponentValT]) =
+      # echo &"cb: {params} -> {results.len}"
+      let b = params[0].to(Bar)
+      echo &"barrrr: {b}"
+
+    let funcName = "call-bar"
+    linker.funcNew(funcName, cb).okOr(err):
+      echo &"[trap] Failed to link func {funcName}: ", err.msg
+
+  block:
+    proc cb(ctx: pointer, params: openArray[ComponentValT], results: openArray[ComponentValT]) =
+      echo "bazzz"
+      # echo &"cb: {params} -> {results.len}"
+      let b = params[0].to(Baz)
+      echo &"bazzz: {b}"
+
+    let funcName = "call-baz"
+    linker.funcNew(funcName, cb).okOr(err):
+      echo &"[trap] Failed to link func {funcName}: ", err.msg
 
   trap.okOr(err):
     echo "[trap] Failed to link wasi: ", err.msg
@@ -194,7 +334,15 @@ proc main2() =
     params[0] = Foo(a: 123, b: 456.789).toVal
     echo &"call func {name}, {params[0]}"
     f.call(context, params[0].addr, params.len.csize_t, results[0].addr, results.len.csize_t, trap.addr).okOr(err):
+      echo &"Failed to call func '{name}': ", err == nil
       echo &"Failed to call func '{name}': ", err.msg
+      trap.okOr(err2):
+        echo "[trap] Failed to call func '{name}': ", err2.msg
+        return
+      return
+
+    trap.okOr(err):
+      echo "[trap] Failed to create component instance: ", err.msg
       return
 
     echo &"Called {name}: {results[0]}"

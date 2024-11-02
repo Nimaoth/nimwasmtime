@@ -65,5 +65,10 @@ task wasmtime, "Build wasmtime":
     when defined(linux):
       exec "cargo build --release --target=x86_64-unknown-linux-musl -p wasmtime-c-api"
 
+task buildWasmComponent, "":
+  exec "nim c -d:release --skipParentCfg ./tests/wasm/test.nim"
+  exec "wasm-tools component embed ./tests --world test-world ./tests/wasm/testm.wasm -o ./tests/wasm/testme.wasm"
+  exec "wasm-tools component new ./tests/wasm/testme.wasm -o ./tests/wasm/testc.wasm --adapt ./tests/wasm/wasi_snapshot_preview1.reactor.wasm"
+
 before install:
   nimgenTask()
