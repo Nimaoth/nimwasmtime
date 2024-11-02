@@ -67,7 +67,7 @@ task wasmtime, "Build wasmtime":
 
 task buildWasmComponent, "":
   exec "nim c -d:release --skipParentCfg ./tests/wasm/test.nim"
-  exec "wasm-tools component embed ./tests --world test-world ./tests/wasm/testm.wasm -o ./tests/wasm/testme.wasm"
+  exec "wasm-tools component embed ./tests/wasm/test.wit --world test-world ./tests/wasm/testm.wasm -o ./tests/wasm/testme.wasm"
   exec "wasm-tools component new ./tests/wasm/testme.wasm -o ./tests/wasm/testc.wasm --adapt ./tests/wasm/wasi_snapshot_preview1.reactor.wasm"
 
 before install:
