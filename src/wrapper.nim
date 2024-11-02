@@ -359,10 +359,10 @@ type
   ComponentValRecordFieldVecT* = object of StructWasmtimeComponentValRecordFieldVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:105:1
   StructWasmtimeComponentValFlagsVecT* {.pure, inheritable, bycopy.} = object
     size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:108:1
-    data*: ptr uint32
+    data*: ptr WasmNameT
   ComponentValFlagsVecT* = object of StructWasmtimeComponentValFlagsVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:108:1
   StructWasmtimeComponentValVariantT* {.pure, inheritable, bycopy.} = object
-    index*: uint32           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:113:16
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:113:16
     val*: ptr ComponentValT
   ComponentValVariantT* = StructWasmtimeComponentValVariantT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:116:3
   StructWasmtimeComponentValResultT* {.pure, inheritable, bycopy.} = object
@@ -370,7 +370,7 @@ type
     error*: bool
   ComponentValResultT* = StructWasmtimeComponentValResultT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:123:3
   StructWasmtimeComponentValEnumT* {.pure, inheritable, bycopy.} = object
-    discriminant*: uint32    ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:126:16
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:126:16
   ComponentValEnumT* = StructWasmtimeComponentValEnumT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:128:3
   ComponentValPayloadT* {.union, bycopy.} = object
     boolean*: bool           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:130:15
@@ -397,8 +397,11 @@ type
   ComponentValPayloadT_typedef* = ComponentValPayloadT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:152:3
   ComponentT* = StructWasmtimeComponentT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:178:37
   ComponentLinkerT* = StructWasmtimeComponentLinkerT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:188:44
-  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:197:46
-  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:205:42
+  ComponentFuncCallbackT* = proc (a0: pointer; a1: ptr ComponentValT;
+                                  a2: csize_t; a3: ptr ComponentValT;
+                                  a4: csize_t): ptr WasmTrapT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:197:24
+  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:209:46
+  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:217:42
   GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
     name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16
@@ -1410,7 +1413,7 @@ proc newEmpty*(out_arg: ptr ComponentValFlagsVecT): void {.cdecl,
     importc: "wasmtime_component_val_flags_vec_new_empty".}
 proc newUninitialized*(out_arg: ptr ComponentValFlagsVecT; a1: csize_t): void {.
     cdecl, importc: "wasmtime_component_val_flags_vec_new_uninitialized".}
-proc new*(out_arg: ptr ComponentValFlagsVecT; a1: csize_t; a2: ptr uint32): void {.
+proc new*(out_arg: ptr ComponentValFlagsVecT; a1: csize_t; a2: ptr WasmNameT): void {.
     cdecl, importc: "wasmtime_component_val_flags_vec_new".}
 proc copy*(out_arg: ptr ComponentValFlagsVecT; a1: ptr ComponentValFlagsVecT): void {.
     cdecl, importc: "wasmtime_component_val_flags_vec_copy".}
@@ -1427,8 +1430,12 @@ proc delete*(a0: ptr ComponentT): void {.cdecl,
     importc: "wasmtime_component_delete".}
 proc newComponentLinker*(engine: ptr WasmEngineT): ptr ComponentLinkerT {.cdecl,
     importc: "wasmtime_component_linker_new".}
-proc linkWasi*(store: ptr ComponentLinkerT; trap_out: ptr ptr WasmTrapT): ptr ErrorT {.
+proc linkWasi*(linker: ptr ComponentLinkerT; trap_out: ptr ptr WasmTrapT): ptr ErrorT {.
     cdecl, importc: "wasmtime_component_linker_link_wasi".}
+proc funcNew*(linker: ptr ComponentLinkerT; name: cstring; len: csize_t;
+              callback: ComponentFuncCallbackT; data: pointer;
+              finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_linker_func_new".}
 proc instantiate*(linker: ptr ComponentLinkerT; context: ptr ComponentContextT;
                   component: ptr ComponentT;
                   instance_out: ptr ptr ComponentInstanceT;
@@ -1863,6 +1870,41 @@ proc call*(f: ptr FuncT; store: ptr ContextT; args: openArray[ValT];
   store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t,
              trap)
 
+type
+  ComponentFuncCallback* = proc (ctx: pointer; params: openArray[ComponentValT];
+                                 results: openArray[ComponentValT])
+proc funcNew*(linker: ptr ComponentLinkerT; name: string;
+              callback: ComponentFuncCallback; data: pointer = nil;
+              finalizer: proc (a0: pointer): void {.cdecl.} = nil): WasmtimeResult[
+    void] =
+  type
+    Ctx = object
+      callback: ComponentFuncCallback
+      data: pointer
+      finalizer: proc (a0: pointer): void {.cdecl.}
+  var ctx = createShared(Ctx)
+  ctx.callback = callback
+  ctx.data = data
+  ctx.finalizer = finalizer
+  proc fin(data: pointer) {.cdecl.} =
+    let ctx = cast[ptr Ctx](data)
+    if ctx.finalizer != nil:
+      ctx.finalizer(ctx.data)
+    deallocShared(ctx)
+
+  proc cb(data: pointer; params: ptr ComponentValT; paramsLen: csize_t;
+          results: ptr ComponentValT; resultsLen: csize_t): ptr WasmTrapT {.
+      cdecl.} =
+    let ctx = cast[ptr Ctx](data)
+    let params = cast[ptr UncheckedArray[ComponentValT]](params)
+    let results = cast[ptr UncheckedArray[ComponentValT]](results)
+    ctx[].callback(ctx[].data, params.toOpenArray(0, paramsLen.int - 1),
+                   results.toOpenArray(0, resultsLen.int - 1))
+    nil
+
+  return linker.funcNew(name.cstring, name.len.csize_t, cb, ctx, fin).toResult(
+      void)
+
 proc `$`*(a: ComponentValT): string =
   case a.kind.ComponentValKind
   of Bool:
@@ -1890,7 +1932,7 @@ proc `$`*(a: ComponentValT): string =
   of Char:
     $a.payload.character
   of String:
-    "\"" & $a.payload.string_field & "\""
+    "\"" & $a.payload.string_field.strVal & "\""
   of List:
     var str = "["
     for i, v in a.payload.list:
@@ -1911,5 +1953,15 @@ proc `$`*(a: ComponentValT): string =
     str
   of Enum:
     $a.payload.enumeration
+  of Option:
+    if a.payload.option != nil:
+      "Some(" & $(a.payload.option[]) & ")"
+    else:
+      "none"
+  of Result:
+    if a.payload.result.error:
+      "Err(" & $(a.payload.option[]) & ")"
+    else:
+      "Ok(" & $(a.payload.option[]) & ")"
   else:
-    "Unknown"
+    "Unknown " & $a.kind.ComponentValKind

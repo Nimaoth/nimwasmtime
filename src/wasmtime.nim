@@ -703,6 +703,37 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           results: openArray[ValT], trap: ptr ptr WasmTrapT): ptr ErrorT =
         store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t, trap)
 
+      type ComponentFuncCallback* = proc(ctx: pointer, params: openArray[ComponentValT], results: openArray[ComponentValT])
+
+      proc funcNew*(linker: ptr ComponentLinkerT; name: string;
+          callback: ComponentFuncCallback; data: pointer = nil;
+          finalizer: proc (a0: pointer): void {.cdecl.} = nil): WasmtimeResult[void] =
+
+        type Ctx = object
+          callback: ComponentFuncCallback
+          data: pointer
+          finalizer: proc (a0: pointer): void {.cdecl.}
+
+        var ctx = createShared(Ctx)
+        ctx.callback = callback
+        ctx.data = data
+        ctx.finalizer = finalizer
+
+        proc fin(data: pointer) {.cdecl.} =
+          let ctx = cast[ptr Ctx](data)
+          if ctx.finalizer != nil:
+            ctx.finalizer(ctx.data)
+          deallocShared(ctx)
+
+        proc cb(data: pointer, params: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
+          let ctx = cast[ptr Ctx](data)
+          let params = cast[ptr UncheckedArray[ComponentValT]](params)
+          let results = cast[ptr UncheckedArray[ComponentValT]](results)
+          ctx[].callback(ctx[].data, params.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
+          nil
+
+        return linker.funcNew(name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
+
       proc `$`*(a: ComponentValT): string =
         case a.kind.ComponentValKind
         of Bool: $a.payload.boolean
@@ -717,7 +748,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
         of Float32: $a.payload.f32
         of Float64: $a.payload.f64
         of Char: $a.payload.character
-        of String: "\"" & $a.payload.string_field & "\""
+        of String: "\"" & $a.payload.string_field.strVal & "\""
 
         of List:
           var str = "["
@@ -741,10 +772,21 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
         # of Tuple: $a.payload.tuple_field
         # of Variant: $a.payload.variant
         of Enum: $a.payload.enumeration
-        # of Option: $a.payload.option
-        # of Result: $a.payload.result
+
+        of Option:
+          if a.payload.option != nil:
+            "Some(" & $(a.payload.option[]) & ")"
+          else:
+            "none"
+
+        of Result:
+          if a.payload.result.error:
+            "Err(" & $(a.payload.option[]) & ")"
+          else:
+            "Ok(" & $(a.payload.option[]) & ")"
+
         # of Flags: $a.payload.flags
-        else: "Unknown"
+        else: "Unknown " & $a.kind.ComponentValKind
 
     static:
       postProcess()
