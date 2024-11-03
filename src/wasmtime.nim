@@ -703,7 +703,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           results: openArray[ValT], trap: ptr ptr WasmTrapT): ptr ErrorT =
         store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t, trap)
 
-      type ComponentFuncCallback* = proc(ctx: pointer, params: openArray[ComponentValT], results: openArray[ComponentValT])
+      type ComponentFuncCallback* = proc(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT])
 
       proc funcNew*(linker: ptr ComponentLinkerT; name: string;
           callback: ComponentFuncCallback; data: pointer = nil;
@@ -771,6 +771,13 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
         # todo
         # of Tuple: $a.payload.tuple_field
         # of Variant: $a.payload.variant
+
+        of Variant:
+          if a.payload.variant.val != nil:
+            a.payload.variant.name.strVal & "(" & $a.payload.variant.val[] & ")"
+          else:
+            a.payload.variant.name.strVal
+
         of Enum: $a.payload.enumeration
 
         of Option:

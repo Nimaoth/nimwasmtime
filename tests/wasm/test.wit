@@ -10,7 +10,7 @@ interface types {
     c: foo,
     d: option<string>,
     e: option<voodoo>,
-    f: list<s32>,
+    f: list<string>,
     // g: result<foo, descriptor-type>,
     // h: result<bar>,
   }

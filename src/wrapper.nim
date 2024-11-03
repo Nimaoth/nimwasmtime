@@ -1872,7 +1872,7 @@ proc call*(f: ptr FuncT; store: ptr ContextT; args: openArray[ValT];
 
 type
   ComponentFuncCallback* = proc (ctx: pointer; params: openArray[ComponentValT];
-                                 results: openArray[ComponentValT])
+                                 results: var openArray[ComponentValT])
 proc funcNew*(linker: ptr ComponentLinkerT; name: string;
               callback: ComponentFuncCallback; data: pointer = nil;
               finalizer: proc (a0: pointer): void {.cdecl.} = nil): WasmtimeResult[
@@ -1951,6 +1951,11 @@ proc `$`*(a: ComponentValT): string =
       str.add $v.val
     str.add "}"
     str
+  of Variant:
+    if a.payload.variant.val != nil:
+      a.payload.variant.name.strVal & "(" & $a.payload.variant.val[] & ")"
+    else:
+      a.payload.variant.name.strVal
   of Enum:
     $a.payload.enumeration
   of Option:

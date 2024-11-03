@@ -1,6 +1,10 @@
 import std/[strformat, options, strutils, macros, genasts]
 import results
 import wasmtime
+import wit_host
+
+witBindGen("wasm/test.wit"):
+  discard
 
 proc main() =
   echo "Start main"
@@ -137,14 +141,28 @@ proc to*(a: ComponentValT, T: typedesc): T =
     assert a.kind == ComponentValKind.String.ComponentValKindT
     result = a.payload.string_field.strVal
 
+  # elif T is WitString:
+  #   assert a.kind == ComponentValKind.String.ComponentValKindT
+  #   result = ws(cast[ptr char](a.payload.string_field.data), a.payload.string_field.len)
+
   elif T is bool:
     assert a.kind == ComponentValKind.Bool.ComponentValKindT
     result = a.payload.boolean
 
   elif T is seq:
     assert a.kind == ComponentValKind.List.ComponentValKindT
+    type Item = typeof(result[0])
     for v in a.payload.list:
-      result.add v.to(typeof(result[0]))
+      result.add v.to(Item)
+
+  # elif T is WitList:
+  #   assert a.kind == ComponentValKind.List.ComponentValKindT
+  #   type Item = typeof(result[0])
+  #   for v in a.payload.list:
+  #     result.add v.to(Item)
+  #   # var res: seq[Item]
+  #   # for v in a.payload.list:
+  #   #   res.add v.to(Item)
 
   elif T is options.Option:
     assert a.kind == ComponentValKind.Option.ComponentValKindT
@@ -186,31 +204,6 @@ proc to*(a: ComponentValT, T: typedesc): T =
   else:
     {.error: "Can't convert ComponentValT to " & $T.}
 
-type
-  Bar = object
-    a*: int32
-    b*: float32
-  Foo = object
-    x*: string
-  VoodooKind = enum
-    Unpossesed = "unpossesed", Possesed = "possesed"
-  Voodoo = object
-    case kind*: VoodooKind
-    of Possesed:
-      possesed: string
-    else:
-      nil
-  Baz = object
-    x*: string
-    c*: Foo
-    d*: Option[string]
-    e*: Option[Voodoo]
-    f*: seq[int32]
-    # h*: Result[Bar, void]
-  DescriptorType = enum
-    Unknown, BlockDevice, CharacterDevice, Directory, Fifo, SymbolicLink,
-    RegularFile, Socket
-
 proc main2() =
   echo "Start main2"
   let config = newConfig()
@@ -226,25 +219,18 @@ proc main2() =
     return
 
   block:
-    proc cb(data: pointer, params: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
-      let params = cast[ptr UncheckedArray[ComponentValT]](params)
-      let results = cast[ptr UncheckedArray[ComponentValT]](results)
-      echo &"cb: {paramsLen} -> {resultsLen}"
-      for i in 0..<paramsLen:
-        echo &"cb: {params[i]}"
-
+    proc cb(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT]) =
       let a = params[0].to(int32)
       let b = params[1].to(float32)
       results[0] = (a.float32 - b).toVal
-      nil
+      echo &"bar-baz: {a} - {b} = {results[0]}"
 
     let funcName = "bar-baz"
-    echo &"link {funcName}"
-    linker.funcNew(funcName.cstring, funcName.len.csize_t, cb, nil, nil).okOr(err):
+    linker.funcNew(funcName, cb).okOr(err):
       echo &"[trap] Failed to link func {funcName}: ", err.msg
 
   block:
-    proc cb(ctx: pointer, params: openArray[ComponentValT], results: openArray[ComponentValT]) =
+    proc cb(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT]) =
       # echo &"cb: {params} -> {results.len}"
       let b = params[0].to(Bar)
       echo &"barrrr: {b}"
@@ -254,7 +240,7 @@ proc main2() =
       echo &"[trap] Failed to link func {funcName}: ", err.msg
 
   block:
-    proc cb(ctx: pointer, params: openArray[ComponentValT], results: openArray[ComponentValT]) =
+    proc cb(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT]) =
       echo "bazzz"
       # echo &"cb: {params} -> {results.len}"
       let b = params[0].to(Baz)
