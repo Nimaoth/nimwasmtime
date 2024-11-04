@@ -1960,6 +1960,14 @@ proc `$`*(a: ComponentValT): string =
       str.add $v.val
     str.add "}"
     str
+  of Tuple:
+    var str = "("
+    for i, v in a.payload.tuple_field:
+      if i > 0:
+        str.add ", "
+      str.add $v
+    str.add ")"
+    str
   of Variant:
     if a.payload.variant.val != nil:
       a.payload.variant.name.strVal & "(" & $a.payload.variant.val[] & ")"

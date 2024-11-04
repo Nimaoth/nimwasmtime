@@ -5,9 +5,11 @@ proc getTypeName*(ctx: WitContext, typ: WitType): NimNode =
   if typ.builtin != "":
     return ctx.builtinToNimName(typ.builtin).ident
   case ctx.types[typ.index].kind:
-  # todo
-  # of Tuple:
-  #   return nnkBracketExpr.newTree(ident"Option", ctx.getTypeName(ctx.types[typ.index].optionTarget))
+
+  of Tuple:
+    result = nnkTupleConstr.newTree()
+    for f in ctx.types[typ.index].fields:
+      result.add ctx.getTypeName(f.typ)
   of Option:
     return nnkBracketExpr.newTree(ident"Option", ctx.getTypeName(ctx.types[typ.index].optionTarget))
   of List:
@@ -19,9 +21,11 @@ proc getTypeName*(ctx: WitContext, typ: WitType): NimNode =
     return nnkBracketExpr.newTree(ident"Result",
       ctx.getTypeName(ctx.types[typ.index].resultOkTarget), ctx.getTypeName(ctx.types[typ.index].resultErrTarget))
   else:
+    if ctx.types[typ.index].name == "":
+      error("type without name: " & $ctx.types[typ.index])
     return ctx.types[typ.index].name.ident
 
-func genTypeSection*(ctx: WitContext): NimNode =
+proc genTypeSection*(ctx: WitContext): NimNode =
   var typeSection = nnkTypeSection.newTree()
 
   for t in ctx.types:

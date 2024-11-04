@@ -208,6 +208,8 @@ proc main2() =
 
     echo &"Called {name}: {results[0]}"
 
+  echo "------------ Finished main2"
+
 main()
 echo "------------"
 main2()

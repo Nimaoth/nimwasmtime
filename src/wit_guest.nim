@@ -135,6 +135,14 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
         loweredI += ctx.flatTypeSize(f.typ)
       return
 
+    of Tuple:
+      var loweredI = 0
+      for i, f in userType.fields:
+        let fieldAccess = nnkBracketExpr.newTree(param, newLit(i))
+        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode)
+        loweredI += ctx.flatTypeSize(f.typ)
+      return
+
     of Variant:
       var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(param, ident"kind"))
       var addElse = false
@@ -157,11 +165,11 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
     # of Owned, Borrowed:
 
     else:
-      # assert false
+      error("Not implemented lower(" & $userType.kind & ")")
       return
 
   else:
-    # assert false
+    error("Not implemented lower(" & $typ.builtin & ")")
     return
 
 proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode) =
@@ -304,8 +312,8 @@ macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped
 
     funcList
 
-  hint "Write api to " & (dir / "witgen.nim")
-  writeFile(dir / "witgen.nim", code.repr)
+  hint "Write api to " & (dir / "guest.nim")
+  writeFile(dir / "guest.nim", code.repr)
   return code
 
 template witBindGen*(witPath: static[string], body: untyped): untyped =

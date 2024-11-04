@@ -775,9 +775,13 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           str.add "}"
           str
 
-        # todo
-        # of Tuple: $a.payload.tuple_field
-        # of Variant: $a.payload.variant
+        of Tuple:
+          var str = "("
+          for i, v in a.payload.tuple_field:
+            if i > 0: str.add ", "
+            str.add $v
+          str.add ")"
+          str
 
         of Variant:
           if a.payload.variant.val != nil:
@@ -799,6 +803,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           else:
             "Ok(" & $(a.payload.option[]) & ")"
 
+        # todo
         # of Flags: $a.payload.flags
         else: "Unknown " & $a.kind.ComponentValKind
 
@@ -894,6 +899,13 @@ proc to*(a: ComponentValT, T: typedesc): T =
     assert a.kind == ComponentValKind.Option.ComponentValKindT
     if a.payload.option != nil:
       result = a.payload.option[].to(typeof(result.get)).some
+
+  elif T is tuple:
+    if a.kind == ComponentValKind.Tuple.ComponentValKindT:
+      var i = 0
+      for k, v in result.fieldPairs:
+        v = a.payload.tuple_field[i].to(typeof(v))
+        inc i
 
   elif T is object:
     if a.kind == ComponentValKind.Record.ComponentValKindT:

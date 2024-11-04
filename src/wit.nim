@@ -170,6 +170,12 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
         fields.add (name.toCamelCase(false), field["type"].jsonTo(WitType))
       res.add(WitUserType(kind: Variant, index: res.len, name: name.toCamelCase(true), fields: fields))
 
+    elif kind.hasKey("tuple"):
+      var fields: seq[RecordField]
+      for i, field in kind["tuple"]["types"].elems:
+        fields.add ($i, field.jsonTo(WitType))
+      res.add(WitUserType(kind: Tuple, index: res.len, fields: fields))
+
     else:
       error(&"Unknown type {t}")
 
@@ -212,7 +218,7 @@ proc despecialize(ctx: WitContext, typ: WitType): WitUserType =
     let userType = ctx.types[typ.index]
     case userType.kind
     of Tuple:
-      return WitUserType(kind: Variant, index: userType.index, fields: userType.fields)
+      return WitUserType(kind: Record, index: userType.index, fields: userType.fields)
     of Enum:
       return WitUserType(kind: Variant, index: userType.index, fields: userType.enumCases.mapIt((name: it, typ: WitType(builtin: "void"))))
     of Option:
@@ -289,7 +295,7 @@ proc flattenType(ctx: WitContext, typ: WitType): seq[CoreType] =
   of Owned, Borrowed: @[CoreType.I32]
 
   else:
-    assert false
+    error("Not implemented: flattenType(" & $typ & ")")
     @[]
 
   ctx.flatSizeMap[typ.index] = result.len
