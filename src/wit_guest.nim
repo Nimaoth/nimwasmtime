@@ -102,6 +102,11 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
         loweredArg = cast[int32](param)
       outCode.add code
 
+    of Flags:
+      let code = genAst(loweredArg = loweredArgs[0], param = param):
+        loweredArg = cast[int32](param)
+      outCode.add code
+
     of Option:
       let childAccess = nnkDotExpr.newTree(param, ident("get"))
       var lowerChild = nnkStmtList.newTree()
@@ -130,7 +135,7 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
     of Record:
       var loweredI = 0
       for i, f in userType.fields:
-        let fieldAccess = nnkDotExpr.newTree(param, ident(f.name))
+        let fieldAccess = nnkDotExpr.newTree(param, ident(f.name.toCamelCase(false)))
         ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode)
         loweredI += ctx.flatTypeSize(f.typ)
       return
@@ -161,7 +166,7 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
         cases
       outCode.add code
 
-    # of Flags:
+    # todo
     # of Owned, Borrowed:
 
     else:

@@ -850,6 +850,17 @@ proc toVal*[T](a: T): ComponentValT =
   else:
     {.error: "Can't convert type " & $T & " to ComponentValT".}
 
+macro getSetTargetType(t: typed): untyped =
+  ## Given set[T], return T
+  return t.getTypeInst[1].getTypeImpl[1]
+
+proc toCamelCase*(str: string, capitalizeFirst: bool): string =
+  for i, part in enumerate(str.split("-")):
+    if i == 0 and not capitalizeFirst:
+      result.add part
+    else:
+      result.add part.capitalizeAscii
+
 proc to*(a: ComponentValT, T: typedesc): T =
   # echo a, ", ", a.kind.ComponentValKind, " to ", T
   when T is int32:
@@ -895,6 +906,13 @@ proc to*(a: ComponentValT, T: typedesc): T =
   #   # for v in a.payload.list:
   #   #   res.add v.to(Item)
 
+  elif T is system.set:
+    assert a.kind == ComponentValKind.Flags.ComponentValKindT
+    type Item = T.getSetTargetType()
+    for v in a.payload.flags:
+      let name = v.strVal
+      result.incl parseEnum[Item](name)
+
   elif T is options.Option:
     assert a.kind == ComponentValKind.Option.ComponentValKindT
     if a.payload.option != nil:
@@ -929,7 +947,7 @@ proc to*(a: ComponentValT, T: typedesc): T =
               # todo: check this `when` in the macro instead of in the returned code
               when compiles(res.field):
                 res.field = val.to(typeof(res.field))
-            cases.add nnkOfBranch.newTree(ident(capitalizeAscii($v)), caseCode)
+            cases.add nnkOfBranch.newTree(ident(toCamelCase($v, true)), caseCode)
 
           return nnkStmtList.newTree(cases)
 

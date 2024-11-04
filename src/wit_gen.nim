@@ -1,4 +1,4 @@
-import std/[macros, options]
+import std/[macros, options, strutils]
 import wit
 
 proc getTypeName*(ctx: WitContext, typ: WitType): NimNode =
@@ -23,7 +23,7 @@ proc getTypeName*(ctx: WitContext, typ: WitType): NimNode =
   else:
     if ctx.types[typ.index].name == "":
       error("type without name: " & $ctx.types[typ.index])
-    return ctx.types[typ.index].name.ident
+    return ctx.types[typ.index].name.toCamelCase(true).ident
 
 proc genTypeSection*(ctx: WitContext): NimNode =
   var typeSection = nnkTypeSection.newTree()
@@ -37,22 +37,37 @@ proc genTypeSection*(ctx: WitContext): NimNode =
       var recList = nnkRecList.newTree()
       for field in t.fields:
         let fieldType = ctx.getTypeName(field.typ)
-        recList.add nnkIdentDefs.newTree(nnkPostfix.newTree(ident"*", ident(field.name)), fieldType, newEmptyNode())
+        recList.add nnkIdentDefs.newTree(nnkPostfix.newTree(ident"*", ident(field.name.toCamelCase(false))), fieldType, newEmptyNode())
       var objType = nnkObjectTy.newTree(newEmptyNode(), newEmptyNode(), recList)
-      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name)), newEmptyNode(), objType)
+      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), objType)
 
     of Enum:
       var enumType = nnkEnumTy.newTree(newEmptyNode())
-      for cas in t.enumCases:
-        enumType.add ident(cas)
-      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name)), newEmptyNode(), enumType)
+      for cas in t.cases:
+        enumType.add nnkEnumFieldDef.newTree(ident(cas.toCamelCase(true)), newLit(cas))
+      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), enumType)
+
+    of Flags:
+      let (enumName, flagsName) = if t.name.endsWith("s"):
+        (t.name[0..^2].toCamelCase(true), t.name.toCamelCase(true))
+      else:
+        (t.name.toCamelCase(true), (t.name & "s").toCamelCase(true))
+
+      var enumType = nnkEnumTy.newTree(newEmptyNode())
+      for cas in t.cases:
+        enumType.add nnkEnumFieldDef.newTree(ident(cas.toCamelCase(true)), newLit(cas))
+      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(enumName)), newEmptyNode(), enumType)
+
+      # todo: set isn't 4 bytes, maybe use int32 or custom type or whatever
+      var flagsType = nnkBracketExpr.newTree(ident"set", ident(enumName))
+      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(flagsName)), newEmptyNode(), flagsType)
 
     of Variant:
       var enumType = nnkEnumTy.newTree(newEmptyNode())
       for f in t.fields:
         enumType.add nnkEnumFieldDef.newTree(ident(f.name.toCamelCase(true)), newLit(f.name))
 
-      let kindTypeName = ident(t.name & "Kind")
+      let kindTypeName = ident(t.name.toCamelCase(true) & "Kind")
       typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", kindTypeName), newEmptyNode(), enumType)
 
       var cases = nnkRecCase.newTree(nnkIdentDefs.newTree(
@@ -76,7 +91,7 @@ proc genTypeSection*(ctx: WitContext): NimNode =
         cases.add nnkElse.newTree(nnkRecList.newTree(newNilLit()))
 
       var objectType = nnkObjectTy.newTree(newEmptyNode(), newEmptyNode(), nnkRecList.newTree(cases))
-      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name)), newEmptyNode(), objectType)
+      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), objectType)
 
     else:
       discard

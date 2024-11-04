@@ -11,8 +11,8 @@ type
     case kind*: WitUserTypeKind
     of Record, Variant, Tuple:
       fields*: seq[RecordField]
-    of Enum:
-      enumCases*: seq[string]
+    of Enum, Flags:
+      cases*: seq[string]
     of Option:
       optionTarget*: WitType
     of List:
@@ -133,15 +133,22 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
       var fields: seq[RecordField]
       for field in kind["record"]["fields"]:
         let name = field["name"].getStr
-        fields.add (name.toCamelCase(false), field["type"].jsonTo(WitType))
-      res.add(WitUserType(kind: Record, index: res.len, name: name.toCamelCase(true), fields: fields))
+        fields.add (name, field["type"].jsonTo(WitType))
+      res.add(WitUserType(kind: Record, index: res.len, name: name, fields: fields))
 
     elif kind.hasKey("enum"):
-      var names: seq[string]
+      var cases: seq[string]
       for cas in kind["enum"]["cases"]:
         let name = cas["name"].getStr
-        names.add name.toCamelCase(true)
-      res.add(WitUserType(kind: Enum, index: res.len, name: name.toCamelCase(true), enumCases: names))
+        cases.add name
+      res.add(WitUserType(kind: Enum, index: res.len, name: name, cases: cases))
+
+    elif kind.hasKey("flags"):
+      var cases: seq[string]
+      for field in kind["flags"]["flags"]:
+        let name = field["name"].getStr
+        cases.add name
+      res.add(WitUserType(kind: Flags, index: res.len, name: name, cases: cases))
 
     elif kind.hasKey("option"):
       let typ = kind["option"].jsonTo(WitType)
@@ -167,8 +174,8 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
       var fields: seq[RecordField]
       for field in kind["variant"]["cases"]:
         let name = field["name"].getStr
-        fields.add (name.toCamelCase(false), field["type"].jsonTo(WitType))
-      res.add(WitUserType(kind: Variant, index: res.len, name: name.toCamelCase(true), fields: fields))
+        fields.add (name, field["type"].jsonTo(WitType))
+      res.add(WitUserType(kind: Variant, index: res.len, name: name, fields: fields))
 
     elif kind.hasKey("tuple"):
       var fields: seq[RecordField]
@@ -177,7 +184,7 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
       res.add(WitUserType(kind: Tuple, index: res.len, fields: fields))
 
     else:
-      error(&"Unknown type {t}")
+      error(&"Not implemented: collectType({t})")
 
   ctx.types = res.ensureMove
 
@@ -220,7 +227,7 @@ proc despecialize(ctx: WitContext, typ: WitType): WitUserType =
     of Tuple:
       return WitUserType(kind: Record, index: userType.index, fields: userType.fields)
     of Enum:
-      return WitUserType(kind: Variant, index: userType.index, fields: userType.enumCases.mapIt((name: it, typ: WitType(builtin: "void"))))
+      return WitUserType(kind: Variant, index: userType.index, fields: userType.cases.mapIt((name: it, typ: WitType(builtin: "void"))))
     of Option:
       return WitUserType(kind: Variant, index: userType.index, fields: @[(name: "none", typ: WitType(builtin: "void")), (name: "some", typ: userType.optionTarget)])
     of Result:
