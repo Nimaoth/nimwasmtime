@@ -1833,6 +1833,15 @@ proc imports*(module: ptr ModuleT): WasmImporttypeVecT =
 proc exports*(module: ptr ModuleT): WasmExporttypeVecT =
   module.exports(result.addr)
 
+proc newComponent*(engine: ptr WasmEngineT; buf: openArray[char]): WasmtimeResult[
+    ptr ComponentT] =
+  var c: ptr ComponentT = nil
+  let err = engine.fromBinary(cast[ptr uint8](buf[0].addr), buf.len.csize_t,
+                              c.addr)
+  if err != nil:
+    return err.toResult(ptr ComponentT)
+  return ok(c)
+
 proc instantiate*(linker: ptr LinkerT; store: ptr ContextT; module: ptr ModuleT;
                   trap: ptr ptr WasmTrapT): WasmtimeResult[InstanceT] =
   var instance: InstanceT

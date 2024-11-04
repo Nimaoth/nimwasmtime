@@ -1,4 +1,4 @@
-import std/[os, macros, strutils, json, sets, enumerate, tables]
+import std/[os, macros, strutils, json, sets, enumerate, tables, options]
 
 const nimWasmtimeStatic* {.booldefine.} = true
 const nimWasmtimeOverride* {.strdefine.} = ""
@@ -669,7 +669,14 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       proc exports*(module: ptr ModuleT): WasmExporttypeVecT =
         module.exports(result.addr)
 
-      proc instantiate*(linker: ptr LinkerT; store: ptr ContextT; module: ptr ModuleT; trap: ptr ptr WasmTrapT): WasmtimeResult[InstanceT] =
+      proc newComponent*(engine: ptr WasmEngineT, buf: openArray[char]): WasmtimeResult[ptr ComponentT] =
+        var c: ptr ComponentT = nil
+        let err = engine.fromBinary(cast[ptr uint8](buf[0].addr), buf.len.csize_t, c.addr)
+        if err != nil:
+          return err.toResult(ptr ComponentT)
+        return ok(c)
+
+      proc instantiate*(linker: ptr LinkerT, store: ptr ContextT, module: ptr ModuleT, trap: ptr ptr WasmTrapT): WasmtimeResult[InstanceT] =
         var instance: InstanceT
         let err = linker.instantiate(store, module, instance.addr, trap)
         if err != nil:
@@ -800,3 +807,125 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
 
 else: # defined(useFuthark) or defined(useFutharkForWasmtime)
   include wrapper
+
+proc toVal*[T](a: T): ComponentValT =
+  # echo &"toVal {a}"
+  when T is object:
+    result.kind = ComponentValKind.Record.ComponentValKindT
+    var numFields = 0
+    for k, v in a.fieldPairs:
+      numFields.inc
+
+    result.payload.record.addr.newUninitialized(numFields.csize_t)
+
+    var i = 0
+    for k, v in a.fieldPairs:
+      result.payload.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
+      inc i
+
+    # echo result.payload.record.data.isNil
+    # echo result.payload.record.size
+
+  elif T is int32:
+    result.kind = ComponentValKind.S32.ComponentValKindT
+    result.payload.s32 = a
+
+  elif T is int64:
+    result.kind = ComponentValKind.S64.ComponentValKindT
+    result.payload.s64 = a
+
+  elif T is float32:
+    result.kind = ComponentValKind.Float32.ComponentValKindT
+    result.payload.f32 = a
+
+  elif T is float64:
+    result.kind = ComponentValKind.Float64.ComponentValKindT
+    result.payload.f64 = a
+
+  else:
+    {.error: "Can't convert type " & $T & " to ComponentValT".}
+
+proc to*(a: ComponentValT, T: typedesc): T =
+  # echo a, ", ", a.kind.ComponentValKind, " to ", T
+  when T is int32:
+    assert a.kind == ComponentValKind.S32.ComponentValKindT
+    result = a.payload.s32
+
+  elif T is int64:
+    assert a.kind == ComponentValKind.S64.ComponentValKindT
+    result = a.payload.s64
+
+  elif T is float32:
+    assert a.kind == ComponentValKind.Float32.ComponentValKindT
+    result = a.payload.f32
+
+  elif T is float64:
+    assert a.kind == ComponentValKind.Float64.ComponentValKindT
+    result = a.payload.f64
+
+  elif T is string:
+    assert a.kind == ComponentValKind.String.ComponentValKindT
+    result = a.payload.string_field.strVal
+
+  # elif T is WitString:
+  #   assert a.kind == ComponentValKind.String.ComponentValKindT
+  #   result = ws(cast[ptr char](a.payload.string_field.data), a.payload.string_field.len)
+
+  elif T is bool:
+    assert a.kind == ComponentValKind.Bool.ComponentValKindT
+    result = a.payload.boolean
+
+  elif T is seq:
+    assert a.kind == ComponentValKind.List.ComponentValKindT
+    type Item = typeof(result[0])
+    for v in a.payload.list:
+      result.add v.to(Item)
+
+  # elif T is WitList:
+  #   assert a.kind == ComponentValKind.List.ComponentValKindT
+  #   type Item = typeof(result[0])
+  #   for v in a.payload.list:
+  #     result.add v.to(Item)
+  #   # var res: seq[Item]
+  #   # for v in a.payload.list:
+  #   #   res.add v.to(Item)
+
+  elif T is options.Option:
+    assert a.kind == ComponentValKind.Option.ComponentValKindT
+    if a.payload.option != nil:
+      result = a.payload.option[].to(typeof(result.get)).some
+
+  elif T is object:
+    if a.kind == ComponentValKind.Record.ComponentValKindT:
+      var i = 0
+      for k, v in result.fieldPairs:
+        v = a.payload.record[i].val.to(typeof(v))
+        inc i
+
+    elif a.kind == ComponentValKind.Variant.ComponentValKindT:
+      when compiles(result.kind):
+        type Kind = typeof(result.kind)
+        let tag = parseEnum[Kind](a.payload.variant.name.strVal)
+        result = T(kind: tag)
+
+        macro convertField(res: typed, val: untyped): untyped =
+          var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(res, ident"kind"))
+          var addElse = false
+
+          for v in Kind:
+            var caseCode = genAst(res, val, field = ident($v)):
+              # todo: check this `when` in the macro instead of in the returned code
+              when compiles(res.field):
+                res.field = val.to(typeof(res.field))
+            cases.add nnkOfBranch.newTree(ident(capitalizeAscii($v)), caseCode)
+
+          return nnkStmtList.newTree(cases)
+
+        result.convertField(a.payload.variant.val[])
+
+  elif T is enum:
+    assert a.kind == ComponentValKind.Enum.ComponentValKindT
+    parseEnum[T](a.payload.enumeration.name.strVal)
+
+  else:
+    {.error: "Can't convert ComponentValT to " & $T.}
