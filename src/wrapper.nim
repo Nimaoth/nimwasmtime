@@ -384,7 +384,7 @@ type
     u64*: uint64
     f32*: cfloat
     f64*: cdouble
-    character*: uint8
+    character*: uint32
     string_field*: WasmNameT
     list*: ComponentValVecT
     record*: ComponentValRecordFieldVecT

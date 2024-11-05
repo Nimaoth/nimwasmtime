@@ -192,7 +192,7 @@ proc builtinToNimName*(ctx: WitContext, builtin: string): string =
   return case builtin
   of "void": "void"
   of "bool": "bool"
-  of "char": "char"
+  of "char": "Rune"
   of "string":
     if ctx.useCustomBuiltinTypes:
       "WitString"

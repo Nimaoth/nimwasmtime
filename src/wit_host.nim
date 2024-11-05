@@ -38,6 +38,7 @@ macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped
   let code = genAst(typeSection):
     {.push hint[DuplicateModuleImport]:off.}
     import std/[options]
+    from std/unicode import Rune
     import results, wit_types
     {.pop.}
 

@@ -66,11 +66,19 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
 
   of "bool":
     let code = genAst(arg = loweredArgs[0]):
-      # arg = true
-      discard
+      loweredArg = cast[int32](param)
     outCode.add code
 
-  # of "char": 1
+  of "char":
+    let code = genAst(loweredArg = loweredArgs[0], param = param):
+      loweredArg = cast[int32](param)
+    outCode.add code
+
+  of "s8", "s16", "s32", "s64", "u8", "u16", "u32", "u64", "f32", "f64":
+    let code = genAst(loweredArg = loweredArgs[0], param = param):
+      loweredArg = param
+    outCode.add code
+
   of "string":
     let code = genAst(loweredPtr = loweredArgs[0], loweredLen = loweredArgs[1], param = param):
       if param.len > 0:
@@ -78,11 +86,6 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       else:
         loweredPtr = 0
       loweredLen = param.len
-    outCode.add code
-
-  of "s8", "s16", "s32", "s64", "u8", "u16", "u32", "u64", "f32", "f64":
-    let code = genAst(loweredArg = loweredArgs[0], param = param):
-      loweredArg = param
     outCode.add code
 
   of "":
@@ -310,6 +313,7 @@ macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped
   let code = genAst(typeSection, funcList):
     {.push hint[DuplicateModuleImport]:off.}
     import std/[options]
+    from std/unicode import Rune
     import results, wit_types
     {.pop.}
 

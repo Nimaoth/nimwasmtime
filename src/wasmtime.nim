@@ -813,6 +813,8 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
 else: # defined(useFuthark) or defined(useFutharkForWasmtime)
   include wrapper
 
+from std/unicode import Rune
+
 proc toVal*[T](a: T): ComponentValT =
   # echo &"toVal {a}"
   when T is object:
@@ -847,6 +849,10 @@ proc toVal*[T](a: T): ComponentValT =
     result.kind = ComponentValKind.Float64.ComponentValKindT
     result.payload.f64 = a
 
+  elif T is Rune:
+    result.kind = ComponentValKind.Char.ComponentValKindT
+    result.payload.character = a.uint32
+
   else:
     {.error: "Can't convert type " & $T & " to ComponentValT".}
 
@@ -878,6 +884,10 @@ proc to*(a: ComponentValT, T: typedesc): T =
   elif T is float64:
     assert a.kind == ComponentValKind.Float64.ComponentValKindT
     result = a.payload.f64
+
+  elif T is Rune:
+    assert a.kind == ComponentValKind.Char.ComponentValKindT
+    result = a.payload.character.Rune
 
   elif T is string:
     assert a.kind == ComponentValKind.String.ComponentValKindT

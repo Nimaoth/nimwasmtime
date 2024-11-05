@@ -58,7 +58,6 @@ proc genTypeSection*(ctx: WitContext): NimNode =
         enumType.add nnkEnumFieldDef.newTree(ident(cas.toCamelCase(true)), newLit(cas))
       typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(enumName)), newEmptyNode(), enumType)
 
-      # todo: set isn't 4 bytes, maybe use int32 or custom type or whatever
       var flagsType = nnkBracketExpr.newTree(ident"set", ident(enumName))
       typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(flagsName)), newEmptyNode(), flagsType)
 
