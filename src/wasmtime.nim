@@ -833,6 +833,10 @@ proc toVal*[T](a: T): ComponentValT =
     # echo result.payload.record.data.isNil
     # echo result.payload.record.size
 
+  elif T is bool:
+    result.kind = ComponentValKind.Bool.ComponentValKindT
+    result.payload.boolean = a
+
   elif T is int32:
     result.kind = ComponentValKind.S32.ComponentValKindT
     result.payload.s32 = a

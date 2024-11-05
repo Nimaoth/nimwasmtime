@@ -65,7 +65,7 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
     outCode.add nnkDiscardStmt.newTree(newEmptyNode())
 
   of "bool":
-    let code = genAst(arg = loweredArgs[0]):
+    let code = genAst(loweredArg = loweredArgs[0], param = param):
       loweredArg = cast[int32](param)
     outCode.add code
 
