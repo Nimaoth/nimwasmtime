@@ -1501,14 +1501,14 @@ proc newTable*(store: ptr ContextT; ty: ptr WasmTabletypeT; init: ptr ValT;
     importc: "wasmtime_table_new".}
 proc type*(store: ptr ContextT; table: ptr TableT): ptr WasmTabletypeT {.cdecl,
     importc: "wasmtime_table_type".}
-proc get*(store: ptr ContextT; table: ptr TableT; index: uint32; val: ptr ValT): bool {.
+proc get*(store: ptr ContextT; table: ptr TableT; index: uint64; val: ptr ValT): bool {.
     cdecl, importc: "wasmtime_table_get".}
-proc set*(store: ptr ContextT; table: ptr TableT; index: uint32; value: ptr ValT): ptr ErrorT {.
+proc set*(store: ptr ContextT; table: ptr TableT; index: uint64; value: ptr ValT): ptr ErrorT {.
     cdecl, importc: "wasmtime_table_set".}
-proc size*(store: ptr ContextT; table: ptr TableT): uint32 {.cdecl,
+proc size*(store: ptr ContextT; table: ptr TableT): uint64 {.cdecl,
     importc: "wasmtime_table_size".}
-proc grow*(store: ptr ContextT; table: ptr TableT; delta: uint32;
-           init: ptr ValT; prev_size: ptr uint32): ptr ErrorT {.cdecl,
+proc grow*(store: ptr ContextT; table: ptr TableT; delta: uint64;
+           init: ptr ValT; prev_size: ptr uint64): ptr ErrorT {.cdecl,
     importc: "wasmtime_table_grow".}
 proc newTrap*(msg: cstring; msg_len: csize_t): ptr WasmTrapT {.cdecl,
     importc: "wasmtime_trap_new".}
