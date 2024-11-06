@@ -48,6 +48,8 @@ type
     F64
 
   CoreFuncType* = object
+    paramsFlat*: bool # Whether the parameters should be flattened into arguments
+    resultsFlat*: bool # Whether the results should be flattened into arguments
     params*: seq[CoreType]
     results*: seq[CoreType]
 
@@ -212,7 +214,7 @@ proc builtinToNimName*(ctx: WitContext, builtin: string): string =
     assert false
     "unknown"
 
-proc coreTypeToNimName*(typ: CoreType): string =
+proc nimTypeName*(typ: CoreType): string =
   return case typ
   of I32: "int32"
   of I64: "int64"
@@ -346,18 +348,40 @@ proc flattenTypes(ctx: WitContext, params: openArray[WitFuncParam]): seq[CoreTyp
 const MAX_FLAT_PARAMS = 16
 const MAX_FLAT_RESULTS = 1
 
-proc flattenFuncType*(ctx: WitContext, fun: WitFunc): CoreFuncType =
-  var flatParams = ctx.flattenTypes(fun.params)
-  var flatResults = ctx.flattenTypes(fun.results)
+func byteSize*(self: CoreType): int =
+  case self
+  of I32, F32: 4
+  of I64, F64: 8
 
-  if flatParams.len > MAX_FLAT_PARAMS:
-    flatParams = @[CoreType.I32]
-  if flatResults.len > MAX_FLAT_RESULTS:
+func byteAlignment*(self: CoreType): int =
+  case self
+  of I32, F32: 4
+  of I64, F64: 8
+
+func paramsByteSize*(self: CoreFuncType): int =
+  for p in self.params:
+    while result mod p.byteAlignment != 0:
+      inc result
+    result += p.byteSize
+
+proc flattenFuncType*(ctx: WitContext, fun: WitFunc): tuple[actual: CoreFuncType, target: CoreFuncType] =
+  result.target.params = ctx.flattenTypes(fun.params)
+  result.target.results = ctx.flattenTypes(fun.results)
+
+  result.target.paramsFlat = true
+  result.target.resultsFlat = true
+
+  result.actual = result.target
+
+  if result.actual.params.len > MAX_FLAT_PARAMS:
+    result.actual.params = @[CoreType.I32]
+    result.actual.paramsFlat = false
+
+  if result.actual.results.len > MAX_FLAT_RESULTS:
     # Context == lower??
-    flatParams.add @[CoreType.I32]
-    flatResults = @[]
-
-  return CoreFuncType(params: flatParams, results: flatResults)
+    result.actual.params.add @[CoreType.I32]
+    result.actual.results = @[]
+    result.actual.resultsFlat = false
 
 proc newWitContext*(witJson: JsonNode): WitContext =
   result = WitContext()

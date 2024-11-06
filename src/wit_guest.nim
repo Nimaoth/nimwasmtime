@@ -187,6 +187,120 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[Nim
     ctx.lower(loweredArgs[loweredI..^1], args[i], p.typ, outCode)
     loweredI += ctx.flatTypeSize(p.typ)
 
+proc genFunction(ctx: WitContext, funcList: NimNode, f: WitFunc) =
+  let importTempl = genAst():
+    proc foo*(a: int): bool {.wasmimport("", "").}
+
+  let importWrapperTempl = genAst():
+    proc foo*(a: int): bool =
+      discard
+
+  let (flatFuncType, flatFuncTargetType) = ctx.flattenFuncType(f)
+
+  let loweredArgs = collect:
+    for i in 0..flatFuncType.params.high:
+      ident("arg" & $i)
+
+  case f.kind
+  of Freestanding:
+    let importedName = ident(f.name.toCamelCase(false) & "Imported")
+
+    block: # raw function
+      var fun = importTempl.copy()
+      fun[0][1] = importedName
+
+      fun[4][0][1] = newLit(f.name)
+      fun[4][0][2] = newLit(f.env)
+
+      let retType = if f.results.len == 0:
+        ident"void"
+      elif f.results.len == 1:
+        ctx.getTypeName(f.results[0])
+      else:
+        var tup = nnkTupleConstr.newTree()
+        for t in f.results:
+          tup.add ctx.getTypeName(t)
+        tup
+
+      fun[3] = nnkFormalParams.newTree(retType)
+
+      let args = collect:
+        for i in 0..flatFuncType.params.high:
+          ident("a" & $i)
+
+      for i, t in flatFuncType.params:
+        let n = ident(t.nimTypeName)
+        fun[3].add nnkIdentDefs.newTree(args[i], n, newEmptyNode())
+
+      funcList.add fun
+
+    ############################# Flat
+
+    block: # wrapper function
+      var fun = importWrapperTempl.copy()
+      fun[0][1] = ident(f.name.toCamelCase(false))
+
+      let retType = if f.results.len == 0:
+        ident"void"
+      elif f.results.len == 1:
+        ctx.getTypeName(f.results[0])
+      else:
+        var tup = nnkTupleConstr.newTree()
+        for t in f.results:
+          tup.add ctx.getTypeName(t)
+        tup
+
+      fun[3] = nnkFormalParams.newTree(retType)
+
+      let args = collect:
+        for p in f.params:
+          ident(p.name.toCamelCase(false))
+
+      var call = nnkCall.newTree(importedName)
+      var vars = nnkVarSection.newTree()
+
+      var lowerCode = nnkStmtList.newTree()
+      if flatFuncType.paramsFlat:
+        for i, arg in loweredArgs:
+          let t = ident(flatFuncType.params[i].nimTypeName)
+          vars.add nnkIdentDefs.newTree(arg, t, newEmptyNode())
+          call.add arg
+
+        ctx.lower(loweredArgs, args, f.params, lowerCode)
+
+      else:
+        # todo: specify aligment for retArea as 4/8 depending on args
+        let retArea = ident"retArea"
+        let retAreaType = nnkBracketExpr.newTree(ident"array", newLit(flatFuncTargetType.paramsByteSize), ident"uint8")
+        vars.add nnkIdentDefs.newTree(retArea, retAreaType, newEmptyNode())
+
+        let ptrArg = genAst(retArea):
+            cast[int32](retArea[0].addr)
+        call.add ptrArg
+
+        var loweredPtrArgs: seq[NimNode]
+        var i = 0
+        for p in flatFuncTargetType.params:
+          while i mod p.byteAlignment != 0:
+            inc i
+          let code = genAst(retArea, nimType = p.nimTypeName.ident, index = newLit(i)):
+            cast[ptr nimType](retArea[index].addr)[]
+          loweredPtrArgs.add code
+          i += p.byteSize
+
+        ctx.lower(loweredPtrArgs, args, f.params, lowerCode)
+
+      fun[6].add vars
+      fun[6].add lowerCode
+      fun[6].add call
+
+      # Add high level paramaters to generated fun
+      for i, p in f.params:
+        let t = ctx.getTypeName(p.typ)
+        fun[3].add nnkIdentDefs.newTree(args[i], t, newEmptyNode())
+
+      funcList.add fun
+
 macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped): untyped =
   let path = if witPath.isAbsolute:
     witPath
@@ -207,108 +321,11 @@ macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped
   var ctx = newWitContext(json)
   ctx.useCustomBuiltinTypes = true
 
-  # echo res.output
-  # echo "=== types"
-  # echo ctx.types.join("\n")
-  # echo "==="
-  # echo "=== interfaces"
-  # echo ctx.interfaces.join("\n")
-  # echo "==="
-  # echo "=== funcs"
-  # echo ctx.funcs.join("\n")
-  # echo "==="
-
-  var typeSection = ctx.genTypeSection()
+  let typeSection = ctx.genTypeSection()
 
   var funcList = nnkStmtList.newTree()
-
-  let importTempl = genAst():
-    proc foo*(a: int): bool {.wasmimport("", "").}
-
-  let importWrapperTempl = genAst():
-    proc foo*(a: int): bool =
-      discard
-
   for f in ctx.funcs:
-    let flatFuncType = ctx.flattenFuncType(f)
-
-    let loweredArgs = collect:
-      for i in 0..flatFuncType.params.high:
-        ident("arg" & $i)
-
-    case f.kind
-    of Freestanding:
-      let importedName = ident(f.name.toCamelCase(false) & "Imported")
-      block:
-        var fun = importTempl.copy()
-        fun[0][1] = importedName
-
-        fun[4][0][1] = newLit(f.name)
-        fun[4][0][2] = newLit(f.env)
-
-        let retType = if f.results.len == 0:
-          ident"void"
-        elif f.results.len == 1:
-          ctx.getTypeName(f.results[0])
-        else:
-          var tup = nnkTupleConstr.newTree()
-          for t in f.results:
-            tup.add ctx.getTypeName(t)
-          tup
-
-        fun[3] = nnkFormalParams.newTree(retType)
-
-        let args = collect:
-          for i in 0..flatFuncType.params.high:
-            ident("a" & $i)
-
-        for i, t in flatFuncType.params:
-          let n = ident(coreTypeToNimName(t))
-          fun[3].add nnkIdentDefs.newTree(args[i], n, newEmptyNode())
-
-        funcList.add fun
-
-      ############################# Flat
-
-      block:
-        var fun = importWrapperTempl.copy()
-        fun[0][1] = ident(f.name.toCamelCase(false))
-
-        let retType = if f.results.len == 0:
-          ident"void"
-        elif f.results.len == 1:
-          ctx.getTypeName(f.results[0])
-        else:
-          var tup = nnkTupleConstr.newTree()
-          for t in f.results:
-            tup.add ctx.getTypeName(t)
-          tup
-
-        fun[3] = nnkFormalParams.newTree(retType)
-
-        var call = nnkCall.newTree(importedName)
-        var vars = nnkVarSection.newTree()
-        for i, arg in loweredArgs:
-          let t = ident(coreTypeToNimName(flatFuncType.params[i]))
-          vars.add nnkIdentDefs.newTree(arg, t, newEmptyNode())
-          call.add arg
-
-        let args = collect:
-          for p in f.params:
-            ident(p.name.toCamelCase(false))
-
-        fun[6].add vars
-
-        var lowerCode = nnkStmtList.newTree()
-        ctx.lower(loweredArgs, args, f.params, lowerCode)
-
-        fun[6].add lowerCode
-        fun[6].add call
-
-        for i, p in f.params:
-          let t = ctx.getTypeName(p.typ)
-          fun[3].add nnkIdentDefs.newTree(args[i], t, newEmptyNode())
-        funcList.add fun
+    ctx.genFunction(funcList, f)
 
   let code = genAst(typeSection, funcList):
     {.push hint[DuplicateModuleImport]:off.}
