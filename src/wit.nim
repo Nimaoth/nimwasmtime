@@ -3,6 +3,8 @@ import std/[strformat, macros, strutils, json, jsonutils, enumerate, options, se
 type
   WitUserTypeKind* = enum Builtin, Record, Flags, Enum, Variant, Option, List, Result, Tuple, Owned, Borrowed
 
+  WitFlattenContext* = enum Lower, Lift
+
   RecordField* = tuple[name: string, typ: WitType]
   WitUserType* = object
     index*: int
@@ -60,6 +62,7 @@ type
     flatSizeMap*: Table[int, int]
     interfaces*: seq[WitInterface]
     funcs*: seq[WitFunc]
+    exports*: seq[WitFunc]
     useCustomBuiltinTypes*: bool
 
 proc fromJsonHook*(self: var WitType, json: JsonNode) =
@@ -97,19 +100,18 @@ proc collectFuncs(ctx: WitContext, json: JsonNode, env: string): seq[WitFunc] =
       for f in ctx.interfaces[index].funcs:
         var f = f
         f.env = name
-        ctx.funcs.add f
+        result.add f
 
     elif val.hasKey("function"):
-      ctx.funcs.add val["function"].parseWitFunc(env)
+      result.add val["function"].parseWitFunc(env)
 
 proc collectFuncsInRoot(ctx: WitContext, json: JsonNode, worldName: string) =
   for world in json["worlds"]:
     if world.hasKey("imports"):
       ctx.funcs.add ctx.collectFuncs(world["imports"], "")
 
-    # if world.hasKey("exports"):
-    #   for name, exp in world["exports"]:
-    #     echo &"export {name} -> {exp}"
+    if world.hasKey("exports"):
+      ctx.exports.add ctx.collectFuncs(world["exports"], "")
 
 proc collectInterfaces(ctx: WitContext, json: JsonNode) =
   for interfac in json["interfaces"]:
@@ -355,7 +357,6 @@ proc flattenType*(ctx: WitContext, typ: WitType): seq[CoreType] =
 
   else:
     error("Not implemented: flattenType(" & $typ & ")")
-    @[]
 
   ctx.flatSizeMap[typ.index] = result.len
 
@@ -398,7 +399,7 @@ proc flattenTypes(ctx: WitContext, params: openArray[WitFuncParam]): seq[CoreTyp
 const MAX_FLAT_PARAMS = 16
 const MAX_FLAT_RESULTS = 1
 
-proc flattenFuncType*(ctx: WitContext, fun: WitFunc): tuple[actual: CoreFuncType, target: CoreFuncType] =
+proc flattenFuncType*(ctx: WitContext, fun: WitFunc, context: WitFlattenContext): tuple[actual: CoreFuncType, target: CoreFuncType] =
   result.target.params = ctx.flattenTypes(fun.params)
   result.target.results = ctx.flattenTypes(fun.results)
 
@@ -412,10 +413,14 @@ proc flattenFuncType*(ctx: WitContext, fun: WitFunc): tuple[actual: CoreFuncType
     result.actual.paramsFlat = false
 
   if result.actual.results.len > MAX_FLAT_RESULTS:
-    # Context == lower??
-    result.actual.params.add @[CoreType.I32]
-    result.actual.results = @[]
-    result.actual.resultsFlat = false
+    case context
+    of Lower:
+      result.actual.params.add @[CoreType.I32]
+      result.actual.results = @[]
+      result.actual.resultsFlat = false
+    of Lift:
+      result.actual.results = @[CoreType.I32]
+      result.actual.resultsFlat = false
 
 proc newWitContext*(witJson: JsonNode): WitContext =
   result = WitContext()

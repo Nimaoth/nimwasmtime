@@ -319,6 +319,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
 
     suffixWrapper:
       import std/[options]
+      from std/unicode import Rune, `$`
 
       proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.}
 
@@ -720,6 +721,23 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           results: openArray[ValT], trap: ptr ptr WasmTrapT): ptr ErrorT =
         store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t, trap)
 
+      proc call*(f: ptr ComponentFuncT, context: ptr ComponentContextT, args: openArray[ComponentValT],
+          results: openArray[ComponentValT]): WasmtimeResult[void] =
+        let argsPtr = if args.len > 0:
+          args[0].addr
+        else:
+          nil
+
+        let resultsPtr = if results.len > 0:
+          results[0].addr
+        else:
+          nil
+
+        var trap: ptr WasmTrapT = nil
+        result = f.call(context, argsPtr, args.len.csize_t, resultsPtr, results.len.csize_t, trap.addr).toResult(void)
+        if trap != nil:
+          result = trap.toResult(void)
+
       type ComponentFuncCallback* = proc(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT])
 
       proc funcNew*(linker: ptr ComponentLinkerT; name: string;
@@ -764,7 +782,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
         of U64: $a.payload.u64
         of Float32: $a.payload.f32
         of Float64: $a.payload.f64
-        of Char: $a.payload.character
+        of Char: $a.payload.character.Rune
         of String: "\"" & $a.payload.string_field.strVal & "\""
 
         of List:
@@ -828,6 +846,22 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           str
 
         else: "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
+
+      proc `$`*[S](a: array[S, ComponentValT]): string =
+        result = "["
+        for i in 0..a.high:
+          if i > 0:
+            result.add ", "
+          result.add $a[i]
+        result.add "]"
+
+      proc `$`*(a: openArray[ComponentValT]): string =
+        result = "["
+        for i in 0..a.high:
+          if i > 0:
+            result.add ", "
+          result.add $a[i]
+        result.add "]"
 
     static:
       postProcess()

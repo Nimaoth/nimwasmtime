@@ -1,4 +1,4 @@
-import std/[strformat, os, macros, strutils, json, jsonutils, genasts, enumerate, options, sequtils, math, sugar, tables]
+import std/[strformat, os, macros, strutils, json, genasts, options, math, sugar, tables]
 import wit, wit_gen
 
 when not declared(buildOS):
@@ -13,7 +13,7 @@ func hostQuoteShell(s: string): string =
   else:
     result = quoteShell(s)
 
-macro wasmexport*(t: typed): untyped =
+macro wasmexport*(name: static[string], t: typed): untyped =
   if t.kind notin {nnkProcDef, nnkFuncDef}:
     error("Can only export procedures", t)
   let
@@ -23,7 +23,7 @@ macro wasmexport*(t: typed): untyped =
     newProc[4] = nnkPragma.newTree(codeGen)
   else:
     newProc[4].add codeGen
-  newProc[4].add ident"exportC"
+  newProc[4].add nnkCall.newTree(ident"exportC", newLit(name))
   result = newStmtList()
   result.add:
     quote do:
@@ -176,11 +176,9 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
 
     else:
       error("Not implemented lower(" & $userType.kind & ")")
-      return
 
   else:
     error("Not implemented lower(" & $typ.builtin & ")")
-    return
 
 proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode) =
   var loweredI = 0
@@ -189,6 +187,12 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[Nim
     ctx.lower(loweredArgs[loweredI..^1], args[i], p.typ, outCode)
     loweredI += ctx.flatTypeSize(p.typ)
 
+proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode) =
+  var loweredI = 0
+  for i, r in results:
+    # echo &"{i}, {loweredI}: lower {r}"
+    ctx.lower(loweredArgs[loweredI..^1], args[i], r, outCode)
+    loweredI += ctx.flatTypeSize(r)
 
 proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode) =
   # let typ = ctx.despecialize(typ)
@@ -345,11 +349,9 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
 
     else:
       error("Not implemented lift(" & $userType.kind & ")")
-      return
 
   else:
     error("Not implemented lift(" & $typ.builtin & ")")
-    return
 
 proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode) =
   var loweredI = 0
@@ -357,6 +359,13 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimN
     # echo &"{i}, {loweredI}: lift {r}"
     ctx.lift(loweredArgs[loweredI..^1], args[i], r, outCode)
     loweredI += ctx.flatTypeSize(r)
+
+proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode) =
+  var loweredI = 0
+  for i, p in params:
+    # echo &"{i}, {loweredI}: lift {p}"
+    ctx.lift(loweredArgs[loweredI..^1], args[i], p.typ, outCode)
+    loweredI += ctx.flatTypeSize(p.typ)
 
 proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
   let importTempl = genAst():
@@ -366,11 +375,11 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
     proc foo*(a: int): bool =
       discard
 
-  let (flatFuncType, flatFuncTargetType) = ctx.flattenFuncType(fun)
+  let (flatFuncType, flatFuncTargetType) = ctx.flattenFuncType(fun, Lower)
 
-  echo ""
-  echo &"genFunction {fun}\n{flatFuncTargetType}\n{flatFuncType}"
-  echo ""
+  # echo ""
+  # echo &"genFunction {fun}\n{flatFuncTargetType}\n{flatFuncType}"
+  # echo ""
 
   case fun.kind
   of Freestanding:
@@ -493,6 +502,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
         ctx.lift(loweredPtrArgs, results, fun.results, liftCode)
 
+      funNode[6] = nnkStmtList.newTree()
       funNode[6].add vars
       funNode[6].add lowerCode
       funNode[6].add call
@@ -504,6 +514,160 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
       for i, p in fun.params:
         let t = ctx.getTypeName(p.typ)
         funNode[3].add nnkIdentDefs.newTree(args[i], t, newEmptyNode())
+
+      funcList.add funNode
+
+proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
+  let importTempl = genAst():
+    proc foo(a: int): bool {.wasmexport("").} =
+      discard
+
+  let importWrapperTempl = genAst():
+    proc foo(a: int): bool
+
+  let (flatFuncType, flatFuncTargetType) = ctx.flattenFuncType(fun, Lift)
+
+  # echo ""
+  # echo &"genExport {fun}\n{flatFuncTargetType}\n{flatFuncType}"
+  # echo ""
+
+  case fun.kind
+  of Freestanding:
+    block: # wrapper function
+      var funNode = importWrapperTempl.copy()
+      funNode[0] = ident(fun.name.toCamelCase(false))
+
+      let retType = if fun.results.len == 0:
+        ident"void"
+      elif fun.results.len == 1:
+        ctx.getTypeName(fun.results[0])
+      else:
+        var tup = nnkTupleConstr.newTree()
+        for t in fun.results:
+          tup.add ctx.getTypeName(t)
+        tup
+
+      funNode[3] = nnkFormalParams.newTree(retType)
+
+      let args = collect:
+        for p in fun.params:
+          ident(p.name.toCamelCase(false))
+
+      # Add high level paramaters to generated fun
+      for i, p in fun.params:
+        let t = ctx.getTypeName(p.typ)
+        funNode[3].add nnkIdentDefs.newTree(args[i], t, newEmptyNode())
+
+      funcList.add funNode
+
+    block: # raw function
+      var funNode = importTempl.copy()
+      funNode[0] = ident(fun.name.toCamelCase(false) & "Exported")
+
+      funNode[4][0][1] = newLit(fun.name)
+
+      let retType = if flatFuncType.results.len == 0:
+        ident"void"
+      else:
+        assert flatFuncType.results.len == 1
+        flatFuncType.results[0].nimTypeName.ident
+
+      funNode[3] = nnkFormalParams.newTree(retType)
+
+      let loweredArgs = collect:
+        for i in 0..flatFuncType.params.high:
+          ident("a" & $i)
+
+      for i, t in flatFuncType.params:
+        let n = ident(t.nimTypeName)
+        funNode[3].add nnkIdentDefs.newTree(loweredArgs[i], n, newEmptyNode())
+
+      var call = nnkCall.newTree(ident(fun.name.toCamelCase(false)))
+      var vars = nnkVarSection.newTree()
+
+      # Return value area
+      # todo: specify aligment for retArea as 4/8 depending on args
+      let retArea = ident(fun.name.toCamelCase(false) & "RetArea")
+
+      let needsRetArea = not flatFuncType.paramsFlat or not flatFuncType.resultsFlat
+      if needsRetArea:
+        var retAreaSize = max(flatFuncTargetType.paramsByteSize, flatFuncTargetType.resultsByteSize)
+        let retAreaType = nnkBracketExpr.newTree(ident"array", newLit(retAreaSize), ident"uint8")
+        funcList.add nnkVarSection.newTree(nnkIdentDefs.newTree(retArea, retAreaType, newEmptyNode()))
+
+      var lowerCode = nnkStmtList.newTree()
+      var liftCode = nnkStmtList.newTree()
+
+      let args = collect:
+        for p in fun.params:
+          ident(p.name)
+
+      for i, arg in args:
+        let t = ctx.getTypeName(fun.params[i].typ)
+        vars.add nnkIdentDefs.newTree(arg, t, newEmptyNode())
+        call.add arg
+
+      if flatFuncType.paramsFlat:
+        # Pass args as flattened individual args
+
+        let loweredArgs = collect:
+          for i in 0..flatFuncTargetType.params.high:
+            ident("a" & $i)
+
+        ctx.lift(loweredArgs, args, fun.params, liftCode)
+
+      else:
+        # Args passed through pointer
+        var loweredPtrArgs: seq[NimNode]
+        var i = 0
+        for p in flatFuncTargetType.params:
+          while i mod p.byteAlignment != 0:
+            inc i
+          let code = genAst(retArea, nimType = p.nimTypeName.ident, index = newLit(i)):
+            cast[ptr nimType](a0 + index)[]
+          loweredPtrArgs.add code
+          i += p.byteSize
+
+        ctx.lift(loweredPtrArgs, args, fun.params, liftCode)
+
+      if flatFuncType.resultsFlat:
+        discard
+      else:
+        var loweredPtrArgs: seq[NimNode]
+        var i = 0
+        for r in flatFuncTargetType.results:
+          while i mod r.byteAlignment != 0:
+            inc i
+          let code = genAst(retArea, nimType = r.nimTypeName.ident, index = newLit(i)):
+            cast[ptr nimType](retArea[index].addr)[]
+          loweredPtrArgs.add code
+          i += r.byteSize
+
+        let resultName = ident"res"
+
+        let results = if fun.results.len == 1:
+          @[resultName]
+        else:
+          collect:
+            for i in 0..fun.results.high:
+              nnkBracketExpr.newTree(resultName, newLit(i))
+
+        ctx.lower(loweredPtrArgs, results, fun.results, lowerCode)
+
+        let retCode = genAst(retArea):
+          cast[int32](retArea[0].addr)
+        lowerCode.add retCode
+
+        call = genAst(resultName, call):
+          let resultName = call
+
+      funNode[6] = nnkStmtList.newTree()
+      funNode[6].add vars
+      funNode[6].add liftCode
+      funNode[6].add call
+
+      if lowerCode.len > 0:
+        funNode[6].add lowerCode
 
       funcList.add funNode
 
@@ -527,11 +691,18 @@ macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped
   var ctx = newWitContext(json)
   ctx.useCustomBuiltinTypes = true
 
+  # echo "------- exports"
+  # echo ctx.exports.join("\n")
+  # echo "-------"
+
   let typeSection = ctx.genTypeSection()
 
   var funcList = nnkStmtList.newTree()
   for f in ctx.funcs:
     ctx.genFunction(funcList, f)
+
+  for f in ctx.exports:
+    ctx.genExport(funcList, f)
 
   let code = genAst(typeSection, funcList):
     {.push hint[DuplicateModuleImport]:off.}

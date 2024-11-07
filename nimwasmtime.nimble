@@ -65,8 +65,17 @@ task wasmtime, "Build wasmtime":
     when defined(linux):
       exec "cargo build --release --target=x86_64-unknown-linux-musl -p wasmtime-c-api"
 
+import std/strformat
+
+proc getCommandLineParams(): string =
+  defer:
+    echo "Additional command line params: ", result
+  if commandLineParams.len < 3:
+    return ""
+  return commandLineParams[3..^1].join(" ")
+
 task buildWasmComponent, "":
-  exec "nim c -d:release --skipParentCfg ./tests/wasm/test.nim"
+  exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} ./tests/wasm/test.nim"
   exec "wasm-tools component embed ./tests/wasm/test.wit --world test-world ./tests/wasm/testm.wasm -o ./tests/wasm/testme.wasm"
   exec "wasm-tools component new ./tests/wasm/testme.wasm -o ./tests/wasm/testc.wasm --adapt ./tests/wasm/wasi_snapshot_preview1.reactor.wasm"
 

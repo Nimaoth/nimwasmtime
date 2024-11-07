@@ -1525,6 +1525,8 @@ proc wasmtimeFrameModuleName*(a0: ptr WasmFrameT): ptr WasmNameT {.cdecl,
 import
   std / [options]
 
+from std / unicode import Rune, `$`
+
 proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.}
 template vec(T: untyped; unchecked: bool = true): untyped =
   type
@@ -1593,7 +1595,7 @@ template vec(T: untyped; unchecked: bool = true): untyped =
     for i in 0 ..< self.len:
       yield (i, self.uncheckedArray[i])
 
-  
+
 vec(WasmByteVecT)
 vec(WasmExporttypeVecT)
 vec(WasmExternVecT)
@@ -1891,6 +1893,21 @@ proc call*(f: ptr FuncT; store: ptr ContextT; args: openArray[ValT];
   store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t,
              trap)
 
+proc call*(f: ptr ComponentFuncT; context: ptr ComponentContextT;
+           args: openArray[ComponentValT]; results: openArray[ComponentValT]): WasmtimeResult[
+    void] =
+  let argsPtr = if args.len > 0:
+    args[0].addr else:
+    nil
+  let resultsPtr = if results.len > 0:
+    results[0].addr else:
+    nil
+  var trap: ptr WasmTrapT = nil
+  result = f.call(context, argsPtr, args.len.csize_t, resultsPtr,
+                  results.len.csize_t, trap.addr).toResult(void)
+  if trap != nil:
+    result = trap.toResult(void)
+
 type
   ComponentFuncCallback* = proc (ctx: pointer; params: openArray[ComponentValT];
                                  results: var openArray[ComponentValT])
@@ -1951,7 +1968,7 @@ proc `$`*(a: ComponentValT): string =
   of Float64:
     $a.payload.f64
   of Char:
-    $a.payload.character
+    $a.payload.character.Rune
   of String:
     "\"" & $a.payload.string_field.strVal & "\""
   of List:
@@ -2013,3 +2030,19 @@ proc `$`*(a: ComponentValT): string =
     str
   else:
     "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
+
+proc `$`*[S](a: array[S, ComponentValT]): string =
+  result = "["
+  for i in 0..a.high:
+    if i > 0:
+      result.add ", "
+    result.add $a[i]
+  result.add "]"
+
+proc `$`*(a: openArray[ComponentValT]): string =
+  result = "["
+  for i in 0..a.high:
+    if i > 0:
+      result.add ", "
+    result.add $a[i]
+  result.add "]"
