@@ -590,8 +590,8 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
       let retArea = ident(fun.name.toCamelCase(false) & "RetArea")
 
       let needsRetArea = not flatFuncType.paramsFlat or not flatFuncType.resultsFlat
+      let retAreaSize = max(flatFuncTargetType.paramsByteSize, flatFuncTargetType.resultsByteSize)
       if needsRetArea:
-        var retAreaSize = max(flatFuncTargetType.paramsByteSize, flatFuncTargetType.resultsByteSize)
         let retAreaType = nnkBracketExpr.newTree(ident"array", newLit(retAreaSize), ident"uint8")
         funcList.add nnkVarSection.newTree(nnkIdentDefs.newTree(retArea, retAreaType, newEmptyNode()))
 
@@ -629,6 +629,10 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           i += p.byteSize
 
         ctx.lift(loweredPtrArgs, args, fun.params, liftCode)
+
+        let freeCode = genAst(retAreaSize):
+          cabi_dealloc(a0, retAreaSize, 4) # todo: alignment
+        lowerCode.add freeCode
 
       if flatFuncType.resultsFlat:
         discard
@@ -708,7 +712,7 @@ macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped
     {.push hint[DuplicateModuleImport]:off.}
     import std/[options]
     from std/unicode import Rune
-    import results, wit_types
+    import results, wit_types, wit_runtime
     {.pop.}
 
     typeSection
