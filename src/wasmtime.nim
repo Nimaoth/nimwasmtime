@@ -1,4 +1,5 @@
 import std/[os, macros, strutils, json, sets, enumerate, tables, options]
+import results
 
 const nimWasmtimeStatic* {.booldefine.} = true
 const nimWasmtimeOverride* {.strdefine.} = ""
@@ -490,7 +491,10 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           result.add cast[ptr UncheckedArray[char]](name.data)[i]
 
       proc toName*(name: string): WasmNameT =
-        result.addr.new(name.len.csize_t, cast[ptr UncheckedArray[WasmByteT]](name[0].addr))
+        if name.len == 0:
+          result.addr.newEmpty()
+        else:
+          result.addr.new(name.len.csize_t, cast[ptr UncheckedArray[WasmByteT]](name[0].addr))
 
       proc `$`*(self: ptr WasmExterntypeT): string =
         if self == nil:
@@ -564,13 +568,19 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
 
       proc msg*(err: ptr ErrorT): string =
         var name: WasmNameT
-        err.message(name.addr)
-        result = name.strVal
+        if err != nil:
+          err.message(name.addr)
+          result = name.strVal
+        else:
+           result = "ERROR: nil wasm error"
 
       proc msg*(err: ptr WasmTrapT): string =
         var name: WasmNameT
-        err.message(name.addr)
-        result = name.strVal
+        if err != nil:
+          err.message(name.addr)
+          result = name.strVal
+        else:
+           result = "ERROR: nil wasm trap"
 
       proc exitStatus*(err: ptr ErrorT): int =
         var exitStatus: cint
@@ -602,7 +612,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       proc isErr*[T](self: WasmtimeResult[T]): bool =
         self.kind == Err
 
-      proc toResult*(err: ptr ErrorT, T: typedesc): WasmtimeResult[T] =
+      proc toResult*(err: ptr ErrorT; T: typedesc): WasmtimeResult[T] =
         if err == nil:
           WasmtimeResult[T](kind: Ok)
         else:
@@ -611,7 +621,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           let trace = err.getWasmTrace()
           WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
 
-      proc toResult*(err: ptr WasmTrapT, T: typedesc): WasmtimeResult[T] =
+      proc toResult*(err: ptr WasmTrapT; T: typedesc): WasmtimeResult[T] =
         if err == nil:
           WasmtimeResult[T](kind: Ok)
         else:
@@ -620,7 +630,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           let trace = err.getWasmTrace()
           WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
 
-      template okOr*[T](res: WasmtimeResult[T], body: untyped): T =
+      template okOr*[T](res: WasmtimeResult[T]; body: untyped): T =
         let temp = res
         if temp.isOk:
           when T isnot void:
@@ -628,25 +638,25 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
         else:
           body
 
-      template okOr*[T](res: WasmtimeResult[T], err: untyped, body: untyped): T =
+      template okOr*[T](res: WasmtimeResult[T]; e: untyped; body: untyped): T =
         let temp = res
         if temp.isOk:
           when T isnot void:
             temp.val
         else:
-          let err {.cursor.} = res.err
+          let e {.cursor.} = temp.err
           body
 
-      template okOr*(res: ptr ErrorT, err: untyped, body: untyped): untyped =
+      template okOr*(res: ptr ErrorT; e: untyped; body: untyped): untyped =
         let temp = res.toResult(void)
         if not temp.isOk:
-          let err {.cursor.} = res
+          let e {.cursor.} = temp.err
           body
 
-      template okOr*(res: ptr WasmTrapT, err: untyped, body: untyped): untyped =
+      template okOr*(res: ptr WasmTrapT; e: untyped; body: untyped): untyped =
         let temp = res.toResult(void)
         if not temp.isOk:
-          let err {.cursor.} = res
+          let e {.cursor.} = temp.err
           body
 
       proc newModule*(engine: ptr WasmEngineT; wasm: openArray[uint8]): WasmtimeResult[ptr ModuleT] =
@@ -789,7 +799,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           else:
             a.payload.variant.name.strVal
 
-        of Enum: $a.payload.enumeration
+        of Enum: a.payload.enumeration.name.strVal
 
         of Option:
           if a.payload.option != nil:
@@ -799,13 +809,25 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
 
         of Result:
           if a.payload.result.error:
-            "Err(" & $(a.payload.option[]) & ")"
+            if a.payload.result.val == nil:
+              "Err()"
+            else:
+              "Err(" & $(a.payload.result.val[]) & ")"
           else:
-            "Ok(" & $(a.payload.option[]) & ")"
+            if a.payload.result.val == nil:
+              "Ok()"
+            else:
+              "Ok(" & $(a.payload.result.val[]) & ")"
 
-        # todo
-        # of Flags: $a.payload.flags
-        else: "Unknown " & $a.kind.ComponentValKind
+        of Flags:
+          var str = "{"
+          for i, v in a.payload.flags:
+            if i > 0: str.add ", "
+            str.add v.strVal
+          str.add "}"
+          str
+
+        else: "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
 
     static:
       postProcess()
@@ -814,26 +836,11 @@ else: # defined(useFuthark) or defined(useFutharkForWasmtime)
   include wrapper
 
 from std/unicode import Rune
+import wit_types
 
 proc toVal*[T](a: T): ComponentValT =
   # echo &"toVal {a}"
-  when T is object:
-    result.kind = ComponentValKind.Record.ComponentValKindT
-    var numFields = 0
-    for k, v in a.fieldPairs:
-      numFields.inc
-
-    result.payload.record.addr.newUninitialized(numFields.csize_t)
-
-    var i = 0
-    for k, v in a.fieldPairs:
-      result.payload.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
-      inc i
-
-    # echo result.payload.record.data.isNil
-    # echo result.payload.record.size
-
-  elif T is bool:
+  when T is bool:
     result.kind = ComponentValKind.Bool.ComponentValKindT
     result.payload.boolean = a
 
@@ -856,6 +863,82 @@ proc toVal*[T](a: T): ComponentValT =
   elif T is Rune:
     result.kind = ComponentValKind.Char.ComponentValKindT
     result.payload.character = a.uint32
+
+  elif T is string:
+    result.kind = ComponentValKind.String.ComponentValKindT
+    let name = a.toName
+    result.payload.string_field = name
+
+  elif T is seq:
+    result.kind = ComponentValKind.List.ComponentValKindT
+    result.payload.list.addr.newUninitialized(a.len.csize_t)
+    for i, v in a:
+      result.payload.list[i] = v.toVal
+
+  elif T is system.set:
+    result.kind = ComponentValKind.Flags.ComponentValKindT
+    result.payload.flags.addr.newUninitialized(a.len.csize_t)
+    for i, v in enumerate(a.items):
+      let name = ($v).toName
+      result.payload.flags[i] = name
+
+  elif T is options.Option:
+    result.kind = ComponentValKind.Option.ComponentValKindT
+    if a.isSome:
+      result.payload.option = valNew()
+      result.payload.option[] = a.get.toVal
+    else:
+      result.payload.option = nil
+
+  elif T is results.Result:
+    result.kind = ComponentValKind.Result.ComponentValKindT
+    type OkType = typeof(a.value)
+    type ErrType = typeof(a.error)
+    result.payload.result.val = nil
+    if a.isErr:
+      result.payload.result.error = true
+      when ErrType isnot void:
+        result.payload.result.val = valNew()
+        result.payload.result.val[] = a.error.toVal
+    else:
+      result.payload.result.error = false
+      when OkType isnot void:
+        result.payload.result.val = valNew()
+        result.payload.result.val[] = a.value.toVal
+
+  elif T is enum:
+    result.kind = ComponentValKind.Enum.ComponentValKindT
+    let name = ($a).toName
+    result.payload.enumeration.name = name
+
+  elif T is tuple:
+    result.kind = ComponentValKind.Tuple.ComponentValKindT
+    var numFields = 0
+    for k, v in a.fieldPairs:
+      numFields.inc
+
+    result.payload.tuple_field.addr.newUninitialized(numFields.csize_t)
+
+    var i = 0
+    for k, v in a.fieldPairs:
+      result.payload.tuple_field[i] = v.toVal
+      inc i
+
+  elif T is object:
+    result.kind = ComponentValKind.Record.ComponentValKindT
+    var numFields = 0
+    for k, v in a.fieldPairs:
+      numFields.inc
+
+    result.payload.record.addr.newUninitialized(numFields.csize_t)
+
+    var i = 0
+    for k, v in a.fieldPairs:
+      result.payload.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
+      inc i
+
+    # echo result.payload.record.data.isNil
+    # echo result.payload.record.size
 
   else:
     {.error: "Can't convert type " & $T & " to ComponentValT".}
@@ -927,10 +1010,34 @@ proc to*(a: ComponentValT, T: typedesc): T =
       let name = v.strVal
       result.incl parseEnum[Item](name)
 
+  elif T is WitFlags:
+    echo "---------------------------------- "
+    assert a.kind == ComponentValKind.Flags.ComponentValKindT
+    type Item = T.getFlagsTargetType()
+    for v in a.payload.flags:
+      let name = v.strVal
+      echo "-------------- ", name
+      result.incl parseEnum[Item](name)
+
   elif T is options.Option:
     assert a.kind == ComponentValKind.Option.ComponentValKindT
     if a.payload.option != nil:
       result = a.payload.option[].to(typeof(result.get)).some
+
+  elif T is results.Result:
+    assert a.kind == ComponentValKind.Result.ComponentValKindT
+    type OkType = typeof(result.value)
+    type ErrType = typeof(result.error)
+    if a.payload.result.error:
+      when ErrType is void:
+        result = results.Result[OkType, ErrType].err()
+      else:
+        result = results.err(a.payload.result.val[].to(ErrType))
+    else:
+      when OkType is void:
+        result = results.Result[OkType, ErrType].ok()
+      else:
+        result = results.ok(a.payload.result.val[].to(OkType))
 
   elif T is tuple:
     if a.kind == ComponentValKind.Tuple.ComponentValKindT:

@@ -1,3 +1,4 @@
+import std/macros
 
 type
   WitList*[T] = object
@@ -7,6 +8,8 @@ type
   WitString* = object
     data: ptr UncheckedArray[char]
     len: int
+
+  WitFlags*[T] = distinct int8
 
 # proc `=copy`*(self: var T; src: T) {.error.}
 # proc clone*(self: T): T =
@@ -54,15 +57,15 @@ func `[]=`*[T](self: WitList[T]; index: int; value: sink T) =
   self.uncheckedArray[index] = value
 
 func `$`*[T](self: WitList[T]): string =
-  var res = "["
+  result = "["
   for i in 0 ..< self.len:
     if i > 0:
-      res.add ", "
+      result.add ", "
     when compiles($self.uncheckedArray[i]):
-      res.add $self.uncheckedArray[i]
+      result.add $self.uncheckedArray[i]
     else:
-      res.add $cast[uint64](self.uncheckedArray[i])
-  res.add "]"
+      result.add $cast[uint64](self.uncheckedArray[i])
+  result.add "]"
 
 iterator items*[T](self: WitList[T]): lent T =
   for i in 0 ..< self.len:
@@ -110,3 +113,15 @@ iterator pairs*(self: WitString): (int, lent char) =
 template toOpenArray*(self: WitString): openArray[char] = self.data.toOpenArray(0, self.high)
 template toOpenArray*(self: WitString, first: int, last: int): openArray[char] = self.data.toOpenArray(first, last)
 
+converter toSet*[T](flags: WitFlags[T]): set[T] = cast[set[T]](flags)
+converter toFlags*[T](flags: set[T]): WitFlags[T] =
+  defer:
+    debugEcho "toFlags ", flags, " -> ", cast[int32](result)
+  cast[WitFlags[T]](cast[int32](flags))
+converter empty*(T: typedesc[WitFlags]): T = cast[T](0)
+
+func `in`*[T](flag: T, flags: WitFlags[T]): bool = flag in flags.toSet
+func incl*[T](flags: var WitFlags[T], flag: T) = flags = cast[WitFlags[T]](cast[int32](flags) or (1 shl flag.int))
+
+func defaultFlagValue[T](x: WitFlags[T]): T = T.default
+template getFlagsTargetType*[T](_: typedesc[WitFlags[T]]): untyped = typeof(WitFlags[T].default.defaultFlagValue)

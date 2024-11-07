@@ -364,6 +364,12 @@ func paramsByteSize*(self: CoreFuncType): int =
       inc result
     result += p.byteSize
 
+func resultsByteSize*(self: CoreFuncType): int =
+  for p in self.results:
+    while result mod p.byteAlignment != 0:
+      inc result
+    result += p.byteSize
+
 proc flattenFuncType*(ctx: WitContext, fun: WitFunc): tuple[actual: CoreFuncType, target: CoreFuncType] =
   result.target.params = ctx.flattenTypes(fun.params)
   result.target.results = ctx.flattenTypes(fun.results)

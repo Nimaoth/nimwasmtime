@@ -1450,6 +1450,9 @@ proc call*(func_arg: ptr ComponentFuncT; context: ptr ComponentContextT;
            results: ptr ComponentValT; results_len: csize_t;
            trap_out: ptr ptr WasmTrapT): ptr ErrorT {.cdecl,
     importc: "wasmtime_component_func_call".}
+proc valNew*(): ptr ComponentValT {.cdecl, importc: "wasmtime_component_val_new".}
+proc valDelete*(val: ptr ComponentValT): void {.cdecl,
+    importc: "wasmtime_component_val_delete".}
 proc clone*(engine: ptr WasmEngineT): ptr WasmEngineT {.cdecl,
     importc: "wasmtime_engine_clone".}
 proc incrementEpoch*(engine: ptr WasmEngineT): void {.cdecl,
@@ -1659,8 +1662,11 @@ proc strVal*(name: WasmNameT): string =
     result.add cast[ptr UncheckedArray[char]](name.data)[i]
 
 proc toName*(name: string): WasmNameT =
-  result.addr.new(name.len.csize_t,
-                  cast[ptr UncheckedArray[WasmByteT]](name[0].addr))
+  if name.len == 0:
+    result.addr.newEmpty()
+  else:
+    result.addr.new(name.len.csize_t,
+                    cast[ptr UncheckedArray[WasmByteT]](name[0].addr))
 
 proc `$`*(self: ptr WasmExterntypeT): string =
   if self == nil:
@@ -1725,13 +1731,19 @@ type
       err*: tuple[msg: string, status: int, trace: WasmFrameVecT]
 proc msg*(err: ptr ErrorT): string =
   var name: WasmNameT
-  err.message(name.addr)
-  result = name.strVal
+  if err != nil:
+    err.message(name.addr)
+    result = name.strVal
+  else:
+    result = "ERROR: nil wasm error"
 
 proc msg*(err: ptr WasmTrapT): string =
   var name: WasmNameT
-  err.message(name.addr)
-  result = name.strVal
+  if err != nil:
+    err.message(name.addr)
+    result = name.strVal
+  else:
+    result = "ERROR: nil wasm trap"
 
 proc exitStatus*(err: ptr ErrorT): int =
   var exitStatus: cint
@@ -1789,25 +1801,25 @@ template okOr*[T](res: WasmtimeResult[T]; body: untyped): T =
   else:
     body
 
-template okOr*[T](res: WasmtimeResult[T]; err: untyped; body: untyped): T =
+template okOr*[T](res: WasmtimeResult[T]; e: untyped; body: untyped): T =
   let temp = res
   if temp.isOk:
     when T isnot void:
       temp.val
   else:
-    let err {.cursor.} = res.err
+    let e {.cursor.} = temp.err
     body
 
-template okOr*(res: ptr ErrorT; err: untyped; body: untyped): untyped =
+template okOr*(res: ptr ErrorT; e: untyped; body: untyped): untyped =
   let temp = res.toResult(void)
   if not temp.isOk:
-    let err {.cursor.} = res
+    let e {.cursor.} = temp.err
     body
 
-template okOr*(res: ptr WasmTrapT; err: untyped; body: untyped): untyped =
+template okOr*(res: ptr WasmTrapT; e: untyped; body: untyped): untyped =
   let temp = res.toResult(void)
   if not temp.isOk:
-    let err {.cursor.} = res
+    let e {.cursor.} = temp.err
     body
 
 proc newModule*(engine: ptr WasmEngineT; wasm: openArray[uint8]): WasmtimeResult[
@@ -1974,7 +1986,7 @@ proc `$`*(a: ComponentValT): string =
     else:
       a.payload.variant.name.strVal
   of Enum:
-    $a.payload.enumeration
+    a.payload.enumeration.name.strVal
   of Option:
     if a.payload.option != nil:
       "Some(" & $(a.payload.option[]) & ")"
@@ -1982,8 +1994,22 @@ proc `$`*(a: ComponentValT): string =
       "none"
   of Result:
     if a.payload.result.error:
-      "Err(" & $(a.payload.option[]) & ")"
+      if a.payload.result.val == nil:
+        "Err()"
+      else:
+        "Err(" & $(a.payload.result.val[]) & ")"
     else:
-      "Ok(" & $(a.payload.option[]) & ")"
+      if a.payload.result.val == nil:
+        "Ok()"
+      else:
+        "Ok(" & $(a.payload.result.val[]) & ")"
+  of Flags:
+    var str = "{"
+    for i, v in a.payload.flags:
+      if i > 0:
+        str.add ", "
+      str.add v.strVal
+    str.add "}"
+    str
   else:
-    "Unknown " & $a.kind.ComponentValKind
+    "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
