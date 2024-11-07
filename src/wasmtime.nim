@@ -3,7 +3,7 @@ import results
 
 const nimWasmtimeStatic* {.booldefine.} = true
 const nimWasmtimeOverride* {.strdefine.} = ""
-const nimWasmtimeBuildDebug* {.booldefine.} = true
+const nimWasmtimeBuildDebug* {.booldefine.} = false
 const nimWasmtimeBuildMusl* {.booldefine.} = false
 const nimWasmtimeBuildCache* {.strdefine.} = "wasmtime-build-cache"
 
