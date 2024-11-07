@@ -42,6 +42,8 @@ type
     funcs*: seq[WitFunc]
 
   CoreType* = enum
+    I8
+    I16
     I32
     I64
     F32
@@ -216,6 +218,8 @@ proc builtinToNimName*(ctx: WitContext, builtin: string): string =
 
 proc nimTypeName*(typ: CoreType): string =
   return case typ
+  of I8: "int8"
+  of I16: "int16"
   of I32: "int32"
   of I64: "int64"
   of F32: "float32"
@@ -250,7 +254,7 @@ proc discriminantType(cases: int): WitType =
   else:
     assert false
 
-proc flattenType(ctx: WitContext, typ: WitType): seq[CoreType]
+proc flattenType*(ctx: WitContext, typ: WitType): seq[CoreType]
 
 proc flattenList(ctx: WitContext, typ: WitUserType): seq[CoreType] =
   # todo: static len
@@ -260,12 +264,45 @@ proc flattenRecord(ctx: WitContext, typ: WitUserType): seq[CoreType] =
   for f in typ.fields:
     result.add ctx.flattenType(f.typ)
 
+proc normalize*(a: CoreType): CoreType =
+  case a
+  of I8, I16: I32
+  else: a
+
 proc join(a, b: CoreType): CoreType =
+  let a = a.normalize
+  let b = b.normalize
   if a == b:
     return a
   if (a == I32 and b == F32) or (a == F32 and b == I32):
     return I32
   return I64
+
+func byteSize*(self: CoreType): int =
+  case self
+  of I8: 1
+  of I16: 2
+  of I32, F32: 4
+  of I64, F64: 8
+
+func byteAlignment*(self: CoreType): int =
+  case self
+  of I8: 1
+  of I16: 2
+  of I32, F32: 4
+  of I64, F64: 8
+
+func paramsByteSize*(self: CoreFuncType): int =
+  for p in self.params:
+    while result mod p.byteAlignment != 0:
+      inc result
+    result += p.byteSize
+
+func resultsByteSize*(self: CoreFuncType): int =
+  for p in self.results:
+    while result mod p.byteAlignment != 0:
+      inc result
+    result += p.byteSize
 
 proc flattenVariant(ctx: WitContext, typ: WitUserType): seq[CoreType] =
   var flat: seq[CoreType] = @[]
@@ -279,7 +316,19 @@ proc flattenVariant(ctx: WitContext, typ: WitUserType): seq[CoreType] =
 
   result = ctx.flattenType(discriminantType(typ.fields.len)) & flat
 
-proc flattenType(ctx: WitContext, typ: WitType): seq[CoreType] =
+  var valueAlignment = 1
+  for i in 1..result.high:
+    valueAlignment = max(valueAlignment, result[i].byteAlignment)
+
+  result[0] = case valueAlignment
+  of 1: I8
+  of 2: I16
+  of 4: I32
+  of 8: I64
+  else:
+    error("Invalid alignment for variant " & $typ)
+
+proc flattenType*(ctx: WitContext, typ: WitType): seq[CoreType] =
   let typ = ctx.despecialize(typ)
   result = case typ.kind
   of Builtin:
@@ -288,8 +337,9 @@ proc flattenType(ctx: WitContext, typ: WitType): seq[CoreType] =
     of "bool": @[CoreType.I32]
     of "char": @[CoreType.I32]
     of "string": @[CoreType.I32, CoreType.I32]
-    of "s8", "s16", "s32": @[CoreType.I32]
-    of "u8", "u16", "u32": @[CoreType.I32]
+    of "s8", "u8": @[CoreType.I8]
+    of "s16", "u16": @[CoreType.I16]
+    of "s32", "u32": @[CoreType.I32]
     of "s64", "u64": @[CoreType.I64]
     of "f32": @[CoreType.F32]
     of "f64": @[CoreType.F32]
@@ -300,7 +350,7 @@ proc flattenType(ctx: WitContext, typ: WitType): seq[CoreType] =
   of List: ctx.flattenList(typ)
   of Record: ctx.flattenRecord(typ)
   of Variant: ctx.flattenVariant(typ)
-  of Flags: @[CoreType.I32]
+  of Flags: ctx.flattenType(discriminantType(typ.cases.len))
   of Owned, Borrowed: @[CoreType.I32]
 
   else:
@@ -347,28 +397,6 @@ proc flattenTypes(ctx: WitContext, params: openArray[WitFuncParam]): seq[CoreTyp
 
 const MAX_FLAT_PARAMS = 16
 const MAX_FLAT_RESULTS = 1
-
-func byteSize*(self: CoreType): int =
-  case self
-  of I32, F32: 4
-  of I64, F64: 8
-
-func byteAlignment*(self: CoreType): int =
-  case self
-  of I32, F32: 4
-  of I64, F64: 8
-
-func paramsByteSize*(self: CoreFuncType): int =
-  for p in self.params:
-    while result mod p.byteAlignment != 0:
-      inc result
-    result += p.byteSize
-
-func resultsByteSize*(self: CoreFuncType): int =
-  for p in self.results:
-    while result mod p.byteAlignment != 0:
-      inc result
-    result += p.byteSize
 
 proc flattenFuncType*(ctx: WitContext, fun: WitFunc): tuple[actual: CoreFuncType, target: CoreFuncType] =
   result.target.params = ctx.flattenTypes(fun.params)

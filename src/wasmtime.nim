@@ -925,20 +925,42 @@ proc toVal*[T](a: T): ComponentValT =
       inc i
 
   elif T is object:
-    result.kind = ComponentValKind.Record.ComponentValKindT
-    var numFields = 0
-    for k, v in a.fieldPairs:
-      numFields.inc
+    when not compiles(T().kind):
+      result.kind = ComponentValKind.Record.ComponentValKindT
+      var numFields = 0
+      for k, v in a.fieldPairs:
+        numFields.inc
 
-    result.payload.record.addr.newUninitialized(numFields.csize_t)
+      result.payload.record.addr.newUninitialized(numFields.csize_t)
 
-    var i = 0
-    for k, v in a.fieldPairs:
-      result.payload.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
-      inc i
+      var i = 0
+      for k, v in a.fieldPairs:
+        result.payload.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
+        inc i
 
-    # echo result.payload.record.data.isNil
-    # echo result.payload.record.size
+    else:
+      result.kind = ComponentValKind.Variant.ComponentValKindT
+
+      type Kind = typeof(a.kind)
+      let name = ($a.kind).toName
+      result.payload.variant.name = name
+
+      macro convertField(res: untyped, val: typed): untyped =
+        var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(val, ident"kind"))
+        var addElse = false
+        for v in Kind:
+          let kindName = ident(toCamelCase($v, true))
+          let fieldName = ident(toCamelCase($v, false))
+          var caseCode = genAst(res, val, fieldName):
+            # todo: check this `when` in the macro instead of in the returned code
+            when compiles(val.fieldName):
+              res = valNew()
+              res[] = val.fieldName.toVal
+          cases.add nnkOfBranch.newTree(kindName, caseCode)
+
+        return nnkStmtList.newTree(cases)
+
+      result.payload.variant.val.convertField(a)
 
   else:
     {.error: "Can't convert type " & $T & " to ComponentValT".}
@@ -1011,12 +1033,10 @@ proc to*(a: ComponentValT, T: typedesc): T =
       result.incl parseEnum[Item](name)
 
   elif T is WitFlags:
-    echo "---------------------------------- "
     assert a.kind == ComponentValKind.Flags.ComponentValKindT
     type Item = T.getFlagsTargetType()
     for v in a.payload.flags:
       let name = v.strVal
-      echo "-------------- ", name
       result.incl parseEnum[Item](name)
 
   elif T is options.Option:

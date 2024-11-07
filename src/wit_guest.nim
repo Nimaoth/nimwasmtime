@@ -287,6 +287,43 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
           errCase
       outCode.add code
 
+    of Variant:
+      let objectTypeName = ident(userType.name.toCamelCase(true))
+      let enumTypeName = ident(objectTypeName.repr & "Kind")
+      let kindCode = genAst(t = enumTypeName, a = loweredArgs[0]):
+        cast[t](a)
+
+      var cases = nnkCaseStmt.newTree(kindCode)
+
+      for f in userType.fields:
+        let kindName = ident(f.name.toCamelCase(true))
+        let fieldName = ident(f.name.toCamelCase(false))
+        var lowerCode = nnkStmtList.newTree()
+
+        let typ = ctx.getTypeName(f.typ)
+        let temp = ident"temp"
+        let tempDecl = nnkVarSection.newTree(nnkIdentDefs.newTree(temp, typ, newEmptyNode()))
+        ctx.lift(loweredArgs[1..^1], temp, f.typ, lowerCode)
+        let caseCode = if typ.repr == "void":
+          genAst(param, typ, t = objectTypeName, k = kindName):
+            param = t(kind: k)
+        else:
+          genAst(param, lowerCode, temp, tempDecl, fieldName, t = objectTypeName, k = kindName):
+            tempDecl
+            lowerCode
+            param = t(kind: k, fieldName: temp)
+
+        cases.add nnkOfBranch.newTree(ident(f.name.toCamelCase(true)), caseCode)
+
+      var addElse = false
+
+      if addElse:
+        cases.add nnkElse.newTree(nnkStmtList.newTree(nnkDiscardStmt.newTree(newEmptyNode())))
+
+      let code = genAst(loweredTag = loweredArgs[0], param, cases):
+        cases
+      outCode.add code
+
     of Record:
       var loweredI = 0
       for i, f in userType.fields:
@@ -302,25 +339,6 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
         ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode)
         loweredI += ctx.flatTypeSize(f.typ)
       return
-
-    of Variant:
-      # todo
-      var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(param, ident"kind"))
-      var addElse = false
-
-      for f in userType.fields:
-        let fieldAccess = nnkDotExpr.newTree(param, ident(f.name.toCamelCase(false)))
-        var caseCode = nnkStmtList.newTree()
-        ctx.lift(loweredArgs[1..^1], fieldAccess, f.typ, caseCode)
-        cases.add nnkOfBranch.newTree(ident(f.name.toCamelCase(true)), caseCode)
-
-      if addElse:
-        cases.add nnkElse.newTree(nnkStmtList.newTree(nnkDiscardStmt.newTree(newEmptyNode())))
-
-      let code = genAst(loweredTag = loweredArgs[0], param, cases):
-        loweredTag = param.kind.int32
-        cases
-      outCode.add code
 
     # todo
     # of Owned, Borrowed:
