@@ -13,7 +13,7 @@ func hostQuoteShell(s: string): string =
   else:
     result = quoteShell(s)
 
-macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped): untyped =
+macro importWitImpl(witPath: static[string], cacheFile: static[string], dir: static[string]): untyped =
   let path = if witPath.isAbsolute:
     witPath
   else:
@@ -44,9 +44,15 @@ macro witBindGenImpl(witPath: static[string], dir: static[string], body: untyped
 
     typeSection
 
-  hint "Write api to " & (dir / "host.nim")
-  writeFile(dir / "host.nim", code.repr)
+  let cacheFile = if cacheFile.isAbsolute:
+    cacheFile
+  else:
+    dir / cacheFile
+
+  hint "Write api to " & cacheFile
+  writeFile(cacheFile, code.repr)
+
   return code
 
-template witBindGen*(witPath: static[string], body: untyped): untyped =
-  witBindGenImpl(witPath, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head, body)
+template importWit*(witPath: static[string], cacheFile: static[string] = "host.nim"): untyped =
+  importWitImpl(witPath, cacheFile, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head)

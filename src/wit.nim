@@ -1,11 +1,25 @@
 import std/[strformat, macros, strutils, json, jsonutils, enumerate, options, sequtils, math, tables]
 
 type
-  WitUserTypeKind* = enum Builtin, Record, Flags, Enum, Variant, Option, List, Result, Tuple, Owned, Borrowed
+  CoreType* = enum
+    I8
+    I16
+    I32
+    I64
+    F32
+    F64
+
+  CoreFuncType* = object
+    paramsFlat*: bool # Whether the parameters should be flattened into arguments
+    resultsFlat*: bool # Whether the results should be flattened into arguments
+    params*: seq[CoreType]
+    results*: seq[CoreType]
 
   WitFlattenContext* = enum Lower, Lift
 
   RecordField* = tuple[name: string, typ: WitType]
+
+  WitUserTypeKind* = enum Builtin, Record, Flags, Enum, Variant, Option, List, Result, Tuple, Owned, Borrowed
   WitUserType* = object
     index*: int
     name*: string
@@ -42,22 +56,20 @@ type
   WitInterface* = object
     name*: string
     funcs*: seq[WitFunc]
+    package*: int
 
-  CoreType* = enum
-    I8
-    I16
-    I32
-    I64
-    F32
-    F64
+  WitWorld* = object
+    name*: string
+    package*: int
 
-  CoreFuncType* = object
-    paramsFlat*: bool # Whether the parameters should be flattened into arguments
-    resultsFlat*: bool # Whether the results should be flattened into arguments
-    params*: seq[CoreType]
-    results*: seq[CoreType]
+  WitPackage* = object
+    name*: string
+    interfaces*: Table[string, int]
+    worlds*: Table[string, int]
 
   WitContext* = ref object
+    packages*: seq[WitPackage]
+    worlds*: seq[WitWorld]
     types*: seq[WitUserType]
     flatSizeMap*: Table[int, int]
     interfaces*: seq[WitInterface]
@@ -93,36 +105,59 @@ proc parseWitFunc(json: JsonNode, env: string): WitFunc =
   result.results = json["results"].elems.mapIt(it["type"].jsonTo(WitType))
   result.env = env
 
-proc collectFuncs(ctx: WitContext, json: JsonNode, env: string): seq[WitFunc] =
+proc collectFuncs(ctx: WitContext, json: JsonNode, package: int): seq[WitFunc] =
+  let package = ctx.packages[package]
+
   for name, val in json:
     if val.hasKey("interface"):
       let index = val["interface"]["id"].getInt
+      let interfaceName = if ctx.interfaces[index].name == "":
+        name
+      else:
+        package.name & "/" & ctx.interfaces[index].name
+
       for f in ctx.interfaces[index].funcs:
         var f = f
-        f.env = name
+        f.env = interfaceName
         result.add f
 
     elif val.hasKey("function"):
-      result.add val["function"].parseWitFunc(env)
+      result.add val["function"].parseWitFunc("")
 
-proc collectFuncsInRoot(ctx: WitContext, json: JsonNode, worldName: string) =
+proc collectFuncsInRoot(ctx: WitContext, json: JsonNode) =
   for world in json["worlds"]:
+    var w = WitWorld()
+    w.name = world["name"].getStr
+    w.package = world["package"].getInt
+    ctx.worlds.add w
+
     if world.hasKey("imports"):
-      ctx.funcs.add ctx.collectFuncs(world["imports"], "")
+      ctx.funcs.add ctx.collectFuncs(world["imports"], w.package)
 
     if world.hasKey("exports"):
-      ctx.exports.add ctx.collectFuncs(world["exports"], "")
+      ctx.exports.add ctx.collectFuncs(world["exports"], w.package)
 
 proc collectInterfaces(ctx: WitContext, json: JsonNode) =
   for interfac in json["interfaces"]:
     var res = WitInterface()
     res.name = interfac["name"].getStr
+    res.package = interfac["package"].getInt
     ctx.interfaces.add res
 
   for i, interfac in json["interfaces"].elems:
     if interfac.hasKey("functions"):
       for name, val in interfac["functions"]:
         ctx.interfaces[i].funcs.add val.parseWitFunc(ctx.interfaces[i].name)
+
+proc parsePackage(ctx: WitContext, json: JsonNode): WitPackage =
+  return json.jsonTo(WitPackage)
+
+proc collectPackages(ctx: WitContext, json: JsonNode) =
+  if not json.hasKey("packages"):
+    return
+
+  for p in json["packages"]:
+    ctx.packages.add ctx.parsePackage(p)
 
 proc collectTypes(ctx: WitContext, json: JsonNode) =
   if not json.hasKey("types"):
@@ -424,6 +459,7 @@ proc flattenFuncType*(ctx: WitContext, fun: WitFunc, context: WitFlattenContext)
 
 proc newWitContext*(witJson: JsonNode): WitContext =
   result = WitContext()
+  result.collectPackages(witJson)
   result.collectTypes(witJson)
   result.collectInterfaces(witJson)
-  result.collectFuncsInRoot(witJson, "test-world")
+  result.collectFuncsInRoot(witJson)

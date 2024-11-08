@@ -400,8 +400,8 @@ type
   ComponentFuncCallbackT* = proc (a0: pointer; a1: ptr ComponentValT;
                                   a2: csize_t; a3: ptr ComponentValT;
                                   a4: csize_t): ptr WasmTrapT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:197:24
-  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:209:46
-  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:217:42
+  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:211:46
+  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:219:42
   GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
     name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16
@@ -1432,7 +1432,8 @@ proc newComponentLinker*(engine: ptr WasmEngineT): ptr ComponentLinkerT {.cdecl,
     importc: "wasmtime_component_linker_new".}
 proc linkWasi*(linker: ptr ComponentLinkerT; trap_out: ptr ptr WasmTrapT): ptr ErrorT {.
     cdecl, importc: "wasmtime_component_linker_link_wasi".}
-proc funcNew*(linker: ptr ComponentLinkerT; name: cstring; len: csize_t;
+proc funcNew*(linker: ptr ComponentLinkerT; env_name: cstring;
+              env_name_len: csize_t; name: cstring; len: csize_t;
               callback: ComponentFuncCallbackT; data: pointer;
               finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
     cdecl, importc: "wasmtime_component_linker_func_new".}
@@ -1595,7 +1596,7 @@ template vec(T: untyped; unchecked: bool = true): untyped =
     for i in 0 ..< self.len:
       yield (i, self.uncheckedArray[i])
 
-
+  
 vec(WasmByteVecT)
 vec(WasmExporttypeVecT)
 vec(WasmExternVecT)
@@ -1911,7 +1912,7 @@ proc call*(f: ptr ComponentFuncT; context: ptr ComponentContextT;
 type
   ComponentFuncCallback* = proc (ctx: pointer; params: openArray[ComponentValT];
                                  results: var openArray[ComponentValT])
-proc funcNew*(linker: ptr ComponentLinkerT; name: string;
+proc funcNew*(linker: ptr ComponentLinkerT; env: string; name: string;
               callback: ComponentFuncCallback; data: pointer = nil;
               finalizer: proc (a0: pointer): void {.cdecl.} = nil): WasmtimeResult[
     void] =
@@ -1940,8 +1941,8 @@ proc funcNew*(linker: ptr ComponentLinkerT; name: string;
                    results.toOpenArray(0, resultsLen.int - 1))
     nil
 
-  return linker.funcNew(name.cstring, name.len.csize_t, cb, ctx, fin).toResult(
-      void)
+  return linker.funcNew(env.cstring, env.len.csize_t, name.cstring,
+                        name.len.csize_t, cb, ctx, fin).toResult(void)
 
 proc `$`*(a: ComponentValT): string =
   case a.kind.ComponentValKind
@@ -2033,7 +2034,7 @@ proc `$`*(a: ComponentValT): string =
 
 proc `$`*[S](a: array[S, ComponentValT]): string =
   result = "["
-  for i in 0..a.high:
+  for i in 0 .. a.high:
     if i > 0:
       result.add ", "
     result.add $a[i]
@@ -2041,7 +2042,7 @@ proc `$`*[S](a: array[S, ComponentValT]): string =
 
 proc `$`*(a: openArray[ComponentValT]): string =
   result = "["
-  for i in 0..a.high:
+  for i in 0 .. a.high:
     if i > 0:
       result.add ", "
     result.add $a[i]

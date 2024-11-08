@@ -740,8 +740,8 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
 
       type ComponentFuncCallback* = proc(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT])
 
-      proc funcNew*(linker: ptr ComponentLinkerT; name: string;
-          callback: ComponentFuncCallback; data: pointer = nil;
+      proc funcNew*(linker: ptr ComponentLinkerT, env: string, name: string,
+          callback: ComponentFuncCallback, data: pointer = nil,
           finalizer: proc (a0: pointer): void {.cdecl.} = nil): WasmtimeResult[void] =
 
         type Ctx = object
@@ -767,7 +767,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
           ctx[].callback(ctx[].data, params.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
           nil
 
-        return linker.funcNew(name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
+        return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
 
       proc `$`*(a: ComponentValT): string =
         case a.kind.ComponentValKind
