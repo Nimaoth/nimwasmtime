@@ -16,9 +16,14 @@ func hostQuoteShell(s: string): string =
 macro wasmexport*(name: static[string], t: typed): untyped =
   if t.kind notin {nnkProcDef, nnkFuncDef}:
     error("Can only export procedures", t)
+
+  let attrib = &"""__attribute__((__export_name__("{name}"))) EMSCRIPTEN_KEEPALIVE"""
+
+  let name = name.toCamelCase(false)
+
   let
     newProc = copyNimTree(t)
-    codeGen = nnkExprColonExpr.newTree(ident"codegendecl", newLit"EMSCRIPTEN_KEEPALIVE $# $#$#")
+    codeGen = nnkExprColonExpr.newTree(ident"codegendecl", newLit(attrib & " $# $#$#"))
   if newProc[4].kind == nnkEmpty:
     newProc[4] = nnkPragma.newTree(codeGen)
   else:
