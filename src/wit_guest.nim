@@ -79,7 +79,17 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       loweredArg = cast[int32](param)
     outCode.add code
 
-  of "s8", "s16", "s32", "s64", "u8", "u16", "u32", "u64", "f32", "f64":
+  of "s8", "s16", "u8", "u16", "s32", "u32":
+    let code = genAst(loweredArg = loweredArgs[0], param = param):
+      loweredArg = cast[int32](param)
+    outCode.add code
+
+  of "s64", "u64":
+    let code = genAst(loweredArg = loweredArgs[0], param = param):
+      loweredArg = cast[int64](param)
+    outCode.add code
+
+  of "f32", "f64":
     let code = genAst(loweredArg = loweredArgs[0], param = param):
       loweredArg = param
     outCode.add code
@@ -374,7 +384,7 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimN
 
 proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
   let importTempl = genAst():
-    proc foo*(a: int): bool {.wasmimport("", "").}
+    proc foo(a: int): bool {.wasmimport("", "").}
 
   let importWrapperTempl = genAst():
     proc foo*(a: int): bool =
@@ -386,13 +396,17 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
   # echo &"genFunction {fun}\n{flatFuncTargetType}\n{flatFuncType}"
   # echo ""
 
+
   case fun.kind
   of Freestanding:
-    let importedName = ident(fun.name.toCamelCase(false) & "Imported")
+    let importedName = if fun.interfac.isSome:
+      ident(fun.interfaceName.toCamelCase(false) & fun.name.toCamelCase(true) & "Imported")
+    else:
+      ident(fun.name.toCamelCase(false) & "Imported")
 
     block: # raw function
       var funNode = importTempl.copy()
-      funNode[0][1] = importedName
+      funNode[0] = importedName
 
       funNode[4][0][1] = newLit(fun.name)
       funNode[4][0][2] = newLit(fun.env)
@@ -410,7 +424,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           ident("a" & $i)
 
       for i, t in flatFuncType.params:
-        let n = ident(t.nimTypeName)
+        let n = ident(t.normalize.nimTypeName)
         funNode[3].add nnkIdentDefs.newTree(args[i], n, newEmptyNode())
 
       funcList.add funNode
@@ -468,7 +482,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
             ident("arg" & $i)
 
         for i, arg in loweredArgs:
-          let t = ident(flatFuncType.params[i].nimTypeName)
+          let t = ident(flatFuncType.params[i].normalize.nimTypeName)
           vars.add nnkIdentDefs.newTree(arg, t, newEmptyNode())
           call.add arg
 
@@ -483,7 +497,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
         for p in flatFuncTargetType.params:
           while i mod p.byteAlignment != 0:
             inc i
-          let code = genAst(retArea, nimType = p.nimTypeName.ident, index = newLit(i)):
+          let code = genAst(retArea, nimType = p.normalize.nimTypeName.ident, index = newLit(i)):
             cast[ptr nimType](retArea[index].addr)[]
           loweredPtrArgs.add code
           i += p.byteSize

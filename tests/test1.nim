@@ -210,4 +210,176 @@ proc main2*() =
 
   var funcType = wasm_functype_new(paramTypesVec.addr, resultTypesVec.addr)
 
-main()
+proc main3*() =
+  let config = WasmConfig.new()
+  let engine = WasmEngine.new(config)
+  let store = WasmtimeComponentStore.new(engine, nil, nil)
+  echo store.it.isNil
+  let context = store.context()
+
+  wasmtime_component_store_limiter(store.it, int64.high, 10000, 1000, 1000, 1000)
+
+  let linker = wasmtime_component_linker_new(engine.it)
+  linker.defineWasi().okOr(err):
+    echo "Failed to create linker: ", err.msg
+    return
+
+
+  echo "read file"
+  let wasmBytes = readFile("tests/wasm/testc.wasm")
+  # let module = WasmtimeModule.new(engine.it, wasmBytes).okOr(err):
+  #   echo "Failed to create wasm module: ", err.msg
+  #   return
+
+  var c: ptr WasmtimeComponent = nil
+  echo "create component"
+  var err = wasmtime_component_from_binary(engine.it, wasmBytes[0].addr, wasmBytes.len.csize_t, c.addr)
+  if err != nil:
+    let res = err.toResult(int)
+    echo "Failed to create wasm component: ", res.err.msg
+    return
+
+  echo "create instance"
+
+  var instance: ptr WasmtimeComponentInstance = nil
+  var trap: ptr wasm_trap_t = nil
+  err = wasmtime_component_linker_instantiate(linker, context, c, instance.addr, trap.addr)
+  if err != nil:
+    let res = err.toResult(int)
+    echo "Failed to create component instance: ", res.err.msg
+    return
+
+  trap.toResult(void).okOr(err):
+    echo "Failed to create component instance: ", err.msg
+    return
+
+  if instance == nil:
+    echo "Failed to create component instance: nil"
+    return
+
+  block:
+    let name = "hello"
+    echo &"get func {name}"
+    var f: ptr WasmtimeComponentFunc = nil
+    if not wasmtime_component_instance_get_func(instance, context, name[0].addr, name.len.csize_t, f.addr):
+      echo &"Failed to get func '{name}'"
+      return
+
+    if f == nil:
+      echo &"Failed to get func '{name}'"
+      return
+
+    echo &"call func {name}"
+    var params: array[1, WasmtimeComponentVal]
+    var results: array[1, WasmtimeComponentVal]
+    wasmtime_component_func_call(f, context, params[0].addr, 0, results[0].addr, 0, trap.addr).toResult(void).okOr(err):
+      echo &"Failed to call func '{name}': {err}"
+      return
+
+  block:
+    let name = "foo"
+    echo &"get func {name}"
+    var f: ptr WasmtimeComponentFunc = nil
+    if not wasmtime_component_instance_get_func(instance, context, name[0].addr, name.len.csize_t, f.addr):
+      echo &"Failed to get func '{name}'"
+      return
+
+    if f == nil:
+      echo &"Failed to get func '{name}'"
+      return
+
+    echo &"call func {name}"
+    var params: array[2, WasmtimeComponentVal]
+    params[0].kind = S32
+    params[0].payload.s32 = 123
+    params[1].kind = Float32
+    params[1].payload.f32 = 789.456
+    var results: array[1, WasmtimeComponentVal]
+    wasmtime_component_func_call(f, context, params[0].addr, params.len.csize_t, results[0].addr, results.len.csize_t, trap.addr).toResult(void).okOr(err):
+      echo &"Failed to call func '{name}': {err}"
+      return
+
+    echo results[0].kind
+
+  echo "done"
+
+main3()
+# main()
+
+
+
+proc main() =
+  echo "Start main"
+  let config = newConfig()
+  let engine = newEngine(config)
+
+  let linker = engine.newLinker()
+  defer: linker.delete()
+
+  let store = engine.newStore(nil, nil)
+  defer: store.delete()
+
+  let context = store.context()
+
+  let wasiConfig = newWasiConfig()
+  wasiConfig.inheritStdin()
+  wasiConfig.inheritStderr()
+  wasiConfig.inheritStdout()
+  context.setWasi(wasiConfig).toResult(void).okOr(err):
+    echo "Failed to setup wasi: ", err.msg
+    return
+
+  echo "Read wasm file"
+  let wasmBytes = readFile("tests/wasm/testm.wasm")
+  let module = engine.newModule(wasmBytes).okOr(err):
+    echo "Failed to create wasm module: ", err.msg
+    return
+
+  let moduleImports = module.imports
+  let moduleExports = module.exports
+
+  echo "Imports:"
+  for i, e in moduleImports:
+    echo &"  {i}: {e}"
+
+  echo "Exports:"
+  for i, e in moduleExports:
+    echo &"  {i}: {e}"
+
+  linker.defineWasi().okOr(err):
+    echo "Failed to create linker: ", err.msg
+    return
+
+  echo "Instantiate "
+  var trap: ptr WasmTrapT = nil
+  let instance = linker.instantiate(context, module, trap.addr).okOr(err):
+    echo "Failed to instantiate wasm module: ", err.msg
+    return
+
+  trap.okOr(err):
+    echo "[trap] Failed to instantiate wasm module: ", err.msg
+    return
+
+  echo "instance exports"
+  for i in 0..<moduleExports.len:
+    let mainExport = instance.getExport(context, i)
+    if mainExport.isNone:
+      echo &"  {i}: none"
+      continue
+    echo &"  {i}: {mainExport.get.name}"
+
+  let mainExport = instance.getExport(context, "hello")
+  assert mainExport.isSome
+  assert mainExport.get.kind.WasmExternKind == ExternFunc
+  echo mainExport
+
+  echo "Call hello"
+  mainExport.get.of_field.func_field.addr.call(context, [], [], trap.addr).toResult(void).okOr(err):
+    echo &"Failed to call hello: {err.msg}"
+    return
+
+  trap.okOr(err):
+    echo "[trap] Failed to call hello: ", err.msg
+    return
+
+  echo "Called hello"

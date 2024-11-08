@@ -49,6 +49,8 @@ type
   WitFunc* = object
     name*: string
     env*: string
+    interfaceName*: string
+    interfac*: Option[int]
     kind*: WitFuncKind
     params*: seq[WitFuncParam]
     results*: seq[WitType]
@@ -98,12 +100,13 @@ proc toCamelCase*(str: string, capitalizeFirst: bool): string =
     else:
       result.add part.capitalizeAscii
 
-proc parseWitFunc(json: JsonNode, env: string): WitFunc =
+proc parseWitFunc(json: JsonNode, env: string, interfac: Option[int] = int.none): WitFunc =
   result.name = json["name"].getStr
   result.kind = json["kind"].jsonTo(WitFuncKind)
   result.params = json["params"].elems.mapIt((it["name"].getStr, it["type"].jsonTo(WitType)))
   result.results = json["results"].elems.mapIt(it["type"].jsonTo(WitType))
   result.env = env
+  result.interfac = interfac
 
 proc collectFuncs(ctx: WitContext, json: JsonNode, package: int): seq[WitFunc] =
   let package = ctx.packages[package]
@@ -114,11 +117,16 @@ proc collectFuncs(ctx: WitContext, json: JsonNode, package: int): seq[WitFunc] =
       let interfaceName = if ctx.interfaces[index].name == "":
         name
       else:
-        package.name & "/" & ctx.interfaces[index].name
+        ctx.interfaces[index].name
+      let env = if ctx.interfaces[index].name == "":
+        name
+      else:
+        package.name & "/" & interfaceName
 
       for f in ctx.interfaces[index].funcs:
         var f = f
-        f.env = interfaceName
+        f.interfaceName = interfaceName
+        f.env = env
         result.add f
 
     elif val.hasKey("function"):
@@ -147,7 +155,7 @@ proc collectInterfaces(ctx: WitContext, json: JsonNode) =
   for i, interfac in json["interfaces"].elems:
     if interfac.hasKey("functions"):
       for name, val in interfac["functions"]:
-        ctx.interfaces[i].funcs.add val.parseWitFunc(ctx.interfaces[i].name)
+        ctx.interfaces[i].funcs.add val.parseWitFunc(ctx.interfaces[i].name, i.some)
 
 proc parsePackage(ctx: WitContext, json: JsonNode): WitPackage =
   return json.jsonTo(WitPackage)
@@ -379,7 +387,7 @@ proc flattenType*(ctx: WitContext, typ: WitType): seq[CoreType] =
     of "s32", "u32": @[CoreType.I32]
     of "s64", "u64": @[CoreType.I64]
     of "f32": @[CoreType.F32]
-    of "f64": @[CoreType.F32]
+    of "f64": @[CoreType.F64]
     else:
       assert false
       @[]

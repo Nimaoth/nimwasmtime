@@ -1,6 +1,8 @@
-package my:demo;
+package my:test-package;
 
-interface types {
+
+interface test-types {
+
   record foo {
     x: string,
   }
@@ -8,20 +10,32 @@ interface types {
   record baz {
     x: string,
     c: foo,
-    d: tuple<string, s32, foo>,
-    e: option<voodoo>,
+    d: tuple<s32, f32>,
+    e: option<s32>,
     f: list<foo>,
+    gbruh: list<props>,
+    g: descriptor-type,
+    h: props,
     // g: result<foo, descriptor-type>,
-    // h: result<bar>,
+    i: result<foo>,
+    j: voodoo
+  }
+
+  flags props {
+    cool,
+    lame,
+    so-lame,
   }
 
   record bar {
     a: s32,
     b: f32,
+    c: char,
+    d: bool,
   }
 
   variant voodoo {
-    unpossesed,
+    un-possesed,
     possesed(string),
   }
 
@@ -37,16 +51,29 @@ interface types {
   }
 }
 
+interface test-interface {
+  test-no-params: func();
+  test-simple-params: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char);
+  test-simple-params-ptr: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char, m: s32, n: s32, o: s32, p: s32, q: s32);
+}
+
 world test-world {
-  use types.{bar};
+  use test-types.{bar, baz};
 
   import env: interface {
-    use types.{bar, baz};
+    use test-types.{bar, baz};
+    test-no-params2: func();
     bar-baz: func(a: s32, b: f32) -> f32;
-    call-bar: func(f: bar);
-    call-baz: func(b: baz);
+    call-bar: func(f: bar) -> bar;
+    call-baz: func(b: baz) -> baz;
+    // call-baz: func(b: baz) -> s32;
   }
 
-  export hello: func();
+  import test-interface;
+
+  export start: func();
   export foo: func(f: bar) -> f32;
+  export bar: func(f: bar) -> bar;
+  export baz: func(f: baz) -> baz;
+  export barz: func(f: bar, g: baz) -> baz;
 }
