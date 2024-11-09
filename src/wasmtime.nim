@@ -773,6 +773,15 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, userId: int, drop: proc(p: pointer) {.cdecl.}): WasmtimeResult[void] =
         return linker.defineResource(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
 
+      proc resourceHostData*(ctx: ptr ComponentContextT; val: ptr ComponentValT;
+                             T: typedesc): WasmtimeResult[ptr T] =
+        let data: pointer = nil
+        let err = ctx.resourceHostData(val, data.addr)
+        if err != nil:
+          return err.toResult(ptr T)
+        assert data != nil
+        return wasmtime.ok(cast[ptr T](data))
+
       proc `$`*(a: ComponentValT): string =
         case a.kind.ComponentValKind
         of Bool: $a.payload.boolean

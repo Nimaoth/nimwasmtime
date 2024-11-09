@@ -96,20 +96,43 @@ proc main() =
 
   linker.defineFunc("my:test-package/test-interface", "[method]blob.read"):
     echo "[host] [method]blob.read()"
+    store.context.resourceDrop(params[0].addr).okOr(err):
+      echo &"[host] Failed to drop resource: {err}"
+      return
 
   linker.defineFunc("my:test-package/test-interface", "[method]blob.write"):
     echo "[host] [method]blob.write()"
+    let a = store.context.resourceHostData(params[0].addr, MyBlob).okOr(err):
+      echo &"[host] Failed to get resource data: {err}"
+      return
+
+    a[].arr.add params[1].to(seq[uint8])
+
+    store.context.resourceDrop(params[0].addr).okOr(err):
+      echo &"[host] Failed to drop resource: {err}"
+      return
 
   linker.defineFunc("my:test-package/test-interface", "[static]blob.merge"):
     echo "[host] [static]blob.merge()"
 
-    var res: ComponentValT
+    let a = store.context.resourceHostData(params[0].addr, MyBlob).okOr(err):
+      echo &"[host] Failed to get resource data: {err}"
+      return
+    let b = store.context.resourceHostData(params[1].addr, MyBlob).okOr(err):
+      echo &"[host] Failed to get resource data: {err}"
+      return
+
     var blob = createShared(MyBlob)
     blob.blobName = "merge" & $counter
     counter.inc
+
+    blob.arr = a[].arr & b[].arr
+
+    var res: ComponentValT
     store.context.resourceNew(69, res.addr, blob).okOr(err):
       echo &"[host] Failed to create resource: {err}"
       return
+
     results[0] = res
 
     store.context.resourceDrop(params[0].addr).okOr(err):
@@ -121,6 +144,16 @@ proc main() =
 
   linker.defineFunc("my:test-package/test-interface", "[static]blob.print"):
     echo "[host] [static]blob.print()"
+
+    let a = store.context.resourceHostData(params[0].addr, MyBlob).okOr(err):
+      echo &"[host] Failed to get resource data: {err}"
+      return
+    let b = store.context.resourceHostData(params[1].addr, MyBlob).okOr(err):
+      echo &"[host] Failed to get resource data: {err}"
+      return
+
+    echo "================================== ", a[], ", ", b[]
+
     store.context.resourceDrop(params[0].addr).okOr(err):
       echo &"[host] Failed to drop resource: {err}"
       return
