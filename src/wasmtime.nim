@@ -771,7 +771,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
         return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
 
       proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, userId: int, drop: proc(p: pointer) {.cdecl.}): WasmtimeResult[void] =
-        return linker.resourceNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
+        return linker.defineResource(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
 
       proc `$`*(a: ComponentValT): string =
         case a.kind.ComponentValKind

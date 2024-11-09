@@ -404,8 +404,8 @@ type
   ComponentFuncCallbackT* = proc (a0: pointer; a1: ptr ComponentValT;
                                   a2: csize_t; a3: ptr ComponentValT;
                                   a4: csize_t): ptr WasmTrapT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:240:24
-  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:270:46
-  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:278:42
+  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:269:46
+  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:277:42
   GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
     name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16
@@ -1441,10 +1441,11 @@ proc funcNew*(linker: ptr ComponentLinkerT; env_name: cstring;
               callback: ComponentFuncCallbackT; data: pointer;
               finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
     cdecl, importc: "wasmtime_component_linker_func_new".}
-proc resourceNew*(linker: ptr ComponentLinkerT; env_name: cstring;
-                  env_name_len: csize_t; name: cstring; len: csize_t;
-                  user_id: csize_t; finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
-    cdecl, importc: "wasmtime_component_linker_resource_new".}
+proc defineResource*(linker: ptr ComponentLinkerT; env_name: cstring;
+                     env_name_len: csize_t; name: cstring; len: csize_t;
+                     user_id: csize_t;
+                     finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_linker_define_resource".}
 proc resourceNew*(context: ptr ComponentContextT; user_id: csize_t;
                   resource: ptr ComponentValT; data: pointer): ptr ErrorT {.
     cdecl, importc: "wasmtime_component_resource_new".}
@@ -1962,8 +1963,8 @@ proc funcNew*(linker: ptr ComponentLinkerT; env: string; name: string;
 proc defineResource*(linker: ptr ComponentLinkerT; env: string; name: string;
                      userId: int; drop: proc (p: pointer) {.cdecl.}): WasmtimeResult[
     void] =
-  return linker.resourceNew(env.cstring, env.len.csize_t, name.cstring,
-                            name.len.csize_t, userId.csize_t, drop).toResult(
+  return linker.defineResource(env.cstring, env.len.csize_t, name.cstring,
+                               name.len.csize_t, userId.csize_t, drop).toResult(
       void)
 
 proc `$`*(a: ComponentValT): string =
