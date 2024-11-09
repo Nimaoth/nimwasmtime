@@ -1,6 +1,12 @@
 import std/[strformat, options, strutils, macros, genasts, unicode]
 import wasmtime, wit_host
 
+type MyBlob = object
+  blobName: string
+  arr: seq[uint8]
+
+template typeId*(_: typedesc[MyBlob]): int = 69
+
 importWit "wasm/test.wit"
 
 proc call(instance: ptr ComponentInstanceT, context: ptr ComponentContextT, name: string, params: openArray[ComponentValT], nresults: static[int]) =
@@ -24,10 +30,15 @@ proc call(instance: ptr ComponentInstanceT, context: ptr ComponentContextT, name
 
 template defineFunc(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped) =
   block:
-    proc cb(ctx: pointer, params {.inject.}: openArray[ComponentValT], results {.inject.}: var openArray[ComponentValT]) =
-      echo "[host] " & name & &" <- {params}"
-      body
-      echo "[host] " & name & &" -> {results}"
+    proc cb(ctx: pointer, p: openArray[ComponentValT], r: var openArray[ComponentValT]) =
+      proc inner(ctx: pointer, params {.inject.}: openArray[ComponentValT], results {.inject.}: var openArray[ComponentValT]): WasmtimeResult[void] =
+        echo "[host] " & name & &" <- {params}"
+        defer:
+          echo "[host] " & name & &" -> {results}"
+        body
+
+      inner(ctx, p, r).okOr(e):
+        echo "[host] ", $e
 
     let funcName {.inject.} = name
     linker.funcNew(env, funcName, cb).okOr(err):
@@ -43,15 +54,6 @@ proc main() =
   let store = engine.newComponentStore(nil, nil)
   # defer: store.delete()
 
-  type MyBlob = object
-    blobName: string
-    arr: seq[uint8]
-
-  proc deleteBlob(b: pointer) {.cdecl.} =
-    let b = cast[ptr MyBlob](b)
-    echo "--------------------------------------- deleteBlob ", b[]
-    deallocShared(b)
-
   linker.linkWasi(trap.addr).okOr(err):
     echo "[host] Failed to link wasi: ", err.msg
     return
@@ -60,7 +62,7 @@ proc main() =
     echo "[host][trap] Failed to link wasi: ", err.msg
     return
 
-  linker.defineResource("my:test-package/test-interface", "blob", 69, deleteBlob).okOr(err):
+  linker.defineResource("my:test-package/test-interface", "blob", MyBlob).okOr(err):
     echo &"Failed to define resource {err.msg}"
     return
 
@@ -82,84 +84,39 @@ proc main() =
   var counter = 0
 
   linker.defineFunc("my:test-package/test-interface", "[constructor]blob"):
-    echo "[host] [constructor]blob()"
-    var res: ComponentValT
-    var blob = createShared(MyBlob)
-    blob.blobName = "constr" & $counter
-    blob.arr = params[0].to(seq[uint8])
+    var b = MyBlob(blobName: "constr" & $counter, arr: params[0].to(seq[uint8]))
+    let res = ?store.context.resourceNew(b)
     counter.inc
-    store.context.resourceNew(69, res.addr, blob).okOr(err):
-      echo &"[host] Failed to create resource: {err}"
-      return
 
     results[0] = res
 
   linker.defineFunc("my:test-package/test-interface", "[method]blob.read"):
-    echo "[host] [method]blob.read()"
-    store.context.resourceDrop(params[0].addr).okOr(err):
-      echo &"[host] Failed to drop resource: {err}"
-      return
+    ?store.context.resourceDrop(params[0].addr)
 
   linker.defineFunc("my:test-package/test-interface", "[method]blob.write"):
-    echo "[host] [method]blob.write()"
-    let a = store.context.resourceHostData(params[0].addr, MyBlob).okOr(err):
-      echo &"[host] Failed to get resource data: {err}"
-      return
-
+    let a = ?store.context.resourceHostData(params[0].addr, MyBlob)
     a[].arr.add params[1].to(seq[uint8])
-
-    store.context.resourceDrop(params[0].addr).okOr(err):
-      echo &"[host] Failed to drop resource: {err}"
-      return
+    ?store.context.resourceDrop(params[0].addr)
 
   linker.defineFunc("my:test-package/test-interface", "[static]blob.merge"):
-    echo "[host] [static]blob.merge()"
+    let a = ?store.context.resourceHostData(params[0].addr, MyBlob)
+    let b = ?store.context.resourceHostData(params[1].addr, MyBlob)
 
-    let a = store.context.resourceHostData(params[0].addr, MyBlob).okOr(err):
-      echo &"[host] Failed to get resource data: {err}"
-      return
-    let b = store.context.resourceHostData(params[1].addr, MyBlob).okOr(err):
-      echo &"[host] Failed to get resource data: {err}"
-      return
-
-    var blob = createShared(MyBlob)
-    blob.blobName = "merge" & $counter
+    var blob = MyBlob(blobName: "merge" & $counter, arr: a[].arr & b[].arr)
+    let res = ?store.context.resourceNew(blob)
     counter.inc
-
-    blob.arr = a[].arr & b[].arr
-
-    var res: ComponentValT
-    store.context.resourceNew(69, res.addr, blob).okOr(err):
-      echo &"[host] Failed to create resource: {err}"
-      return
 
     results[0] = res
 
-    store.context.resourceDrop(params[0].addr).okOr(err):
-      echo &"[host] Failed to drop resource: {err}"
-      return
-    store.context.resourceDrop(params[1].addr).okOr(err):
-      echo &"[host] Failed to drop resource: {err}"
-      return
+    ?store.context.resourceDrop(params[0].addr)
+    ?store.context.resourceDrop(params[1].addr)
 
   linker.defineFunc("my:test-package/test-interface", "[static]blob.print"):
-    echo "[host] [static]blob.print()"
-
-    let a = store.context.resourceHostData(params[0].addr, MyBlob).okOr(err):
-      echo &"[host] Failed to get resource data: {err}"
-      return
-    let b = store.context.resourceHostData(params[1].addr, MyBlob).okOr(err):
-      echo &"[host] Failed to get resource data: {err}"
-      return
-
+    let a = ?store.context.resourceHostData(params[0].addr, MyBlob)
+    let b = ?store.context.resourceHostData(params[1].addr, MyBlob)
     echo "================================== ", a[], ", ", b[]
-
-    store.context.resourceDrop(params[0].addr).okOr(err):
-      echo &"[host] Failed to drop resource: {err}"
-      return
-    store.context.resourceDrop(params[1].addr).okOr(err):
-      echo &"[host] Failed to drop resource: {err}"
-      return
+    ?store.context.resourceDrop(params[0].addr)
+    ?store.context.resourceDrop(params[1].addr)
 
   linker.defineFunc("my:test-package/test-interface", "test-no-params"):
     echo "[host] testNoParams()"

@@ -315,7 +315,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       content.add suffix
       writeFile(outputPath, content)
 
-    macro suffixWrapper(body: untyped) =
+    macro suffixWrapper(body: untyped): untyped =
       suffix = body.repr
 
     suffixWrapper:
@@ -335,88 +335,31 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       #     if self.data != nil:
       #       self.addr.delete()
 
-      template vec(T: untyped, unchecked: bool = true): untyped =
+      template vecType(T: untyped, unchecked: bool = true): untyped =
         type ItemType = typeof(T().data[])
 
         proc `=copy`*(self: var T; src: T) {.error.}
-        proc clone*(self: T): T =
-          self.addr.copy(result.addr)
 
         proc `=destroy`*(self: T) =
           if self.data != nil:
             self.addr.delete()
 
-        func toVec*(s: openArray[ItemType]): T =
-          if s.len > 0:
-            when unchecked:
-              result.addr.new(s.len.csize_t, cast[ptr UncheckedArray[ItemType]](s[0].addr))
-            else:
-              result.addr.new(s.len.csize_t, s[0].addr)
-          else:
-            result.addr.newEmpty()
+      vecType(WasmByteVecT)
+      vecType(WasmExporttypeVecT)
+      vecType(WasmExternVecT)
+      vecType(WasmExterntypeVecT)
+      vecType(WasmFrameVecT)
+      vecType(WasmFunctypeVecT)
+      vecType(WasmGlobaltypeVecT)
+      vecType(WasmImporttypeVecT)
+      vecType(WasmMemorytypeVecT)
+      vecType(WasmTabletypeVecT)
+      vecType(WasmValVecT)
+      vecType(WasmValtypeVecT)
 
-        func empty*(_: typedesc[T]): T =
-          result.addr.newEmpty()
-
-        func low*(self: T): int =
-          0
-
-        func high*(self: T): int =
-          self.size.int - 1
-
-        func len*(self: T): int =
-          self.size.int
-
-        func uncheckedArray*(self: T): ptr UncheckedArray[ItemType] =
-          cast[ptr UncheckedArray[ItemType]](self.data)
-
-        func `[]`*(self: var T; index: int): var ItemType =
-          assert index in 0 ..< self.len
-          self.uncheckedArray[index]
-
-        func `[]`*(self: T; index: int): lent ItemType =
-          assert index in 0 ..< self.len
-          self.uncheckedArray[index]
-
-        func `[]=`*(self: T; index: int; value: sink ItemType) =
-          assert index in 0 ..< self.len
-          self.uncheckedArray[index] = value
-
-        func `$`*(self: T): string =
-          var res = "["
-          for i in 0 ..< self.len:
-            if i > 0:
-              res.add ", "
-            when compiles($self.uncheckedArray[i]):
-              res.add $self.uncheckedArray[i]
-            else:
-              res.add $cast[uint64](self.uncheckedArray[i])
-          res.add "]"
-
-        iterator items*(self: T): lent ItemType =
-          for i in 0 ..< self.len:
-            yield self.uncheckedArray[i]
-
-        iterator pairs*(self: T): (int, lent ItemType) =
-          for i in 0 ..< self.len:
-            yield (i, self.uncheckedArray[i])
-
-      vec(WasmByteVecT)
-      vec(WasmExporttypeVecT)
-      vec(WasmExternVecT)
-      vec(WasmExterntypeVecT)
-      vec(WasmFrameVecT)
-      vec(WasmFunctypeVecT)
-      vec(WasmGlobaltypeVecT)
-      vec(WasmImporttypeVecT)
-      vec(WasmMemorytypeVecT)
-      vec(WasmTabletypeVecT)
-      vec(WasmValVecT)
-      vec(WasmValtypeVecT)
-
-      vec(ComponentValFlagsVecT, unchecked = false)
-      vec(ComponentValRecordFieldVecT, unchecked = false)
-      vec(ComponentValVecT, unchecked = false)
+      vecType(ComponentValFlagsVecT, unchecked = false)
+      vecType(ComponentValRecordFieldVecT, unchecked = false)
+      vecType(ComponentValVecT, unchecked = false)
 
       # todo
       # owned(WasmConfigT)
@@ -468,433 +411,170 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
         of Flags: `=destroy`(self.payload.flags)
         else: discard
 
-      type WasmByte* = WasmByteT
-
-      type WasmByteVec* = WasmByteVecT
-      type WasmExporttypeVec* = WasmExporttypeVecT
-      type WasmExternVec* = WasmExternVecT
-      type WasmExterntypeVec* = WasmExterntypeVecT
-      type WasmFrameVec* = WasmFrameVecT
-      type WasmFunctypeVec* = WasmFunctypeVecT
-      type WasmGlobaltypeVec* = WasmGlobaltypeVecT
-      type WasmImporttypeVec* = WasmImporttypeVecT
-      type WasmMemorytypeVec* = WasmMemorytypeVecT
-      type WasmTabletypeVec* = WasmTabletypeVecT
-      type WasmValVec* = WasmValVecT
-      type WasmValtypeVec* = WasmValtypeVecT
-
-      type ComponentValFlagsVec* = ComponentValFlagsVecT
-      type ComponentValRecordFieldVec* = ComponentValRecordFieldVecT
-      type ComponentValVec* = ComponentValVecT
-
-      proc strVal*(name: WasmNameT): string =
-        result = newStringOfCap(name.size.int)
-        for i in 0..<name.size.int:
-          result.add cast[ptr UncheckedArray[char]](name.data)[i]
-
-      proc toName*(name: string): WasmNameT =
-        if name.len == 0:
-          result.addr.newEmpty()
-        else:
-          result.addr.new(name.len.csize_t, cast[ptr UncheckedArray[WasmByteT]](name[0].addr))
-
-      proc `$`*(self: ptr WasmExterntypeT): string =
-        if self == nil:
-          return "nil"
-
-        result = ""
-        case self.kind.WasmExternkind
-        of ExternFunc:
-          let f = self.asFunctype
-          let params = f.params
-          let results = f.results
-
-          result.add "("
-
-          for i in 0..<params[].size.int:
-            if i > 0:
-              result.add ", "
-            {.push warning[HoleEnumConv]:off.}
-            let kind = params[][i].kind.WasmValkind
-            {.pop.}
-            result.add $kind
-
-          result.add ") -> ("
-
-          for i in 0..<results[].size.int:
-            if i > 0:
-              result.add ", "
-            {.push warning[HoleEnumConv]:off.}
-            let kind = results[][i].kind.WasmValkind
-            {.pop.}
-            result.add $kind
-
-          result.add ")"
-
-        else:
-          discard
-
-      proc `$`*(self: ptr WasmExporttypeT): string =
-        if self == nil:
-          return "nil"
-
-        let name = self.name()
-        if name == nil:
-          result.add "nil"
-        else:
-          result.add name[].strVal
-        result.add ": "
-        result.add $self.type()
-
-      proc `$`*(self: ptr WasmImporttypeT): string =
-        if self == nil:
-          return "nil"
-
-        let name = self.name()
-        if name == nil:
-          result.add "nil"
-        else:
-          result.add name[].strVal
-        result.add ": "
-        result.add $self.type()
-
-      type
-        WasmtimeResultKind* = enum Ok, Err
-        WasmtimeResult*[T] = object
-          case kind*: WasmtimeResultKind
-          of Ok:
-            when T isnot void:
-              val*: T
-          of Err:
-            err*: tuple[msg: string, status: int, trace: WasmFrameVecT]
-
-      proc msg*(err: ptr ErrorT): string =
-        var name: WasmNameT
-        if err != nil:
-          err.message(name.addr)
-          result = name.strVal
-        else:
-           result = "ERROR: nil wasm error"
-
-      proc msg*(err: ptr WasmTrapT): string =
-        var name: WasmNameT
-        if err != nil:
-          err.message(name.addr)
-          result = name.strVal
-        else:
-           result = "ERROR: nil wasm trap"
-
-      proc exitStatus*(err: ptr ErrorT): int =
-        var exitStatus: cint
-        if err.exitStatus(exitStatus.addr):
-          return exitStatus.int
-        return -1
-
-      proc getWasmTrace*(err: ptr ErrorT): WasmFrameVecT =
-        wasmTrace(err, result.addr)
-
-      proc getWasmTrace*(err: ptr WasmTrapT): WasmFrameVecT =
-        trace(err, result.addr)
-
-      proc exitStatus*(err: ptr WasmTrapT): int =
-        var exitStatus: uint8
-        if err.code(exitStatus.addr):
-          return exitStatus.int
-        return -1
-
-      proc ok*[T](val: sink T): WasmtimeResult[T] =
-        WasmtimeResult[T](kind: Ok, val: val)
-
-      proc ok*(): WasmtimeResult[void] =
-        WasmtimeResult[void](kind: Ok)
-
-      proc isOk*[T](self: WasmtimeResult[T]): bool =
-        self.kind == Ok
-
-      proc isErr*[T](self: WasmtimeResult[T]): bool =
-        self.kind == Err
-
-      proc toResult*(err: ptr ErrorT; T: typedesc): WasmtimeResult[T] =
-        if err == nil:
-          WasmtimeResult[T](kind: Ok)
-        else:
-          let msg = err.msg()
-          let exitStatus = err.exitStatus()
-          let trace = err.getWasmTrace()
-          WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
-
-      proc toResult*(err: ptr WasmTrapT; T: typedesc): WasmtimeResult[T] =
-        if err == nil:
-          WasmtimeResult[T](kind: Ok)
-        else:
-          let msg = err.msg()
-          let exitStatus = err.exitStatus()
-          let trace = err.getWasmTrace()
-          WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
-
-      template okOr*[T](res: WasmtimeResult[T]; body: untyped): T =
-        let temp = res
-        if temp.isOk:
-          when T isnot void:
-            temp.val
-        else:
-          body
-
-      template okOr*[T](res: WasmtimeResult[T]; e: untyped; body: untyped): T =
-        let temp = res
-        if temp.isOk:
-          when T isnot void:
-            temp.val
-        else:
-          let e {.cursor.} = temp.err
-          body
-
-      template okOr*(res: ptr ErrorT; e: untyped; body: untyped): untyped =
-        let temp = res.toResult(void)
-        if not temp.isOk:
-          let e {.cursor.} = temp.err
-          body
-
-      template okOr*(res: ptr WasmTrapT; e: untyped; body: untyped): untyped =
-        let temp = res.toResult(void)
-        if not temp.isOk:
-          let e {.cursor.} = temp.err
-          body
-
-      proc newModule*(engine: ptr WasmEngineT; wasm: openArray[uint8]): WasmtimeResult[ptr ModuleT] =
-        var res: ptr ModuleT = nil
-        let err = engine.newModule(wasm[0].addr, wasm.len.csize_t, res.addr)
-        if err != nil:
-          return err.toResult(ptr ModuleT)
-        return res.ok
-
-      proc newModule*(engine: ptr WasmEngineT; wasm: string): WasmtimeResult[ptr ModuleT] =
-        var res: ptr ModuleT = nil
-        let err = engine.newModule(cast[ptr uint8](wasm[0].addr), wasm.len.csize_t, res.addr)
-        if err != nil:
-          return err.toResult(ptr ModuleT)
-        return res.ok
-
-      proc imports*(module: ptr ModuleT): WasmImporttypeVecT =
-        module.imports(result.addr)
-
-      proc exports*(module: ptr ModuleT): WasmExporttypeVecT =
-        module.exports(result.addr)
-
-      proc newComponent*(engine: ptr WasmEngineT, buf: openArray[char]): WasmtimeResult[ptr ComponentT] =
-        var c: ptr ComponentT = nil
-        let err = engine.fromBinary(cast[ptr uint8](buf[0].addr), buf.len.csize_t, c.addr)
-        if err != nil:
-          return err.toResult(ptr ComponentT)
-        return ok(c)
-
-      proc instantiate*(linker: ptr LinkerT, store: ptr ContextT, module: ptr ModuleT, trap: ptr ptr WasmTrapT): WasmtimeResult[InstanceT] =
-        var instance: InstanceT
-        let err = linker.instantiate(store, module, instance.addr, trap)
-        if err != nil:
-          return err.toResult(InstanceT)
-        return instance.ok
-
-      proc getExport*(instance: InstanceT, store: ptr ContextT, index: int):
-          Option[tuple[name: string, extern: ExternT]] =
-        var name: cstring = ""
-        var nameLen: csize_t = 0
-        var res: ExternT
-        if not store.exportNth(instance.addr, index.csize_t, name.addr, nameLen.addr, res.addr):
-          return
-        (name.toOpenArray(0, nameLen.int - 1).join(), res).some
-
-      proc getExport*(instance: InstanceT, store: ptr ContextT, name: string):
-          Option[ExternT] =
-        var instance = instance
-        var res: ExternT
-        if not store.exportGet(instance.addr, name.cstring, name.len.csize_t, res.addr):
-          return
-        res.some
-
-      proc data*[T](arr: openArray[T]): ptr T =
-        if arr.len == 0:
-          nil
-        else:
-          arr[0].addr
-
-      proc call*(f: ptr FuncT, store: ptr ContextT, args: openArray[ValT],
-          results: openArray[ValT], trap: ptr ptr WasmTrapT): ptr ErrorT =
-        store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t, trap)
-
-      proc call*(f: ptr ComponentFuncT, context: ptr ComponentContextT, args: openArray[ComponentValT],
-          results: openArray[ComponentValT]): WasmtimeResult[void] =
-        let argsPtr = if args.len > 0:
-          args[0].addr
-        else:
-          nil
-
-        let resultsPtr = if results.len > 0:
-          results[0].addr
-        else:
-          nil
-
-        var trap: ptr WasmTrapT = nil
-        result = f.call(context, argsPtr, args.len.csize_t, resultsPtr, results.len.csize_t, trap.addr).toResult(void)
-        if trap != nil:
-          result = trap.toResult(void)
-
-      type ComponentFuncCallback* = proc(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT])
-
-      proc funcNew*(linker: ptr ComponentLinkerT, env: string, name: string,
-          callback: ComponentFuncCallback, data: pointer = nil,
-          finalizer: proc (a0: pointer): void {.cdecl.} = nil): WasmtimeResult[void] =
-
-        type Ctx = object
-          callback: ComponentFuncCallback
-          data: pointer
-          finalizer: proc (a0: pointer): void {.cdecl.}
-
-        var ctx = createShared(Ctx)
-        ctx.callback = callback
-        ctx.data = data
-        ctx.finalizer = finalizer
-
-        proc fin(data: pointer) {.cdecl.} =
-          let ctx = cast[ptr Ctx](data)
-          if ctx.finalizer != nil:
-            ctx.finalizer(ctx.data)
-          deallocShared(ctx)
-
-        proc cb(data: pointer, params: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
-          let ctx = cast[ptr Ctx](data)
-          let params = cast[ptr UncheckedArray[ComponentValT]](params)
-          let results = cast[ptr UncheckedArray[ComponentValT]](results)
-          ctx[].callback(ctx[].data, params.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
-          nil
-
-        return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
-
-      proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, userId: int, drop: proc(p: pointer) {.cdecl.}): WasmtimeResult[void] =
-        return linker.defineResource(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
-
-      proc resourceHostData*(ctx: ptr ComponentContextT; val: ptr ComponentValT;
-                             T: typedesc): WasmtimeResult[ptr T] =
-        let data: pointer = nil
-        let err = ctx.resourceHostData(val, data.addr)
-        if err != nil:
-          return err.toResult(ptr T)
-        assert data != nil
-        return wasmtime.ok(cast[ptr T](data))
-
-      proc `$`*(a: ComponentValT): string =
-        case a.kind.ComponentValKind
-        of Bool: $a.payload.boolean
-        of S8: $a.payload.s8
-        of U8: $a.payload.u8
-        of S16: $a.payload.s16
-        of U16: $a.payload.u16
-        of S32: $a.payload.s32
-        of U32: $a.payload.u32
-        of S64: $a.payload.s64
-        of U64: $a.payload.u64
-        of Float32: $a.payload.f32
-        of Float64: $a.payload.f64
-        of Char: $a.payload.character.Rune
-        of String: "\"" & $a.payload.string_field.strVal & "\""
-
-        of List:
-          var str = "["
-          for i, v in a.payload.list:
-            if i > 0: str.add ", "
-            str.add $v
-          str.add "]"
-          str
-
-        of Record:
-          var str = "{"
-          for i, v in a.payload.record:
-            if i > 0: str.add ", "
-            str.add v.name.strVal
-            str.add ": "
-            str.add $v.val
-          str.add "}"
-          str
-
-        of Tuple:
-          var str = "("
-          for i, v in a.payload.tuple_field:
-            if i > 0: str.add ", "
-            str.add $v
-          str.add ")"
-          str
-
-        of Variant:
-          if a.payload.variant.val != nil:
-            a.payload.variant.name.strVal & "(" & $a.payload.variant.val[] & ")"
-          else:
-            a.payload.variant.name.strVal
-
-        of Enum: a.payload.enumeration.name.strVal
-
-        of Option:
-          if a.payload.option != nil:
-            "Some(" & $(a.payload.option[]) & ")"
-          else:
-            "none"
-
-        of Result:
-          if a.payload.result.error:
-            if a.payload.result.val == nil:
-              "Err()"
-            else:
-              "Err(" & $(a.payload.result.val[]) & ")"
-          else:
-            if a.payload.result.val == nil:
-              "Ok()"
-            else:
-              "Ok(" & $(a.payload.result.val[]) & ")"
-
-        of Flags:
-          var str = "{"
-          for i, v in a.payload.flags:
-            if i > 0: str.add ", "
-            str.add v.strVal
-          str.add "}"
-          str
-
-        of Resource:
-          let name = a.addr.resourceDump()
-          name.strVal
-          # var str = "Resource(idx: " & $a.payload.resource.idx & ", owned: " & $a.payload.resource.owned_field & ", ty: "
-          # str.add case a.payload.resource.ty.kind
-          # of Host: $a.payload.resource.ty.payload.host
-          # of Guest: $a.payload.resource.ty.payload.guest
-          # of Uninstantiated: $a.payload.resource.ty.payload.uninstantiated
-          # str.add ")"
-          # str
-
-        else: "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
-
-      proc `$`*[S](a: array[S, ComponentValT]): string =
-        result = "["
-        for i in 0..a.high:
-          if i > 0:
-            result.add ", "
-          result.add $a[i]
-        result.add "]"
-
-      proc `$`*(a: openArray[ComponentValT]): string =
-        result = "["
-        for i in 0..a.high:
-          if i > 0:
-            result.add ", "
-          result.add $a[i]
-        result.add "]"
-
     static:
       postProcess()
 
 else: # defined(useFuthark) or defined(useFutharkForWasmtime)
   include wrapper
 
-from std/unicode import Rune
+from std/unicode import Rune, `$`
 import wit_types
+
+template vec(T: untyped, unchecked: bool = true): untyped =
+  type ItemType = typeof(T().data[])
+
+  proc clone*(self: T): T =
+    self.addr.copy(result.addr)
+
+  func toVec*(s: openArray[ItemType]): T =
+    if s.len > 0:
+      when unchecked:
+        result.addr.new(s.len.csize_t, cast[ptr UncheckedArray[ItemType]](s[0].addr))
+      else:
+        result.addr.new(s.len.csize_t, s[0].addr)
+    else:
+      result.addr.newEmpty()
+
+  func empty*(_: typedesc[T]): T =
+    result.addr.newEmpty()
+
+  func low*(self: T): int =
+    0
+
+  func high*(self: T): int =
+    self.size.int - 1
+
+  func len*(self: T): int =
+    self.size.int
+
+  func uncheckedArray*(self: T): ptr UncheckedArray[ItemType] =
+    cast[ptr UncheckedArray[ItemType]](self.data)
+
+  func `[]`*(self: var T; index: int): var ItemType =
+    assert index in 0 ..< self.len
+    self.uncheckedArray[index]
+
+  func `[]`*(self: T; index: int): lent ItemType =
+    assert index in 0 ..< self.len
+    self.uncheckedArray[index]
+
+  func `[]=`*(self: T; index: int; value: sink ItemType) =
+    assert index in 0 ..< self.len
+    self.uncheckedArray[index] = value
+
+  func `$`*(self: T): string =
+    var res = "["
+    for i in 0 ..< self.len:
+      if i > 0:
+        res.add ", "
+      when compiles($self.uncheckedArray[i]):
+        res.add $self.uncheckedArray[i]
+      else:
+        res.add $cast[uint64](self.uncheckedArray[i])
+    res.add "]"
+
+  iterator items*(self: T): lent ItemType =
+    for i in 0 ..< self.len:
+      yield self.uncheckedArray[i]
+
+  iterator pairs*(self: T): (int, lent ItemType) =
+    for i in 0 ..< self.len:
+      yield (i, self.uncheckedArray[i])
+
+vec(WasmByteVecT)
+vec(WasmExporttypeVecT)
+vec(WasmExternVecT)
+vec(WasmExterntypeVecT)
+vec(WasmFrameVecT)
+vec(WasmFunctypeVecT)
+vec(WasmGlobaltypeVecT)
+vec(WasmImporttypeVecT)
+vec(WasmMemorytypeVecT)
+vec(WasmTabletypeVecT)
+vec(WasmValVecT)
+vec(WasmValtypeVecT)
+
+vec(ComponentValFlagsVecT, unchecked = false)
+vec(ComponentValRecordFieldVecT, unchecked = false)
+vec(ComponentValVecT, unchecked = false)
+
+proc strVal*(name: WasmNameT): string =
+  result = newStringOfCap(name.size.int)
+  for i in 0..<name.size.int:
+    result.add cast[ptr UncheckedArray[char]](name.data)[i]
+
+proc toName*(name: string): WasmNameT =
+  if name.len == 0:
+    result.addr.newEmpty()
+  else:
+    result.addr.new(name.len.csize_t, cast[ptr UncheckedArray[WasmByteT]](name[0].addr))
+
+proc `$`*(self: ptr WasmExterntypeT): string =
+  if self == nil:
+    return "nil"
+
+  result = ""
+  case self.kind.WasmExternkind
+  of ExternFunc:
+    let f = self.asFunctype
+    let params = f.params
+    let results = f.results
+
+    result.add "("
+
+    for i in 0..<params[].size.int:
+      if i > 0:
+        result.add ", "
+      {.push warning[HoleEnumConv]:off.}
+      let kind = params[][i].kind.WasmValkind
+      {.pop.}
+      result.add $kind
+
+    result.add ") -> ("
+
+    for i in 0..<results[].size.int:
+      if i > 0:
+        result.add ", "
+      {.push warning[HoleEnumConv]:off.}
+      let kind = results[][i].kind.WasmValkind
+      {.pop.}
+      result.add $kind
+
+    result.add ")"
+
+  else:
+    discard
+
+proc `$`*(self: ptr WasmExporttypeT): string =
+  if self == nil:
+    return "nil"
+
+  let name = self.name()
+  if name == nil:
+    result.add "nil"
+  else:
+    result.add name[].strVal
+  result.add ": "
+  result.add $self.type()
+
+proc `$`*(self: ptr WasmImporttypeT): string =
+  if self == nil:
+    return "nil"
+
+  let name = self.name()
+  if name == nil:
+    result.add "nil"
+  else:
+    result.add name[].strVal
+  result.add ": "
+  result.add $self.type()
+
+proc toCamelCase*(str: string, capitalizeFirst: bool): string =
+  for i, part in enumerate(str.split("-")):
+    if i == 0 and not capitalizeFirst:
+      result.add part
+    else:
+      result.add part.capitalizeAscii
 
 proc toVal*[T](a: T): ComponentValT =
   # echo &"toVal {a}"
@@ -1026,13 +706,6 @@ proc toVal*[T](a: T): ComponentValT =
 macro getSetTargetType(t: typed): untyped =
   ## Given set[T], return T
   return t.getTypeInst[1].getTypeImpl[1]
-
-proc toCamelCase*(str: string, capitalizeFirst: bool): string =
-  for i, part in enumerate(str.split("-")):
-    if i == 0 and not capitalizeFirst:
-      result.add part
-    else:
-      result.add part.capitalizeAscii
 
 proc to*(a: ComponentValT, T: typedesc): T =
   # echo a, ", ", a.kind.ComponentValKind, " to ", T
@@ -1182,3 +855,376 @@ proc to*(a: ComponentValT, T: typedesc): T =
 
   else:
     {.error: "Can't convert ComponentValT to " & $T.}
+
+type
+  WasmtimeResultKind* = enum Ok, Err
+  WasmtimeResult*[T] = object
+    case kind*: WasmtimeResultKind
+    of Ok:
+      when T isnot void:
+        val*: T
+    of Err:
+      err*: tuple[msg: string, status: int, trace: WasmFrameVecT]
+
+proc msg*(err: ptr ErrorT): string =
+  var name: WasmNameT
+  if err != nil:
+    err.message(name.addr)
+    result = name.strVal
+  else:
+     result = "ERROR: nil wasm error"
+
+proc msg*(err: ptr WasmTrapT): string =
+  var name: WasmNameT
+  if err != nil:
+    err.message(name.addr)
+    result = name.strVal
+  else:
+     result = "ERROR: nil wasm trap"
+
+proc exitStatus*(err: ptr ErrorT): int =
+  var exitStatus: cint
+  if err.exitStatus(exitStatus.addr):
+    return exitStatus.int
+  return -1
+
+proc getWasmTrace*(err: ptr ErrorT): WasmFrameVecT =
+  wasmTrace(err, result.addr)
+
+proc getWasmTrace*(err: ptr WasmTrapT): WasmFrameVecT =
+  trace(err, result.addr)
+
+proc exitStatus*(err: ptr WasmTrapT): int =
+  var exitStatus: uint8
+  if err.code(exitStatus.addr):
+    return exitStatus.int
+  return -1
+
+proc ok*[T](val: sink T): WasmtimeResult[T] =
+  WasmtimeResult[T](kind: Ok, val: val)
+
+proc ok*(): WasmtimeResult[void] =
+  WasmtimeResult[void](kind: Ok)
+
+proc isOk*[T](self: WasmtimeResult[T]): bool =
+  self.kind == Ok
+
+proc isErr*[T](self: WasmtimeResult[T]): bool =
+  self.kind == Err
+
+proc toResult*(err: ptr ErrorT; T: typedesc): WasmtimeResult[T] =
+  if err == nil:
+    WasmtimeResult[T](kind: Ok)
+  else:
+    let msg = err.msg()
+    let exitStatus = err.exitStatus()
+    let trace = err.getWasmTrace()
+    WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
+
+proc toResult*(err: ptr WasmTrapT; T: typedesc): WasmtimeResult[T] =
+  if err == nil:
+    WasmtimeResult[T](kind: Ok)
+  else:
+    let msg = err.msg()
+    let exitStatus = err.exitStatus()
+    let trace = err.getWasmTrace()
+    WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
+
+proc toResult*[T](self: sink WasmtimeResult[T], T2: typedesc): WasmtimeResult[T2] =
+  if self.isErr:
+    WasmtimeResult[T2](kind: Err, err: self.err.ensureMove)
+  else:
+    WasmtimeResult[T2](kind: Ok)
+
+template okOr*[T](res: WasmtimeResult[T]; body: untyped): T =
+  let temp = res
+  if temp.isOk:
+    when T isnot void:
+      temp.val
+  else:
+    body
+
+template okOr*[T](res: WasmtimeResult[T]; e: untyped; body: untyped): T =
+  let temp = res
+  if temp.isOk:
+    when T isnot void:
+      temp.val
+  else:
+    let e {.cursor.} = temp.err
+    body
+
+template okOr*(res: ptr ErrorT; e: untyped; body: untyped): untyped =
+  let temp = res.toResult(void)
+  if not temp.isOk:
+    let e {.cursor.} = temp.err
+    body
+
+template okOr*(res: ptr WasmTrapT; e: untyped; body: untyped): untyped =
+  let temp = res.toResult(void)
+  if not temp.isOk:
+    let e {.cursor.} = temp.err
+    body
+
+template `?`*[T](self: WasmtimeResult[T]): untyped =
+  block:
+    var t = self
+    if t.isErr:
+      return t.toResult(void)
+    when T isnot void:
+      t.val.ensureMove
+
+template `?`*(self: ptr ErrorT): untyped =
+  block:
+    var t = self
+    if t != nil:
+      return t.toResult(void)
+
+template `?`*(self: ptr WasmTrapT): untyped =
+  block:
+    var t = self
+    if t != nil:
+      return t.toResult(void)
+
+proc newModule*(engine: ptr WasmEngineT; wasm: openArray[uint8]): WasmtimeResult[ptr ModuleT] =
+  var res: ptr ModuleT = nil
+  let err = engine.newModule(wasm[0].addr, wasm.len.csize_t, res.addr)
+  if err != nil:
+    return err.toResult(ptr ModuleT)
+  return res.ok
+
+proc newModule*(engine: ptr WasmEngineT; wasm: string): WasmtimeResult[ptr ModuleT] =
+  var res: ptr ModuleT = nil
+  let err = engine.newModule(cast[ptr uint8](wasm[0].addr), wasm.len.csize_t, res.addr)
+  if err != nil:
+    return err.toResult(ptr ModuleT)
+  return res.ok
+
+proc imports*(module: ptr ModuleT): WasmImporttypeVecT =
+  module.imports(result.addr)
+
+proc exports*(module: ptr ModuleT): WasmExporttypeVecT =
+  module.exports(result.addr)
+
+proc newComponent*(engine: ptr WasmEngineT, buf: openArray[char]): WasmtimeResult[ptr ComponentT] =
+  var c: ptr ComponentT = nil
+  let err = engine.fromBinary(cast[ptr uint8](buf[0].addr), buf.len.csize_t, c.addr)
+  if err != nil:
+    return err.toResult(ptr ComponentT)
+  return ok(c)
+
+proc instantiate*(linker: ptr LinkerT, store: ptr ContextT, module: ptr ModuleT, trap: ptr ptr WasmTrapT): WasmtimeResult[InstanceT] =
+  var instance: InstanceT
+  let err = linker.instantiate(store, module, instance.addr, trap)
+  if err != nil:
+    return err.toResult(InstanceT)
+  return instance.ok
+
+proc getExport*(instance: InstanceT, store: ptr ContextT, index: int):
+    Option[tuple[name: string, extern: ExternT]] =
+  var name: cstring = ""
+  var nameLen: csize_t = 0
+  var res: ExternT
+  if not store.exportNth(instance.addr, index.csize_t, name.addr, nameLen.addr, res.addr):
+    return
+  (name.toOpenArray(0, nameLen.int - 1).join(), res).some
+
+proc getExport*(instance: InstanceT, store: ptr ContextT, name: string):
+    Option[ExternT] =
+  var instance = instance
+  var res: ExternT
+  if not store.exportGet(instance.addr, name.cstring, name.len.csize_t, res.addr):
+    return
+  res.some
+
+proc data*[T](arr: openArray[T]): ptr T =
+  if arr.len == 0:
+    nil
+  else:
+    arr[0].addr
+
+proc call*(f: ptr FuncT, store: ptr ContextT, args: openArray[ValT],
+    results: openArray[ValT], trap: ptr ptr WasmTrapT): ptr ErrorT =
+  store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t, trap)
+
+proc call*(f: ptr ComponentFuncT, context: ptr ComponentContextT, args: openArray[ComponentValT],
+    results: openArray[ComponentValT]): WasmtimeResult[void] =
+  let argsPtr = if args.len > 0:
+    args[0].addr
+  else:
+    nil
+
+  let resultsPtr = if results.len > 0:
+    results[0].addr
+  else:
+    nil
+
+  var trap: ptr WasmTrapT = nil
+  result = f.call(context, argsPtr, args.len.csize_t, resultsPtr, results.len.csize_t, trap.addr).toResult(void)
+  if trap != nil:
+    result = trap.toResult(void)
+
+type ComponentFuncCallback* = proc(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT])
+
+proc funcNew*(linker: ptr ComponentLinkerT, env: string, name: string,
+    callback: ComponentFuncCallback, data: pointer = nil,
+    finalizer: proc (a0: pointer): void {.cdecl.} = nil): WasmtimeResult[void] =
+
+  type Ctx = object
+    callback: ComponentFuncCallback
+    data: pointer
+    finalizer: proc (a0: pointer): void {.cdecl.}
+
+  var ctx = createShared(Ctx)
+  ctx.callback = callback
+  ctx.data = data
+  ctx.finalizer = finalizer
+
+  proc fin(data: pointer) {.cdecl.} =
+    let ctx = cast[ptr Ctx](data)
+    if ctx.finalizer != nil:
+      ctx.finalizer(ctx.data)
+    deallocShared(ctx)
+
+  proc cb(data: pointer, params: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
+    let ctx = cast[ptr Ctx](data)
+    let params = cast[ptr UncheckedArray[ComponentValT]](params)
+    let results = cast[ptr UncheckedArray[ComponentValT]](results)
+    ctx[].callback(ctx[].data, params.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
+    nil
+
+  return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
+
+proc resourceHostData*(ctx: ptr ComponentContextT; val: ptr ComponentValT;
+                       T: typedesc): WasmtimeResult[ptr T] =
+  let data: pointer = nil
+  let err = ctx.resourceHostData(val, data.addr)
+  if err != nil:
+    return err.toResult(ptr T)
+  assert data != nil
+  return wasmtime.ok(cast[ptr T](data))
+
+proc `$`*(a: ComponentValT): string =
+  case a.kind.ComponentValKind
+  of Bool: $a.payload.boolean
+  of S8: $a.payload.s8
+  of U8: $a.payload.u8
+  of S16: $a.payload.s16
+  of U16: $a.payload.u16
+  of S32: $a.payload.s32
+  of U32: $a.payload.u32
+  of S64: $a.payload.s64
+  of U64: $a.payload.u64
+  of Float32: $a.payload.f32
+  of Float64: $a.payload.f64
+  of Char: $a.payload.character.Rune
+  of String: "\"" & $a.payload.string_field.strVal & "\""
+
+  of List:
+    var str = "["
+    for i, v in a.payload.list:
+      if i > 0: str.add ", "
+      str.add $v
+    str.add "]"
+    str
+
+  of Record:
+    var str = "{"
+    for i, v in a.payload.record:
+      if i > 0: str.add ", "
+      str.add v.name.strVal
+      str.add ": "
+      str.add $v.val
+    str.add "}"
+    str
+
+  of Tuple:
+    var str = "("
+    for i, v in a.payload.tuple_field:
+      if i > 0: str.add ", "
+      str.add $v
+    str.add ")"
+    str
+
+  of Variant:
+    if a.payload.variant.val != nil:
+      a.payload.variant.name.strVal & "(" & $a.payload.variant.val[] & ")"
+    else:
+      a.payload.variant.name.strVal
+
+  of Enum: a.payload.enumeration.name.strVal
+
+  of Option:
+    if a.payload.option != nil:
+      "Some(" & $(a.payload.option[]) & ")"
+    else:
+      "none"
+
+  of Result:
+    if a.payload.result.error:
+      if a.payload.result.val == nil:
+        "Err()"
+      else:
+        "Err(" & $(a.payload.result.val[]) & ")"
+    else:
+      if a.payload.result.val == nil:
+        "Ok()"
+      else:
+        "Ok(" & $(a.payload.result.val[]) & ")"
+
+  of Flags:
+    var str = "{"
+    for i, v in a.payload.flags:
+      if i > 0: str.add ", "
+      str.add v.strVal
+    str.add "}"
+    str
+
+  of Resource:
+    let name = a.addr.resourceDump()
+    name.strVal
+    # var str = "Resource(idx: " & $a.payload.resource.idx & ", owned: " & $a.payload.resource.owned_field & ", ty: "
+    # str.add case a.payload.resource.ty.kind
+    # of Host: $a.payload.resource.ty.payload.host
+    # of Guest: $a.payload.resource.ty.payload.guest
+    # of Uninstantiated: $a.payload.resource.ty.payload.uninstantiated
+    # str.add ")"
+    # str
+
+  else: "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
+
+proc `$`*[S](a: array[S, ComponentValT]): string =
+  result = "["
+  for i in 0..a.high:
+    if i > 0:
+      result.add ", "
+    result.add $a[i]
+  result.add "]"
+
+proc `$`*(a: openArray[ComponentValT]): string =
+  result = "["
+  for i in 0..a.high:
+    if i > 0:
+      result.add ", "
+    result.add $a[i]
+  result.add "]"
+
+proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, userId: int, drop: proc(p: pointer) {.cdecl.}): WasmtimeResult[void] =
+  return linker.defineResource(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
+
+proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, T: typedesc): WasmtimeResult[void] =
+  proc deleteImpl(b: pointer) {.cdecl.} =
+    let b = cast[ptr T](b)
+    echo "--------------------------------------- delete ", T, " ", b[]
+    `=destroy`(b[])
+    deallocShared(b)
+  linker.defineResource(env, name, T.typeId, deleteImpl)
+
+proc resourceNew*[T](context: ptr ComponentContextT, data: sink T): WasmtimeResult[ComponentValT] =
+  var res: ComponentValT
+  var r = createShared(T)
+  r[] = data
+  let err = context.resourceNew(T.typeId, res.addr, r)
+  if err != nil:
+    return err.toResult(ComponentValT)
+
+  return wasmtime.ok(res.ensureMove)
