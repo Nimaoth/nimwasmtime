@@ -19,11 +19,14 @@ type
 
   RecordField* = tuple[name: string, typ: WitType]
 
-  WitUserTypeKind* = enum Builtin, Record, Flags, Enum, Variant, Option, List, Result, Tuple, Owned, Borrowed
+  WitUserTypeKind* = enum Builtin, Record, Flags, Enum, Variant, Option, List, Result, Tuple, Resource, Handle
   WitUserType* = object
     index*: int
     name*: string
     refIndex*: Option[int]
+    interfaceName*: string
+    env*: string
+    package*: int
     case kind*: WitUserTypeKind
     of Record, Variant, Tuple:
       fields*: seq[RecordField]
@@ -36,6 +39,9 @@ type
     of Result:
       resultOkTarget*: WitType
       resultErrTarget*: WitType
+    of Handle:
+      owned*: bool
+      handleTarget*: WitType
     else:
       discard
 
@@ -45,13 +51,14 @@ type
 
   WitFuncParam* = tuple[name: string, typ: WitType]
 
-  WitFuncKind* = enum Freestanding = "freestanding"
+  WitFuncKind* = enum Freestanding = "freestanding", Constructor = "constructor", Method = "method", Static = "static"
   WitFunc* = object
     name*: string
     env*: string
     interfaceName*: string
     interfac*: Option[int]
     kind*: WitFuncKind
+    resource*: WitType
     params*: seq[WitFuncParam]
     results*: seq[WitType]
 
@@ -101,8 +108,24 @@ proc toCamelCase*(str: string, capitalizeFirst: bool): string =
       result.add part.capitalizeAscii
 
 proc parseWitFunc(json: JsonNode, env: string, interfac: Option[int] = int.none): WitFunc =
+  # echo &"parseWitFunc {env}, {json}"
   result.name = json["name"].getStr
-  result.kind = json["kind"].jsonTo(WitFuncKind)
+
+  let kind = json["kind"]
+  if kind.kind == JString:
+    result.kind = kind.jsonTo(WitFuncKind)
+  elif kind.hasKey("constructor"):
+    result.kind = WitFuncKind.Constructor
+    result.resource = kind["constructor"].jsonTo(WitType)
+  elif kind.hasKey("method"):
+    result.kind = WitFuncKind.Method
+    result.resource = kind["method"].jsonTo(WitType)
+  elif kind.hasKey("static"):
+    result.kind = WitFuncKind.Static
+    result.resource = kind["static"].jsonTo(WitType)
+  else:
+    error("Invalid func kind " & $kind)
+
   result.params = json["params"].elems.mapIt((it["name"].getStr, it["type"].jsonTo(WitType)))
   result.results = json["results"].elems.mapIt(it["type"].jsonTo(WitType))
   result.env = env
@@ -177,40 +200,58 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
     assert t.kind == JObject
     let name = t["name"].getStr
 
+    let (interfaceName, package) = if t.hasKey("owner") and t["owner"].kind == JObject and t["owner"].hasKey("interface"):
+      let index = t["owner"]["interface"].getInt
+      (ctx.interfaces[index].name, ctx.interfaces[index].package)
+    else:
+      ("", 0)
+    let env = if interfaceName == "":
+      "env" # todo
+    else:
+      ctx.packages[package].name & "/" & interfaceName
+
     let kind = t["kind"]
+    if kind.kind == JString:
+      case kind.getStr
+      of "resource":
+        res.add(WitUserType(kind: Resource, name: name, interfaceName: interfaceName, env: env, package: package))
+      else:
+        error(&"Not implemented: collectType({kind})")
+      continue
+
     if kind.hasKey("record"):
       var fields: seq[RecordField]
       for field in kind["record"]["fields"]:
         let name = field["name"].getStr
         fields.add (name, field["type"].jsonTo(WitType))
-      res.add(WitUserType(kind: Record, index: res.len, name: name, fields: fields))
+      res.add(WitUserType(kind: Record, index: res.len, name: name, fields: fields, interfaceName: interfaceName, env: env, package: package))
 
     elif kind.hasKey("enum"):
       var cases: seq[string]
       for cas in kind["enum"]["cases"]:
         let name = cas["name"].getStr
         cases.add name
-      res.add(WitUserType(kind: Enum, index: res.len, name: name, cases: cases))
+      res.add(WitUserType(kind: Enum, index: res.len, name: name, cases: cases, interfaceName: interfaceName, env: env, package: package))
 
     elif kind.hasKey("flags"):
       var cases: seq[string]
       for field in kind["flags"]["flags"]:
         let name = field["name"].getStr
         cases.add name
-      res.add(WitUserType(kind: Flags, index: res.len, name: name, cases: cases))
+      res.add(WitUserType(kind: Flags, index: res.len, name: name, cases: cases, interfaceName: interfaceName, env: env, package: package))
 
     elif kind.hasKey("option"):
       let typ = kind["option"].jsonTo(WitType)
-      res.add(WitUserType(kind: Option, index: res.len, optionTarget: typ))
+      res.add(WitUserType(kind: Option, index: res.len, optionTarget: typ, interfaceName: interfaceName, env: env, package: package))
 
     elif kind.hasKey("list"):
       let typ = kind["list"].jsonTo(WitType)
-      res.add(WitUserType(kind: List, index: res.len, listTarget: typ))
+      res.add(WitUserType(kind: List, index: res.len, listTarget: typ, interfaceName: interfaceName, env: env, package: package))
 
     elif kind.hasKey("result"):
       let okTyp = kind["result"]["ok"].jsonTo(WitType)
       let errTyp = kind["result"]["err"].jsonTo(WitType)
-      res.add(WitUserType(kind: Result, index: res.len, resultOkTarget: okTyp, resultErrTarget: errTyp))
+      res.add(WitUserType(kind: Result, index: res.len, resultOkTarget: okTyp, resultErrTarget: errTyp, interfaceName: interfaceName, env: env, package: package))
 
     elif kind.hasKey("type"):
       let index = kind["type"].getInt
@@ -224,13 +265,21 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
       for field in kind["variant"]["cases"]:
         let name = field["name"].getStr
         fields.add (name, field["type"].jsonTo(WitType))
-      res.add(WitUserType(kind: Variant, index: res.len, name: name, fields: fields))
+      res.add(WitUserType(kind: Variant, index: res.len, name: name, fields: fields, interfaceName: interfaceName, env: env, package: package))
 
     elif kind.hasKey("tuple"):
       var fields: seq[RecordField]
       for i, field in kind["tuple"]["types"].elems:
         fields.add ($i, field.jsonTo(WitType))
-      res.add(WitUserType(kind: Tuple, index: res.len, fields: fields))
+      res.add(WitUserType(kind: Tuple, index: res.len, fields: fields, interfaceName: interfaceName, env: env, package: package))
+
+    elif kind.hasKey("handle"):
+      if kind["handle"].hasKey("own"):
+        res.add(WitUserType(kind: Handle, owned: true, handleTarget: kind["handle"]["own"].jsonTo(WitType), interfaceName: interfaceName, env: env, package: package))
+      elif kind["handle"].hasKey("borrow"):
+        res.add(WitUserType(kind: Handle, owned: false, handleTarget: kind["handle"]["borrow"].jsonTo(WitType), interfaceName: interfaceName, env: env, package: package))
+      else:
+        error(&"Not implemented: collectType({t})")
 
     else:
       error(&"Not implemented: collectType({t})")
@@ -396,7 +445,7 @@ proc flattenType*(ctx: WitContext, typ: WitType): seq[CoreType] =
   of Record: ctx.flattenRecord(typ)
   of Variant: ctx.flattenVariant(typ)
   of Flags: ctx.flattenType(discriminantType(typ.cases.len))
-  of Owned, Borrowed: @[CoreType.I32]
+  of Resource, Handle: @[CoreType.I32]
 
   else:
     error("Not implemented: flattenType(" & $typ & ")")
@@ -425,7 +474,7 @@ proc flatTypeSize*(ctx: WitContext, typ: WitType): int =
   of Record: ctx.flatSizeMap[typ.index]
   of Variant: ctx.flatSizeMap[typ.index]
   of Flags: 1
-  of Owned, Borrowed: 1
+  of Resource, Handle: 1
 
   else:
     assert false
@@ -468,6 +517,6 @@ proc flattenFuncType*(ctx: WitContext, fun: WitFunc, context: WitFlattenContext)
 proc newWitContext*(witJson: JsonNode): WitContext =
   result = WitContext()
   result.collectPackages(witJson)
-  result.collectTypes(witJson)
   result.collectInterfaces(witJson)
+  result.collectTypes(witJson)
   result.collectFuncsInRoot(witJson)

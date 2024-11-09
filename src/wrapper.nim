@@ -22,7 +22,7 @@ type
     Bool = 0, S8 = 1, U8 = 2, S16 = 3, U16 = 4, S32 = 5, U32 = 6, S64 = 7,
     U64 = 8, Float32 = 9, Float64 = 10, Char = 11, String = 12, List = 13,
     Record = 14, Tuple = 15, Variant = 16, Enum = 17, Option = 18, Result = 19,
-    Flags = 20
+    Flags = 20, Resource = 21
 type
   TrapCode* {.size: sizeof(cuint).} = enum
     StackOverflow = 0, MemoryOutOfBounds = 1, HeapMisaligned = 2,
@@ -341,39 +341,42 @@ type
   ComponentStoreT* = StructWasmtimeComponentStore ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:30:41
   ComponentContextT* = StructWasmtimeComponentContext ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:31:43
   ComponentValKindT* = uint8 ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:35:17
-  ComponentValT* = StructWasmtimeComponentValT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:158:3
+  ComponentValT* = StructWasmtimeComponentValT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:201:3
   StructWasmtimeComponentValT* {.pure, inheritable, bycopy.} = object
-    kind*: ComponentValKindT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:155:16
+    kind*: ComponentValKindT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:198:16
     payload*: ComponentValPayloadT_typedef
-  ComponentValRecordFieldT* = StructWasmtimeComponentValRecordFieldT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:164:3
+  ComponentValRecordFieldT* = StructWasmtimeComponentValRecordFieldT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:207:3
   StructWasmtimeComponentValRecordFieldT* {.pure, inheritable, bycopy.} = object
-    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:161:16
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:204:16
     val*: ComponentValT
   StructWasmtimeComponentValVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:102:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:110:1
     data*: ptr ComponentValT
-  ComponentValVecT* = object of StructWasmtimeComponentValVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:102:1
+  ComponentValVecT* = object of StructWasmtimeComponentValVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:110:1
   StructWasmtimeComponentValRecordFieldVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:105:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:113:1
     data*: ptr ComponentValRecordFieldT
-  ComponentValRecordFieldVecT* = object of StructWasmtimeComponentValRecordFieldVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:105:1
+  ComponentValRecordFieldVecT* = object of StructWasmtimeComponentValRecordFieldVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:113:1
   StructWasmtimeComponentValFlagsVecT* {.pure, inheritable, bycopy.} = object
-    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:108:1
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:116:1
     data*: ptr WasmNameT
-  ComponentValFlagsVecT* = object of StructWasmtimeComponentValFlagsVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:108:1
+  ComponentValFlagsVecT* = object of StructWasmtimeComponentValFlagsVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:116:1
   StructWasmtimeComponentValVariantT* {.pure, inheritable, bycopy.} = object
-    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:113:16
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:121:16
     val*: ptr ComponentValT
-  ComponentValVariantT* = StructWasmtimeComponentValVariantT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:116:3
+  ComponentValVariantT* = StructWasmtimeComponentValVariantT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:124:3
   StructWasmtimeComponentValResultT* {.pure, inheritable, bycopy.} = object
-    val*: ptr ComponentValT  ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:120:16
+    val*: ptr ComponentValT  ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:128:16
     error*: bool
-  ComponentValResultT* = StructWasmtimeComponentValResultT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:123:3
+  ComponentValResultT* = StructWasmtimeComponentValResultT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:131:3
   StructWasmtimeComponentValEnumT* {.pure, inheritable, bycopy.} = object
-    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:126:16
-  ComponentValEnumT* = StructWasmtimeComponentValEnumT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:128:3
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:134:16
+  ComponentValEnumT* = StructWasmtimeComponentValEnumT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:136:3
+  StructWasmtimeComponentValResourceT* {.pure, inheritable, bycopy.} = object
+    data*: pointer           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:164:16
+  ComponentValResourceT* = StructWasmtimeComponentValResourceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:166:3
   ComponentValPayloadT* {.union, bycopy.} = object
-    boolean*: bool           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:130:15
+    boolean*: bool           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:172:15
     s8*: int8
     u8*: uint8
     s16*: int16
@@ -394,14 +397,15 @@ type
     option*: ptr ComponentValT
     result*: ComponentValResultT
     flags*: ComponentValFlagsVecT
-  ComponentValPayloadT_typedef* = ComponentValPayloadT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:152:3
-  ComponentT* = StructWasmtimeComponentT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:178:37
-  ComponentLinkerT* = StructWasmtimeComponentLinkerT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:188:44
+    resource*: ComponentValResourceT
+  ComponentValPayloadT_typedef* = ComponentValPayloadT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:195:3
+  ComponentT* = StructWasmtimeComponentT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:221:37
+  ComponentLinkerT* = StructWasmtimeComponentLinkerT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:231:44
   ComponentFuncCallbackT* = proc (a0: pointer; a1: ptr ComponentValT;
                                   a2: csize_t; a3: ptr ComponentValT;
-                                  a4: csize_t): ptr WasmTrapT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:197:24
-  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:211:46
-  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:219:42
+                                  a4: csize_t): ptr WasmTrapT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:240:24
+  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:270:46
+  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:278:42
   GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
     name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16
@@ -1437,6 +1441,13 @@ proc funcNew*(linker: ptr ComponentLinkerT; env_name: cstring;
               callback: ComponentFuncCallbackT; data: pointer;
               finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
     cdecl, importc: "wasmtime_component_linker_func_new".}
+proc resourceNew*(linker: ptr ComponentLinkerT; env_name: cstring;
+                  env_name_len: csize_t; name: cstring; len: csize_t;
+                  user_id: csize_t; finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_linker_resource_new".}
+proc resourceNew*(context: ptr ComponentContextT; user_id: csize_t;
+                  resource: ptr ComponentValT; data: pointer): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_resource_new".}
 proc instantiate*(linker: ptr ComponentLinkerT; context: ptr ComponentContextT;
                   component: ptr ComponentT;
                   instance_out: ptr ptr ComponentInstanceT;
@@ -1454,6 +1465,10 @@ proc call*(func_arg: ptr ComponentFuncT; context: ptr ComponentContextT;
 proc valNew*(): ptr ComponentValT {.cdecl, importc: "wasmtime_component_val_new".}
 proc valDelete*(val: ptr ComponentValT): void {.cdecl,
     importc: "wasmtime_component_val_delete".}
+proc resourceDrop*(context: ptr ComponentContextT; val: ptr ComponentValT): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_resource_drop".}
+proc resourceDump*(val: ptr ComponentValT): WasmNameT {.cdecl,
+    importc: "wasmtime_component_resource_dump".}
 proc clone*(engine: ptr WasmEngineT): ptr WasmEngineT {.cdecl,
     importc: "wasmtime_engine_clone".}
 proc incrementEpoch*(engine: ptr WasmEngineT): void {.cdecl,
@@ -1944,6 +1959,13 @@ proc funcNew*(linker: ptr ComponentLinkerT; env: string; name: string;
   return linker.funcNew(env.cstring, env.len.csize_t, name.cstring,
                         name.len.csize_t, cb, ctx, fin).toResult(void)
 
+proc defineResource*(linker: ptr ComponentLinkerT; env: string; name: string;
+                     userId: int; drop: proc (p: pointer) {.cdecl.}): WasmtimeResult[
+    void] =
+  return linker.resourceNew(env.cstring, env.len.csize_t, name.cstring,
+                            name.len.csize_t, userId.csize_t, drop).toResult(
+      void)
+
 proc `$`*(a: ComponentValT): string =
   case a.kind.ComponentValKind
   of Bool:
@@ -2029,6 +2051,9 @@ proc `$`*(a: ComponentValT): string =
       str.add v.strVal
     str.add "}"
     str
+  of Resource:
+    let name = a.addr.resourceDump()
+    name.strVal
   else:
     "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
 

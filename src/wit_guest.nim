@@ -62,7 +62,7 @@ macro wasmimport*(name: static[string], env: static[string], t: typed): untyped 
   result.add:
     newProc
 
-proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode) =
+proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode, context: WitNimTypeNameContext) =
   # let typ = ctx.despecialize(typ)
   # echo &"lower {param.repr}: {typ}, {loweredArgs[0].treeRepr}, {typ}"
   case typ.builtin
@@ -130,7 +130,7 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
     of Option:
       let childAccess = nnkDotExpr.newTree(param, ident("get"))
       var lowerChild = nnkStmtList.newTree()
-      ctx.lower(loweredArgs[1..^1], childAccess, userType.optionTarget, lowerChild)
+      ctx.lower(loweredArgs[1..^1], childAccess, userType.optionTarget, lowerChild, context)
       let code = genAst(loweredTag = loweredArgs[0], param, lowerChild):
         loweredTag = param.isSome.int32
         if param.isSome:
@@ -141,9 +141,9 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       let childAccess = nnkDotExpr.newTree(param, ident("value"))
       let errAccess = nnkDotExpr.newTree(param, ident("error"))
       var lowerChild = nnkStmtList.newTree()
-      ctx.lower(loweredArgs[1..^1], childAccess, userType.resultOkTarget, lowerChild)
+      ctx.lower(loweredArgs[1..^1], childAccess, userType.resultOkTarget, lowerChild, context)
       var lowerError = nnkStmtList.newTree()
-      ctx.lower(loweredArgs[1..^1], errAccess, userType.resultErrTarget, lowerError)
+      ctx.lower(loweredArgs[1..^1], errAccess, userType.resultErrTarget, lowerError, context)
       let code = genAst(loweredTag = loweredArgs[0], param, lowerChild, lowerError):
         loweredTag = param.isErr.int32
         if param.isOk:
@@ -156,7 +156,7 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       var loweredI = 0
       for i, f in userType.fields:
         let fieldAccess = nnkDotExpr.newTree(param, ident(f.name.toCamelCase(false)))
-        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode)
+        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context)
         loweredI += ctx.flatTypeSize(f.typ)
       return
 
@@ -164,7 +164,7 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       var loweredI = 0
       for i, f in userType.fields:
         let fieldAccess = nnkBracketExpr.newTree(param, newLit(i))
-        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode)
+        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context)
         loweredI += ctx.flatTypeSize(f.typ)
       return
 
@@ -175,7 +175,7 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       for f in userType.fields:
         let fieldAccess = nnkDotExpr.newTree(param, ident(f.name.toCamelCase(false)))
         var caseCode = nnkStmtList.newTree()
-        ctx.lower(loweredArgs[1..^1], fieldAccess, f.typ, caseCode)
+        ctx.lower(loweredArgs[1..^1], fieldAccess, f.typ, caseCode, context)
         cases.add nnkOfBranch.newTree(ident(f.name.toCamelCase(true)), caseCode)
 
       if addElse:
@@ -186,8 +186,10 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
         cases
       outCode.add code
 
-    # todo
-    # of Owned, Borrowed:
+    of Handle:
+      let code = genAst(loweredArg = loweredArgs[0], param = param):
+        loweredArg = cast[int32](param.handle - 1)
+      outCode.add code
 
     else:
       error("Not implemented lower(" & $userType.kind & ")")
@@ -195,21 +197,21 @@ proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
   else:
     error("Not implemented lower(" & $typ.builtin & ")")
 
-proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode) =
+proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode, context: WitNimTypeNameContext) =
   var loweredI = 0
   for i, p in params:
     # echo &"{i}, {loweredI}: lower {p}"
-    ctx.lower(loweredArgs[loweredI..^1], args[i], p.typ, outCode)
+    ctx.lower(loweredArgs[loweredI..^1], args[i], p.typ, outCode, context)
     loweredI += ctx.flatTypeSize(p.typ)
 
-proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode) =
+proc lower(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode, context: WitNimTypeNameContext) =
   var loweredI = 0
   for i, r in results:
     # echo &"{i}, {loweredI}: lower {r}"
-    ctx.lower(loweredArgs[loweredI..^1], args[i], r, outCode)
+    ctx.lower(loweredArgs[loweredI..^1], args[i], r, outCode, context)
     loweredI += ctx.flatTypeSize(r)
 
-proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode) =
+proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode, context: WitNimTypeNameContext) =
   # let typ = ctx.despecialize(typ)
   # echo &"lift {param.repr}: {typ}, {loweredArgs[0].treeRepr}"
   case typ.builtin
@@ -245,23 +247,23 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
       outCode.add code
 
     of Enum:
-      let t = ctx.getTypeName(typ)
+      let t = ctx.getTypeName(typ, context)
       let code = genAst(loweredArg = loweredArgs[0], param = param, t):
         param = cast[t](loweredArg)
       outCode.add code
 
     of Flags:
-      let t = ctx.getTypeName(typ)
+      let t = ctx.getTypeName(typ, context)
       let code = genAst(loweredArg = loweredArgs[0], param = param, t):
         param = cast[t](loweredArg)
       outCode.add code
 
     of Option:
-      let t = ctx.getTypeName(userType.optionTarget)
+      let t = ctx.getTypeName(userType.optionTarget, context)
       let child = ident"temp"
       let childDecl = nnkVarSection.newTree(nnkIdentDefs.newTree(child, t, newEmptyNode()))
       var lowerChild = nnkStmtList.newTree()
-      ctx.lift(loweredArgs[1..^1], child, userType.optionTarget, lowerChild)
+      ctx.lift(loweredArgs[1..^1], child, userType.optionTarget, lowerChild, context)
       let code = genAst(loweredTag = loweredArgs[0], param, lowerChild, t, childDecl, child):
         if loweredTag != 0:
           childDecl
@@ -270,16 +272,16 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
       outCode.add code
 
     of Result:
-      let okType = ctx.getTypeName(userType.resultOkTarget)
-      let errType = ctx.getTypeName(userType.resultErrTarget)
+      let okType = ctx.getTypeName(userType.resultOkTarget, context)
+      let errType = ctx.getTypeName(userType.resultErrTarget, context)
       let okChild = ident"tempOk"
       let errChild = ident"tempErr"
       let okChildDecl = nnkVarSection.newTree(nnkIdentDefs.newTree(okChild, okType, newEmptyNode()))
       let errChildDecl = nnkVarSection.newTree(nnkIdentDefs.newTree(errChild, errType, newEmptyNode()))
       var lowerChild = nnkStmtList.newTree()
       var lowerError = nnkStmtList.newTree()
-      ctx.lift(loweredArgs[1..^1], okChild, userType.resultOkTarget, lowerChild)
-      ctx.lift(loweredArgs[1..^1], errChild, userType.resultErrTarget, lowerError)
+      ctx.lift(loweredArgs[1..^1], okChild, userType.resultOkTarget, lowerChild, context)
+      ctx.lift(loweredArgs[1..^1], errChild, userType.resultErrTarget, lowerError, context)
 
       let okCase = if okType.repr == "void":
         genAst(param, okType, errType):
@@ -319,10 +321,10 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
         let fieldName = ident(f.name.toCamelCase(false))
         var lowerCode = nnkStmtList.newTree()
 
-        let typ = ctx.getTypeName(f.typ)
+        let typ = ctx.getTypeName(f.typ, context)
         let temp = ident"temp"
         let tempDecl = nnkVarSection.newTree(nnkIdentDefs.newTree(temp, typ, newEmptyNode()))
-        ctx.lift(loweredArgs[1..^1], temp, f.typ, lowerCode)
+        ctx.lift(loweredArgs[1..^1], temp, f.typ, lowerCode, context)
         let caseCode = if typ.repr == "void":
           genAst(param, typ, t = objectTypeName, k = kindName):
             param = t(kind: k)
@@ -347,20 +349,20 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
       var loweredI = 0
       for i, f in userType.fields:
         let fieldAccess = nnkDotExpr.newTree(param, ident(f.name.toCamelCase(false)))
-        ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode)
+        ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context)
         loweredI += ctx.flatTypeSize(f.typ)
-      return
 
     of Tuple:
       var loweredI = 0
       for i, f in userType.fields:
         let fieldAccess = nnkBracketExpr.newTree(param, newLit(i))
-        ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode)
+        ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context)
         loweredI += ctx.flatTypeSize(f.typ)
-      return
 
-    # todo
-    # of Owned, Borrowed:
+    of Handle:
+      let code = genAst(arg = loweredArgs[0], param):
+        param.handle = arg + 1
+      outCode.add code
 
     else:
       error("Not implemented lift(" & $userType.kind & ")")
@@ -368,18 +370,18 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
   else:
     error("Not implemented lift(" & $typ.builtin & ")")
 
-proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode) =
+proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode, context: WitNimTypeNameContext) =
   var loweredI = 0
   for i, r in results:
     # echo &"{i}, {loweredI}: lift {r}"
-    ctx.lift(loweredArgs[loweredI..^1], args[i], r, outCode)
+    ctx.lift(loweredArgs[loweredI..^1], args[i], r, outCode, context)
     loweredI += ctx.flatTypeSize(r)
 
-proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode) =
+proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode, context: WitNimTypeNameContext) =
   var loweredI = 0
   for i, p in params:
     # echo &"{i}, {loweredI}: lift {p}"
-    ctx.lift(loweredArgs[loweredI..^1], args[i], p.typ, outCode)
+    ctx.lift(loweredArgs[loweredI..^1], args[i], p.typ, outCode, context)
     loweredI += ctx.flatTypeSize(p.typ)
 
 proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
@@ -387,22 +389,29 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
     proc foo(a: int): bool {.wasmimport("", "").}
 
   let importWrapperTempl = genAst():
-    proc foo*(a: int): bool =
+    proc foo*(a: int): bool {.nodestroy.} =
       discard
 
   let (flatFuncType, flatFuncTargetType) = ctx.flattenFuncType(fun, Lower)
 
-  # echo ""
-  # echo &"genFunction {fun}\n{flatFuncTargetType}\n{flatFuncType}"
-  # echo ""
+  block:
+    let funcNimName = case fun.kind
+    of Freestanding:
+      fun.name
+    of Constructor:
+      let i = fun.name.find("]")
+      assert i != -1
+      "new-" & fun.name[i + 1..^1]
 
+    of Method, Static:
+      let i = fun.name.find(".")
+      assert i != -1
+      fun.name[i + 1..^1]
 
-  case fun.kind
-  of Freestanding:
     let importedName = if fun.interfac.isSome:
-      ident(fun.interfaceName.toCamelCase(false) & fun.name.toCamelCase(true) & "Imported")
+      ident(fun.interfaceName.toCamelCase(false) & funcNimName.toCamelCase(true) & "Imported")
     else:
-      ident(fun.name.toCamelCase(false) & "Imported")
+      ident(funcNimName.toCamelCase(false) & "Imported")
 
     block: # raw function
       var funNode = importTempl.copy()
@@ -433,16 +442,16 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
     block: # wrapper function
       var funNode = importWrapperTempl.copy()
-      funNode[0][1] = ident(fun.name.toCamelCase(false))
+      funNode[0][1] = ident(funcNimName.toCamelCase(false))
 
       let retType = if fun.results.len == 0:
         ident"void"
       elif fun.results.len == 1:
-        ctx.getTypeName(fun.results[0])
+        ctx.getTypeName(fun.results[0], Return)
       else:
         var tup = nnkTupleConstr.newTree()
         for t in fun.results:
-          tup.add ctx.getTypeName(t)
+          tup.add ctx.getTypeName(t, Return)
         tup
 
       funNode[3] = nnkFormalParams.newTree(retType)
@@ -486,7 +495,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           vars.add nnkIdentDefs.newTree(arg, t, newEmptyNode())
           call.add arg
 
-        ctx.lower(loweredArgs, args, fun.params, lowerCode)
+        ctx.lower(loweredArgs, args, fun.params, lowerCode, Parameter)
 
       else:
         # Pass args through pointer
@@ -502,10 +511,15 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           loweredPtrArgs.add code
           i += p.byteSize
 
-        ctx.lower(loweredPtrArgs, args, fun.params, lowerCode)
+        ctx.lower(loweredPtrArgs, args, fun.params, lowerCode, Parameter)
 
       if flatFuncType.resultsFlat:
-        discard
+        if fun.results.len > 0:
+          let resultName = ident"res"
+          call = genAst(resultName, call):
+            let resultName = call
+          ctx.lift(@[resultName], results, fun.results, liftCode, Return)
+
       else:
         call.add retAreaPtr
 
@@ -519,7 +533,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           loweredPtrArgs.add code
           i += r.byteSize
 
-        ctx.lift(loweredPtrArgs, results, fun.results, liftCode)
+        ctx.lift(loweredPtrArgs, results, fun.results, liftCode, Return)
 
       funNode[6] = nnkStmtList.newTree()
       funNode[6].add vars
@@ -531,7 +545,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
       # Add high level paramaters to generated fun
       for i, p in fun.params:
-        let t = ctx.getTypeName(p.typ)
+        let t = ctx.getTypeName(p.typ, Parameter)
         funNode[3].add nnkIdentDefs.newTree(args[i], t, newEmptyNode())
 
       funcList.add funNode
@@ -546,11 +560,14 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
   let (flatFuncType, flatFuncTargetType) = ctx.flattenFuncType(fun, Lift)
 
-  # echo ""
-  # echo &"genExport {fun}\n{flatFuncTargetType}\n{flatFuncType}"
-  # echo ""
-
   case fun.kind
+  of Constructor:
+    discard
+  of Method:
+    discard
+  of Static:
+    discard
+
   of Freestanding:
     block: # wrapper function
       var funNode = importWrapperTempl.copy()
@@ -559,11 +576,11 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
       let retType = if fun.results.len == 0:
         ident"void"
       elif fun.results.len == 1:
-        ctx.getTypeName(fun.results[0])
+        ctx.getTypeName(fun.results[0], Return)
       else:
         var tup = nnkTupleConstr.newTree()
         for t in fun.results:
-          tup.add ctx.getTypeName(t)
+          tup.add ctx.getTypeName(t, Return)
         tup
 
       funNode[3] = nnkFormalParams.newTree(retType)
@@ -574,7 +591,7 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
       # Add high level paramaters to generated fun
       for i, p in fun.params:
-        let t = ctx.getTypeName(p.typ)
+        let t = ctx.getTypeName(p.typ, Parameter)
         funNode[3].add nnkIdentDefs.newTree(args[i], t, newEmptyNode())
 
       funcList.add funNode
@@ -622,7 +639,7 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           ident(p.name)
 
       for i, arg in args:
-        let t = ctx.getTypeName(fun.params[i].typ)
+        let t = ctx.getTypeName(fun.params[i].typ, Parameter)
         vars.add nnkIdentDefs.newTree(arg, t, newEmptyNode())
         call.add arg
 
@@ -633,7 +650,7 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           for i in 0..flatFuncTargetType.params.high:
             ident("a" & $i)
 
-        ctx.lift(loweredArgs, args, fun.params, liftCode)
+        ctx.lift(loweredArgs, args, fun.params, liftCode, Parameter)
 
       else:
         # Args passed through pointer
@@ -647,7 +664,7 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           loweredPtrArgs.add code
           i += p.byteSize
 
-        ctx.lift(loweredPtrArgs, args, fun.params, liftCode)
+        ctx.lift(loweredPtrArgs, args, fun.params, liftCode, Parameter)
 
         let freeCode = genAst(retAreaSize):
           cabi_dealloc(a0, retAreaSize, 4) # todo: alignment
@@ -675,7 +692,7 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
             for i in 0..fun.results.high:
               nnkBracketExpr.newTree(resultName, newLit(i))
 
-        ctx.lower(loweredPtrArgs, results, fun.results, lowerCode)
+        ctx.lower(loweredPtrArgs, results, fun.results, lowerCode, Return)
 
         let retCode = genAst(retArea):
           cast[int32](retArea[0].addr)
@@ -693,6 +710,41 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
         funNode[6].add lowerCode
 
       funcList.add funNode
+
+proc genResourceLifetimeFuncs(ctx: WitContext, funcList: NimNode) =
+  let dropTempl = genAst(a = ident"a"):
+    proc foo(a: int32): void {.wasmimport("", "").}
+
+  for t in ctx.types:
+    if t.refIndex.isSome:
+      continue
+    case t.kind
+    of Resource:
+      let dropName = if t.interfaceName != "":
+        ident(t.interfaceName.toCamelCase(false) & t.name.toCamelCase(true) & "Drop")
+      else:
+        ident(t.name.toCamelCase(false) & "Drop")
+
+      let typ = ident(t.name.toCamelCase(true))
+
+      var dropImpl = dropTempl.copy()
+      dropImpl[0] = dropName
+
+      dropImpl[4][0][1] = newLit("[resource-drop]" & t.name)
+      dropImpl[4][0][2] = newLit(t.env)
+
+      let code = genAst(dropImpl, drop = dropName, typ, a = ident"a", b = ident"b"):
+        dropImpl
+
+        proc `=copy`*(a: var typ, b: typ) {.error.}
+        proc `=destroy`*(a: typ) =
+          if a.handle != 0:
+            drop(a.handle - 1)
+
+      funcList.add code
+
+    else:
+      discard
 
 macro importWitImpl(witPath: static[string], cacheFile: static[string], dir: static[string]): untyped =
   let path = if witPath.isAbsolute:
@@ -714,13 +766,12 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], dir: sta
   var ctx = newWitContext(json)
   ctx.useCustomBuiltinTypes = true
 
-  # echo "------- exports"
-  # echo ctx.exports.join("\n")
-  # echo "-------"
-
   let typeSection = ctx.genTypeSection()
 
   var funcList = nnkStmtList.newTree()
+
+  ctx.genResourceLifetimeFuncs(funcList)
+
   for f in ctx.funcs:
     ctx.genFunction(funcList, f)
 

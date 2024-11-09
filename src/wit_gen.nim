@@ -1,7 +1,9 @@
 import std/[macros, options, strutils]
 import wit
 
-proc getTypeName*(ctx: WitContext, typ: WitType): NimNode =
+type WitNimTypeNameContext* = enum Field, Parameter, Return
+
+proc getTypeName*(ctx: WitContext, typ: WitType, context: WitNimTypeNameContext): NimNode =
   if typ.builtin != "":
     return ctx.builtinToNimName(typ.builtin).ident
   case ctx.types[typ.index].kind:
@@ -9,17 +11,31 @@ proc getTypeName*(ctx: WitContext, typ: WitType): NimNode =
   of Tuple:
     result = nnkTupleConstr.newTree()
     for f in ctx.types[typ.index].fields:
-      result.add ctx.getTypeName(f.typ)
+      result.add ctx.getTypeName(f.typ, context)
+
   of Option:
-    return nnkBracketExpr.newTree(ident"Option", ctx.getTypeName(ctx.types[typ.index].optionTarget))
+    return nnkBracketExpr.newTree(ident"Option", ctx.getTypeName(ctx.types[typ.index].optionTarget, context))
+
   of List:
     if ctx.useCustomBuiltinTypes:
-      return nnkBracketExpr.newTree(ident"WitList", ctx.getTypeName(ctx.types[typ.index].listTarget))
+      return nnkBracketExpr.newTree(ident"WitList", ctx.getTypeName(ctx.types[typ.index].listTarget, context))
     else:
-      return nnkBracketExpr.newTree(ident"seq", ctx.getTypeName(ctx.types[typ.index].listTarget))
+      return nnkBracketExpr.newTree(ident"seq", ctx.getTypeName(ctx.types[typ.index].listTarget, context))
+
   of Result:
     return nnkBracketExpr.newTree(ident"Result",
-      ctx.getTypeName(ctx.types[typ.index].resultOkTarget), ctx.getTypeName(ctx.types[typ.index].resultErrTarget))
+      ctx.getTypeName(ctx.types[typ.index].resultOkTarget, context), ctx.getTypeName(ctx.types[typ.index].resultErrTarget, context))
+
+  of Handle:
+    let targetType = ctx.types[typ.index].handleTarget
+    if ctx.types[typ.index].owned and context == Parameter:
+      return nnkCommand.newTree(ident"sink", ctx.getTypeName(targetType, context))
+    elif not ctx.types[typ.index].owned and context == Return:
+      return nnkCommand.newTree(ident"lent", ctx.getTypeName(targetType, context))
+    else:
+      # todo: Field context owned vs borrowed
+      return ctx.getTypeName(targetType, context)
+
   else:
     if ctx.types[typ.index].name == "":
       error("type without name: " & $ctx.types[typ.index])
@@ -36,7 +52,7 @@ proc genTypeSection*(ctx: WitContext): NimNode =
     of Record:
       var recList = nnkRecList.newTree()
       for field in t.fields:
-        let fieldType = ctx.getTypeName(field.typ)
+        let fieldType = ctx.getTypeName(field.typ, Field)
         recList.add nnkIdentDefs.newTree(nnkPostfix.newTree(ident"*", ident(field.name.toCamelCase(false))), fieldType, newEmptyNode())
       var objType = nnkObjectTy.newTree(newEmptyNode(), newEmptyNode(), recList)
       typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), objType)
@@ -81,7 +97,7 @@ proc genTypeSection*(ctx: WitContext): NimNode =
             ident(f.name.toCamelCase(true)),
             nnkRecList.newTree(nnkIdentDefs.newTree(
               ident(f.name.toCamelCase(false)),
-              ctx.getTypeName(f.typ),
+              ctx.getTypeName(f.typ, Field),
               newEmptyNode())))
         else:
           addElse = true
@@ -91,6 +107,12 @@ proc genTypeSection*(ctx: WitContext): NimNode =
 
       var objectType = nnkObjectTy.newTree(newEmptyNode(), newEmptyNode(), nnkRecList.newTree(cases))
       typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), objectType)
+
+    of Resource:
+      var recList = nnkRecList.newTree()
+      recList.add nnkIdentDefs.newTree(nnkPostfix.newTree(ident"*", ident("handle")), ident"int32", newEmptyNode())
+      var objType = nnkObjectTy.newTree(newEmptyNode(), newEmptyNode(), recList)
+      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), objType)
 
     else:
       discard

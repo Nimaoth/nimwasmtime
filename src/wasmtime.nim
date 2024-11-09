@@ -1,5 +1,5 @@
 import std/[os, macros, strutils, json, sets, enumerate, tables, options]
-import results
+import results as ress
 
 const nimWasmtimeStatic* {.booldefine.} = true
 const nimWasmtimeOverride* {.strdefine.} = ""
@@ -154,6 +154,7 @@ proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, pa
       result.removePrefix("WASMTIME_PROFILING_STRATEGY_")
       result.removePrefix("WASMTIME_STRATEGY_")
       result.removePrefix("WASMTIME_COMPONENT_VAL_KIND_")
+      result.removePrefix("WASMTIME_COMPONENT_RESOURCE_KIND_")
     result.removePrefix("WASMTIME_")
     result = processName(result)
 
@@ -769,6 +770,9 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
 
         return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
 
+      proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, userId: int, drop: proc(p: pointer) {.cdecl.}): WasmtimeResult[void] =
+        return linker.resourceNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
+
       proc `$`*(a: ComponentValT): string =
         case a.kind.ComponentValKind
         of Bool: $a.payload.boolean
@@ -844,6 +848,17 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
             str.add v.strVal
           str.add "}"
           str
+
+        of Resource:
+          let name = a.addr.resourceDump()
+          name.strVal
+          # var str = "Resource(idx: " & $a.payload.resource.idx & ", owned: " & $a.payload.resource.owned_field & ", ty: "
+          # str.add case a.payload.resource.ty.kind
+          # of Host: $a.payload.resource.ty.payload.host
+          # of Guest: $a.payload.resource.ty.payload.guest
+          # of Uninstantiated: $a.payload.resource.ty.payload.uninstantiated
+          # str.add ")"
+          # str
 
         else: "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
 
@@ -924,7 +939,7 @@ proc toVal*[T](a: T): ComponentValT =
     else:
       result.payload.option = nil
 
-  elif T is results.Result:
+  elif T is ress.Result:
     result.kind = ComponentValKind.Result.ComponentValKindT
     type OkType = typeof(a.value)
     type ErrType = typeof(a.error)
@@ -1012,13 +1027,37 @@ proc toCamelCase*(str: string, capitalizeFirst: bool): string =
 
 proc to*(a: ComponentValT, T: typedesc): T =
   # echo a, ", ", a.kind.ComponentValKind, " to ", T
-  when T is int32:
+  when T is int8:
+    assert a.kind == ComponentValKind.S8.ComponentValKindT
+    result = a.payload.s8
+
+  elif T is int16:
+    assert a.kind == ComponentValKind.S16.ComponentValKindT
+    result = a.payload.s16
+
+  elif T is int32:
     assert a.kind == ComponentValKind.S32.ComponentValKindT
     result = a.payload.s32
 
   elif T is int64:
     assert a.kind == ComponentValKind.S64.ComponentValKindT
     result = a.payload.s64
+
+  elif T is uint8:
+    assert a.kind == ComponentValKind.U8.ComponentValKindT
+    result = a.payload.u8
+
+  elif T is uint16:
+    assert a.kind == ComponentValKind.U16.ComponentValKindT
+    result = a.payload.u16
+
+  elif T is uint32:
+    assert a.kind == ComponentValKind.U32.ComponentValKindT
+    result = a.payload.u32
+
+  elif T is uint64:
+    assert a.kind == ComponentValKind.U64.ComponentValKindT
+    result = a.payload.u64
 
   elif T is float32:
     assert a.kind == ComponentValKind.Float32.ComponentValKindT
@@ -1078,20 +1117,20 @@ proc to*(a: ComponentValT, T: typedesc): T =
     if a.payload.option != nil:
       result = a.payload.option[].to(typeof(result.get)).some
 
-  elif T is results.Result:
+  elif T is ress.Result:
     assert a.kind == ComponentValKind.Result.ComponentValKindT
     type OkType = typeof(result.value)
     type ErrType = typeof(result.error)
     if a.payload.result.error:
       when ErrType is void:
-        result = results.Result[OkType, ErrType].err()
+        result = ress.Result[OkType, ErrType].err()
       else:
-        result = results.err(a.payload.result.val[].to(ErrType))
+        result = ress.err(a.payload.result.val[].to(ErrType))
     else:
       when OkType is void:
-        result = results.Result[OkType, ErrType].ok()
+        result = ress.Result[OkType, ErrType].ok()
       else:
-        result = results.ok(a.payload.result.val[].to(OkType))
+        result = ress.ok(a.payload.result.val[].to(OkType))
 
   elif T is tuple:
     if a.kind == ComponentValKind.Tuple.ComponentValKindT:
