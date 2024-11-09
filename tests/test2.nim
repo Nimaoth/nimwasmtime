@@ -40,12 +40,28 @@ proc main() =
   let linker = engine.newComponentLinker()
   var trap: ptr WasmTrapT = nil
 
+  let store = engine.newComponentStore(nil, nil)
+  # defer: store.delete()
+
+  type MyBlob = object
+    blobName: string
+    arr: seq[uint8]
+
+  proc deleteBlob(b: pointer) {.cdecl.} =
+    let b = cast[ptr MyBlob](b)
+    echo "--------------------------------------- deleteBlob ", b[]
+    deallocShared(b)
+
   linker.linkWasi(trap.addr).okOr(err):
     echo "[host] Failed to link wasi: ", err.msg
     return
 
   trap.okOr(err):
     echo "[host][trap] Failed to link wasi: ", err.msg
+    return
+
+  linker.defineResource("my:test-package/test-interface", "blob", 69, deleteBlob).okOr(err):
+    echo &"Failed to define resource {err.msg}"
     return
 
   linker.defineFunc("env", "bar-baz"):
@@ -63,6 +79,55 @@ proc main() =
   linker.defineFunc("env", "test-no-params2"):
     echo "[host] testNoParams()"
 
+  var counter = 0
+
+  linker.defineFunc("my:test-package/test-interface", "[constructor]blob"):
+    echo "[host] [constructor]blob()"
+    var res: ComponentValT
+    var blob = createShared(MyBlob)
+    blob.blobName = "constr" & $counter
+    blob.arr = params[0].to(seq[uint8])
+    counter.inc
+    store.context.resourceNew(69, res.addr, blob).okOr(err):
+      echo &"[host] Failed to create resource: {err}"
+      return
+
+    results[0] = res
+
+  linker.defineFunc("my:test-package/test-interface", "[method]blob.read"):
+    echo "[host] [method]blob.read()"
+
+  linker.defineFunc("my:test-package/test-interface", "[method]blob.write"):
+    echo "[host] [method]blob.write()"
+
+  linker.defineFunc("my:test-package/test-interface", "[static]blob.merge"):
+    echo "[host] [static]blob.merge()"
+
+    var res: ComponentValT
+    var blob = createShared(MyBlob)
+    blob.blobName = "merge" & $counter
+    counter.inc
+    store.context.resourceNew(69, res.addr, blob).okOr(err):
+      echo &"[host] Failed to create resource: {err}"
+      return
+    results[0] = res
+
+    store.context.resourceDrop(params[0].addr).okOr(err):
+      echo &"[host] Failed to drop resource: {err}"
+      return
+    store.context.resourceDrop(params[1].addr).okOr(err):
+      echo &"[host] Failed to drop resource: {err}"
+      return
+
+  linker.defineFunc("my:test-package/test-interface", "[static]blob.print"):
+    echo "[host] [static]blob.print()"
+    store.context.resourceDrop(params[0].addr).okOr(err):
+      echo &"[host] Failed to drop resource: {err}"
+      return
+    store.context.resourceDrop(params[1].addr).okOr(err):
+      echo &"[host] Failed to drop resource: {err}"
+      return
+
   linker.defineFunc("my:test-package/test-interface", "test-no-params"):
     echo "[host] testNoParams()"
 
@@ -79,9 +144,6 @@ proc main() =
     return
 
   echo "[host] create instance"
-
-  let store = engine.newComponentStore(nil, nil)
-  # defer: store.delete()
 
   var instance: ptr ComponentInstanceT = nil
   linker.instantiate(store.context, component, instance.addr, trap.addr).okOr(err):
