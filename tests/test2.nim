@@ -1,13 +1,64 @@
-import std/[strformat, options, strutils, macros, genasts, unicode]
+import std/[strformat, options, strutils, macros, genasts, unicode, tables]
 import wasmtime, wit_host
 
+type MyContext = ref object
+  counter: int
+
 type MyBlob = object
+  i: int = 1
   blobName: string
   arr: seq[uint8]
 
+proc `=destroy`*(b: MyBlob) =
+  if b.i != 0:
+    echo "--------------------------------- delete MyBlob ", b
+
 template typeId*(_: typedesc[MyBlob]): int = 69
 
-importWit "wasm/test.wit"
+when defined(witRebuild):
+  static: hint("Rebuilding test.wit")
+  importWit "wasm/test.wit", MyContext:
+    mapName "blob", MyBlob
+else:
+  static: hint("Using cached test.wit (host.nim)")
+  include host
+
+proc testInterfaceNewBlob(host: MyContext, store: ptr ComponentContextT, init: seq[uint8]): MyBlob =
+  result = MyBlob(blobName: "constr" & $host.counter, arr: init)
+  host.counter.inc
+
+proc testInterfaceWrite(host: MyContext, store: ptr ComponentContextT, self: var MyBlob, bytes: seq[uint8]) =
+  self.arr.add bytes
+
+proc testInterfaceRead(host: MyContext, store: ptr ComponentContextT, self: var MyBlob, n: int32): seq[uint8] =
+  let l = min(self.arr.len, n.int)
+  return self.arr[0..<l]
+
+proc testInterfaceMerge(host: MyContext, store: ptr ComponentContextT, lhs: sink MyBlob, rhs: sink MyBlob): MyBlob =
+  result = MyBlob(blobName: "merge" & $host.counter, arr: lhs.arr & rhs.arr)
+  host.counter.inc
+
+proc testInterfacePrint(host: MyContext, store: ptr ComponentContextT, lhs: var MyBlob, rhs: var MyBlob) =
+  echo "================================== ", lhs, ", ", rhs
+
+proc testInterfaceBarBaz(host: MyContext, store: ptr ComponentContextT, a: int32, b: float32): float32 =
+  result = a.float32 - b
+
+proc envTestNoParams2(host: MyContext, store: ptr ComponentContextT) =
+  echo "envTestNoParams2"
+
+proc testInterfaceTestNoParams(host: MyContext, store: ptr ComponentContextT) =
+  echo "testInterfaceTestNoParams"
+
+proc testInterfaceTestSimpleParams(host: MyContext, store: ptr ComponentContextT,
+    a: int8, b: int16, c: int32, d: int64, e: uint8, f: uint16, g: uint32, h: uint64, i: float32,
+    j: float64, k: bool, l: Rune) =
+  echo &"{a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}"
+
+proc testInterfaceTestSimpleParamsPtr(host: MyContext, store: ptr ComponentContextT,
+    a: int8, b: int16, c: int32, d: int64, e: uint8, f: uint16, g: uint32, h: uint64, i: float32,
+    j: float64, k: bool, l: Rune, m: int32, n: int32, o: int32, p: int32, q: int32) =
+  echo &"{a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}, {m}, {n}, {o}, {p}, {q}"
 
 proc call(instance: ptr ComponentInstanceT, context: ptr ComponentContextT, name: string, params: openArray[ComponentValT], nresults: static[int]) =
   var f: ptr ComponentFuncT = nil
@@ -28,22 +79,6 @@ proc call(instance: ptr ComponentInstanceT, context: ptr ComponentContextT, name
   if nresults > 0:
     echo &"[host] call func {name} -> {res}"
 
-template defineFunc(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped) =
-  block:
-    proc cb(ctx: pointer, p: openArray[ComponentValT], r: var openArray[ComponentValT]) =
-      proc inner(ctx: pointer, params {.inject.}: openArray[ComponentValT], results {.inject.}: var openArray[ComponentValT]): WasmtimeResult[void] =
-        echo "[host] " & name & &" <- {params}"
-        defer:
-          echo "[host] " & name & &" -> {results}"
-        body
-
-      inner(ctx, p, r).okOr(e):
-        echo "[host] ", $e
-
-    let funcName {.inject.} = name
-    linker.funcNew(env, funcName, cb).okOr(err):
-      echo &"[host][trap] Failed to link func {funcName}: {err.msg}"
-
 proc main() =
   echo "[host] Start main"
   let config = newConfig()
@@ -54,6 +89,11 @@ proc main() =
   let store = engine.newComponentStore(nil, nil)
   # defer: store.delete()
 
+  var ctx = MyContext(counter: 1)
+  linker.defineComponent(ctx).okOr(err):
+    echo "[host] Failed to define component: ", err.msg
+    return
+
   linker.linkWasi(trap.addr).okOr(err):
     echo "[host] Failed to link wasi: ", err.msg
     return
@@ -62,71 +102,6 @@ proc main() =
     echo "[host][trap] Failed to link wasi: ", err.msg
     return
 
-  linker.defineResource("my:test-package/test-interface", "blob", MyBlob).okOr(err):
-    echo &"Failed to define resource {err.msg}"
-    return
-
-  linker.defineFunc("env", "bar-baz"):
-    let a = params[0].to(int32)
-    let b = params[1].to(float32)
-    results[0] = (a.float32 - b).toVal
-    echo &"[host] bar-baz: {a} - {b} = {results[0]}"
-
-  linker.defineFunc("env", "call-bar"):
-    results[0] = params[0].to(Bar).toVal
-
-  linker.defineFunc("env", "call-baz"):
-    results[0] = params[0].to(Baz).toVal
-
-  linker.defineFunc("env", "test-no-params2"):
-    echo "[host] testNoParams()"
-
-  var counter = 0
-
-  linker.defineFunc("my:test-package/test-interface", "[constructor]blob"):
-    var b = MyBlob(blobName: "constr" & $counter, arr: params[0].to(seq[uint8]))
-    let res = ?store.context.resourceNew(b)
-    counter.inc
-
-    results[0] = res
-
-  linker.defineFunc("my:test-package/test-interface", "[method]blob.read"):
-    ?store.context.resourceDrop(params[0].addr)
-
-  linker.defineFunc("my:test-package/test-interface", "[method]blob.write"):
-    let a = ?store.context.resourceHostData(params[0].addr, MyBlob)
-    a[].arr.add params[1].to(seq[uint8])
-    ?store.context.resourceDrop(params[0].addr)
-
-  linker.defineFunc("my:test-package/test-interface", "[static]blob.merge"):
-    let a = ?store.context.resourceHostData(params[0].addr, MyBlob)
-    let b = ?store.context.resourceHostData(params[1].addr, MyBlob)
-
-    var blob = MyBlob(blobName: "merge" & $counter, arr: a[].arr & b[].arr)
-    let res = ?store.context.resourceNew(blob)
-    counter.inc
-
-    results[0] = res
-
-    ?store.context.resourceDrop(params[0].addr)
-    ?store.context.resourceDrop(params[1].addr)
-
-  linker.defineFunc("my:test-package/test-interface", "[static]blob.print"):
-    let a = ?store.context.resourceHostData(params[0].addr, MyBlob)
-    let b = ?store.context.resourceHostData(params[1].addr, MyBlob)
-    echo "================================== ", a[], ", ", b[]
-    ?store.context.resourceDrop(params[0].addr)
-    ?store.context.resourceDrop(params[1].addr)
-
-  linker.defineFunc("my:test-package/test-interface", "test-no-params"):
-    echo "[host] testNoParams()"
-
-  linker.defineFunc("my:test-package/test-interface", "test-simple-params"):
-    echo "[host] testSimpleParams()"
-
-  linker.defineFunc("my:test-package/test-interface", "test-simple-params-ptr"):
-    echo "[host] testSimpleParamsPtr()"
-
   echo "[host] read file"
   let wasmBytes = readFile("tests/wasm/testc.wasm")
   let component = engine.newComponent(wasmBytes).okOr(err):
@@ -134,7 +109,6 @@ proc main() =
     return
 
   echo "[host] create instance"
-
   var instance: ptr ComponentInstanceT = nil
   linker.instantiate(store.context, component, instance.addr, trap.addr).okOr(err):
     echo "[host] Failed to create component instance: ", err.msg

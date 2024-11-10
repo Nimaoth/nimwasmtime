@@ -55,3 +55,5 @@ proc start() =
   let b3 = merge(b1.ensureMove, b2.ensureMove)
   echo "b3: ", b3
   b3.write(@@[127.uint8, 63])
+
+  echo b3.read(9)
