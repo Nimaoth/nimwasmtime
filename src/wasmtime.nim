@@ -1214,7 +1214,6 @@ proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, us
 proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, T: typedesc): WasmtimeResult[void] =
   proc deleteImpl(b: pointer) {.cdecl.} =
     let b = cast[ptr T](b)
-    echo "--------------------------------------- delete ", T, " ", b[]
     `=destroy`(b[])
     deallocShared(b)
   linker.defineResource(env, name, T.typeId, deleteImpl)
