@@ -401,11 +401,12 @@ type
   ComponentValPayloadT_typedef* = ComponentValPayloadT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:158:3
   ComponentT* = StructWasmtimeComponentT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:184:37
   ComponentLinkerT* = StructWasmtimeComponentLinkerT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:194:44
-  ComponentFuncCallbackT* = proc (a0: pointer; a1: ptr ComponentValT;
-                                  a2: csize_t; a3: ptr ComponentValT;
-                                  a4: csize_t): ptr WasmTrapT {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:203:24
-  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:232:46
-  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:240:42
+  ComponentFuncCallbackT* = proc (a0: ptr ComponentContextT; a1: pointer;
+                                  a2: ptr ComponentValT; a3: csize_t;
+                                  a4: ptr ComponentValT; a5: csize_t): ptr WasmTrapT {.
+      cdecl.}                ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:203:24
+  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:233:46
+  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:241:42
   GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
     name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16

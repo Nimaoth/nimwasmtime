@@ -582,6 +582,14 @@ proc toVal*[T](a: T): ComponentValT =
     result.kind = ComponentValKind.Bool.ComponentValKindT
     result.payload.boolean = a
 
+  elif T is int8:
+    result.kind = ComponentValKind.S8.ComponentValKindT
+    result.payload.s8 = a
+
+  elif T is int16:
+    result.kind = ComponentValKind.S16.ComponentValKindT
+    result.payload.s16 = a
+
   elif T is int32:
     result.kind = ComponentValKind.S32.ComponentValKindT
     result.payload.s32 = a
@@ -589,6 +597,22 @@ proc toVal*[T](a: T): ComponentValT =
   elif T is int64:
     result.kind = ComponentValKind.S64.ComponentValKindT
     result.payload.s64 = a
+
+  elif T is uint8:
+    result.kind = ComponentValKind.U8.ComponentValKindT
+    result.payload.u8 = a
+
+  elif T is uint16:
+    result.kind = ComponentValKind.U16.ComponentValKindT
+    result.payload.u16 = a
+
+  elif T is uint32:
+    result.kind = ComponentValKind.U32.ComponentValKindT
+    result.payload.u32 = a
+
+  elif T is uint64:
+    result.kind = ComponentValKind.U64.ComponentValKindT
+    result.payload.u64 = a
 
   elif T is float32:
     result.kind = ComponentValKind.Float32.ComponentValKindT
@@ -1063,36 +1087,61 @@ proc call*(f: ptr ComponentFuncT, context: ptr ComponentContextT, args: openArra
   if trap != nil:
     result = trap.toResult(void)
 
-type ComponentFuncCallback* = proc(ctx: pointer, params: openArray[ComponentValT], results: var openArray[ComponentValT])
+type ComponentFuncCallback*[T] = proc(ctx: ptr ComponentContextT, data: ptr T, params: openArray[ComponentValT], results: var openArray[ComponentValT]): ptr WasmTrapT
 
-proc funcNew*(linker: ptr ComponentLinkerT, env: string, name: string,
-    callback: ComponentFuncCallback, data: pointer = nil,
-    finalizer: proc (a0: pointer): void {.cdecl.} = nil): WasmtimeResult[void] =
+proc funcNew*[T](linker: ptr ComponentLinkerT, env: string, name: string,
+    callback: ComponentFuncCallback[T], data: ptr T = nil,
+    finalizer: proc (a0: ptr T): void = nil): WasmtimeResult[void] =
 
-  type Ctx = object
-    callback: ComponentFuncCallback
-    data: pointer
-    finalizer: proc (a0: pointer): void {.cdecl.}
+  type Data = object
+    callback: ComponentFuncCallback[T]
+    data: ptr T
+    finalizer: proc (a0: ptr T): void
+    env: string
+    name: string
 
-  var ctx = createShared(Ctx)
+  var ctx = createShared(Data)
   ctx.callback = callback
   ctx.data = data
   ctx.finalizer = finalizer
+  ctx.env = env
+  ctx.name = name
 
   proc fin(data: pointer) {.cdecl.} =
-    let ctx = cast[ptr Ctx](data)
-    if ctx.finalizer != nil:
-      ctx.finalizer(ctx.data)
-    deallocShared(ctx)
+    let data = cast[ptr Data](data)
+    if data.finalizer != nil:
+      data.finalizer(data.data)
+    deallocShared(data)
 
-  proc cb(data: pointer, params: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
-    let ctx = cast[ptr Ctx](data)
-    let params = cast[ptr UncheckedArray[ComponentValT]](params)
+  proc cb(ctx: ptr ComponentContextT, data: pointer, parameters: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
+    let data = cast[ptr Data](data)
+    let parameters = cast[ptr UncheckedArray[ComponentValT]](parameters)
     let results = cast[ptr UncheckedArray[ComponentValT]](results)
-    ctx[].callback(ctx[].data, params.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
-    nil
+    try:
+      data[].callback(ctx, data[].data, parameters.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
+    except Exception as e:
+      let msg = &"Failed to run func '{data.env}.{data.name}': {e.msg}\n{e.getStackTrace()}"
+      newTrap(msg.cstring, msg.len.csize_t)
 
   return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
+
+template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped) =
+  block:
+    proc cb(s: ptr ComponentContextT, data: ptr int, p: openArray[ComponentValT], r: var openArray[ComponentValT]): ptr WasmTrapT =
+      proc inner(store {.inject.}: ptr ComponentContextT, parameters {.inject.}: openArray[ComponentValT], results {.inject.}: var openArray[ComponentValT]): WasmtimeResult[void] =
+        # echo "[host] " & name & &" <- {parameters}"
+        # defer:
+        #   echo "[host] " & name & &" -> {results}"
+        body
+
+      inner(s, p, r).okOr(e):
+        let msg = $e
+        return newTrap(msg.cstring, msg.len.csize_t)
+
+      nil
+
+    let funcName {.inject.} = name
+    ?linker.funcNew[:int](env, funcName, cb)
 
 proc resourceHostData*(ctx: ptr ComponentContextT; val: ptr ComponentValT;
                        T: typedesc): WasmtimeResult[ptr T] =
@@ -1221,7 +1270,7 @@ proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, T:
 proc resourceNew*[T](context: ptr ComponentContextT, data: sink T): WasmtimeResult[ComponentValT] =
   var res: ComponentValT
   var r = createShared(T)
-  r[] = data
+  r[] = data.ensureMove
   let err = context.resourceNew(T.typeId, res.addr, r)
   if err != nil:
     return err.toResult(ComponentValT)

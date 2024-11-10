@@ -766,7 +766,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], dir: sta
   var ctx = newWitContext(json)
   ctx.useCustomBuiltinTypes = true
 
-  let typeSection = ctx.genTypeSection()
+  let typeSection = ctx.genTypeSection(host=false)
 
   var funcList = nnkStmtList.newTree()
 

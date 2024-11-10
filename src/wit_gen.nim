@@ -1,7 +1,23 @@
-import std/[macros, options, strutils]
+import std/[macros, options, strutils, genasts]
 import wit
 
 type WitNimTypeNameContext* = enum Field, Parameter, Return
+type WitParamTypeKind* = enum Builtin, User, OwnedResource, BorrowedResource
+
+proc getParamTypeKind*(ctx: WitContext, typ: WitType): WitParamTypeKind =
+  if typ.builtin != "":
+    return Builtin
+
+  case ctx.types[typ.index].kind:
+  of Handle:
+    let targetType = ctx.types[typ.index].handleTarget
+    if ctx.types[typ.index].owned:
+      OwnedResource
+    else:
+      BorrowedResource
+
+  else:
+    User
 
 proc getTypeName*(ctx: WitContext, typ: WitType, context: WitNimTypeNameContext): NimNode =
   if typ.builtin != "":
@@ -39,10 +55,11 @@ proc getTypeName*(ctx: WitContext, typ: WitType, context: WitNimTypeNameContext)
   else:
     if ctx.types[typ.index].name == "":
       error("type without name: " & $ctx.types[typ.index])
-    return ctx.types[typ.index].name.toCamelCase(true).ident
+    return ctx.getNimName(ctx.types[typ.index].name, true).ident
 
-proc genTypeSection*(ctx: WitContext): NimNode =
+proc genTypeSection*(ctx: WitContext, host: bool): NimNode =
   var typeSection = nnkTypeSection.newTree()
+  result = nnkStmtList.newTree(typeSection)
 
   for t in ctx.types:
     if t.refIndex.isSome:
@@ -109,12 +126,18 @@ proc genTypeSection*(ctx: WitContext): NimNode =
       typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), objectType)
 
     of Resource:
-      var recList = nnkRecList.newTree()
-      recList.add nnkIdentDefs.newTree(nnkPostfix.newTree(ident"*", ident("handle")), ident"int32", newEmptyNode())
-      var objType = nnkObjectTy.newTree(newEmptyNode(), newEmptyNode(), recList)
-      typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), objType)
+      if not host:
+        var recList = nnkRecList.newTree()
+        recList.add nnkIdentDefs.newTree(nnkPostfix.newTree(ident"*", ident("handle")), ident"int32", newEmptyNode())
+        var objType = nnkObjectTy.newTree(newEmptyNode(), newEmptyNode(), recList)
+        typeSection.add nnkTypeDef.newTree(nnkPostfix.newTree(ident"*", ident(t.name.toCamelCase(true))), newEmptyNode(), objType)
+      else:
+        let typeName = ctx.getNimName(t.name, true)
+        let code = genAst(name = ident(typeName), nameStr = typeName):
+          when not declared(name):
+            {.error: "Missing resource type definition for " & nameStr & ". Define the type before the importWit statement.".}
+        result.add code
 
     else:
       discard
 
-  return typeSection

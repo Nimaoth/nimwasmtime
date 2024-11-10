@@ -85,6 +85,7 @@ type
     funcs*: seq[WitFunc]
     exports*: seq[WitFunc]
     useCustomBuiltinTypes*: bool
+    nameMap*: Table[string, string]
 
 proc fromJsonHook*(self: var WitType, json: JsonNode) =
   case json.kind
@@ -106,6 +107,11 @@ proc toCamelCase*(str: string, capitalizeFirst: bool): string =
       result.add part
     else:
       result.add part.capitalizeAscii
+
+proc getNimName*(ctx: WitContext, str: string, capitalizeFirst: bool): string =
+  ctx.nameMap.withValue(str, name):
+    return name[].toCamelCase(capitalizeFirst)
+  return str.toCamelCase(capitalizeFirst)
 
 proc parseWitFunc(json: JsonNode, env: string, interfac: Option[int] = int.none): WitFunc =
   # echo &"parseWitFunc {env}, {json}"
