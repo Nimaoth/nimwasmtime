@@ -4,7 +4,8 @@ import wit_guest
 
 when defined(witRebuild):
   static: hint("Rebuilding test.wit")
-  importWit "test.wit"
+  importWit "wit":
+    world = "test-world"
 else:
   static: hint("Using cached test.wit (guest.nim)")
   include guest
@@ -54,6 +55,10 @@ proc start() =
   echo "b1: ", b1, ", ", b2
   let b3 = merge(b1.ensureMove, b2.ensureMove)
   echo "b3: ", b3
+  b3.write(@@[42.uint8, 69])
   b3.write(@@[127.uint8, 63])
 
   echo b3.read(9)
+
+proc foo() =
+  echo "plugin1: foo"

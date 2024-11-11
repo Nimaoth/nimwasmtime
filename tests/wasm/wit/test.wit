@@ -1,6 +1,5 @@
 package my:test-package;
 
-
 interface test-types {
 
   record foo {
@@ -65,6 +64,10 @@ interface test-interface {
   }
 }
 
+// interface plugin1 {
+//   foo: func();
+// }
+
 world test-world {
   use test-types.{bar, baz};
 
@@ -79,6 +82,8 @@ world test-world {
   }
 
   import test-interface;
+  // export plugin1;
+  export my:plugin1/plugin1-api;
 
   export start: func();
   // export foo: func(f: bar) -> f32;

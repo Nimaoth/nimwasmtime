@@ -17,7 +17,8 @@ template typeId*(_: typedesc[MyBlob]): int = 69
 
 when defined(witRebuild):
   static: hint("Rebuilding test.wit")
-  importWit "wasm/test.wit", MyContext:
+  importWit "wasm/wit", MyContext:
+    world = "test-world"
     mapName "blob", MyBlob
 else:
   static: hint("Using cached test.wit (host.nim)")
@@ -102,16 +103,30 @@ proc main() =
     echo "[host][trap] Failed to link wasi: ", err.msg
     return
 
-  echo "[host] read file"
-  let wasmBytes = readFile("tests/wasm/testc.wasm")
-  let component = engine.newComponent(wasmBytes).okOr(err):
+  echo "[host] read file 1"
+  let component1 = engine.newComponent(readFile("tests/wasm/testc.wasm")).okOr(err):
+    echo "[host] Failed to create wasm component: ", err.msg
+    return
+
+  echo "[host] read file 2"
+  let component2 = engine.newComponent(readFile("tests/wasm/test_import.c.wasm")).okOr(err):
     echo "[host] Failed to create wasm component: ", err.msg
     return
 
   echo "[host] create instance"
   var instance: ptr ComponentInstanceT = nil
-  linker.instantiate(store.context, component, instance.addr, trap.addr).okOr(err):
+  linker.instantiate(store.context, component1, instance.addr, trap.addr).okOr(err):
     echo "[host] Failed to create component instance: ", err.msg
+    return
+
+  linker.defineInstance(store.context, component1, instance).okOr(err):
+    echo "[host] Failed to define instance in linker: ", err.msg
+    return
+
+  echo "[host] create instance"
+  var instance2: ptr ComponentInstanceT = nil
+  linker.instantiate(store.context, component2, instance2.addr, trap.addr).okOr(err):
+    echo "[host] Failed to create component instance 2: ", err.msg
     return
 
   trap.okOr(err):
@@ -121,6 +136,7 @@ proc main() =
   assert instance != nil
 
   instance.call(store.context, "start", [], 0)
+  instance2.call(store.context, "start", [], 0)
 
   echo "[host] ------------ Finished main"
 

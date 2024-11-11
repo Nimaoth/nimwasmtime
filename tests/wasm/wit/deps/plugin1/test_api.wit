@@ -1,0 +1,5 @@
+package my:plugin1;
+
+interface plugin1-api {
+  foo: func();
+}

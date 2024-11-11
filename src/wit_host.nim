@@ -13,7 +13,7 @@ func hostQuoteShell(s: string): string =
   else:
     result = quoteShell(s)
 
-macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap: static[Table[string, string]], dir: static[string], hostType: untyped): untyped =
+macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap: static[Table[string, string]], worldName: static[string], dir: static[string], hostType: untyped): untyped =
   let path = if witPath.isAbsolute:
     witPath
   else:
@@ -50,6 +50,8 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
   var defines = nnkStmtList.newTree()
   defineComponentFun[6] = defines
 
+  let world = ctx.getWorld(worldName)
+
   for t in ctx.types:
     if t.refIndex.isSome:
       continue
@@ -63,7 +65,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     else:
       discard
 
-  for fun in ctx.funcs:
+  for fun in world.funcs:
     var body = nnkStmtList.newTree()
 
     let funcNimName = case fun.kind
@@ -205,6 +207,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
 
 template importWit*(witPath: static[string], hostType: untyped, body: untyped): untyped =
   var cacheFile {.compiletime, inject.} = "host.nim"
+  var world {.compiletime, inject.} = ""
   var nameMap {.compiletime.} = initTable[string, string]()
   template mapName(name: static[string], newName: untyped): untyped =
     nameMap[name] = $newName
@@ -212,4 +215,4 @@ template importWit*(witPath: static[string], hostType: untyped, body: untyped): 
   static:
     body
 
-  importWitImpl(witPath, cacheFile, nameMap, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head, hostType)
+  importWitImpl(witPath, cacheFile, nameMap, world, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head, hostType)

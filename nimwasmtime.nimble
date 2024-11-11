@@ -75,9 +75,14 @@ proc getCommandLineParams(): string =
   return commandLineParams[3..^1].join(" ")
 
 task buildWasmComponent, "":
-  exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} ./tests/wasm/test.nim"
-  exec "wasm-tools component embed ./tests/wasm/test.wit --world test-world ./tests/wasm/testm.wasm -o ./tests/wasm/testme.wasm"
+  exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} \"--passL:-o tests/wasm/testm.wasm\" ./tests/wasm/test.nim"
+  exec "wasm-tools component embed ./tests/wasm/wit --world test-world ./tests/wasm/testm.wasm -o ./tests/wasm/testme.wasm"
   exec "wasm-tools component new ./tests/wasm/testme.wasm -o ./tests/wasm/testc.wasm --adapt ./tests/wasm/wasi_snapshot_preview1.reactor.wasm"
+
+task buildWasmComponent2, "":
+  exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} \"--passL:-o tests/wasm/test_import.m.wasm\" ./tests/wasm/test_import.nim"
+  exec "wasm-tools component embed ./tests/wasm/wit --world plugin1-world ./tests/wasm/test_import.m.wasm -o ./tests/wasm/test_import.me.wasm"
+  exec "wasm-tools component new ./tests/wasm/test_import.me.wasm -o ./tests/wasm/test_import.c.wasm --adapt ./tests/wasm/wasi_snapshot_preview1.reactor.wasm"
 
 before install:
   nimgenTask()

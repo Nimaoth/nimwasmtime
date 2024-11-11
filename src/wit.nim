@@ -70,6 +70,8 @@ type
   WitWorld* = object
     name*: string
     package*: int
+    funcs*: seq[WitFunc]
+    exports*: seq[WitFunc]
 
   WitPackage* = object
     name*: string
@@ -82,10 +84,14 @@ type
     types*: seq[WitUserType]
     flatSizeMap*: Table[int, int]
     interfaces*: seq[WitInterface]
-    funcs*: seq[WitFunc]
-    exports*: seq[WitFunc]
     useCustomBuiltinTypes*: bool
     nameMap*: Table[string, string]
+
+proc getWorld*(ctx: WitContext, name: string): lent WitWorld =
+  for w in ctx.worlds:
+    if w.name == name:
+      return w
+  error("Unknown world " & name)
 
 proc fromJsonHook*(self: var WitType, json: JsonNode) =
   case json.kind
@@ -137,8 +143,8 @@ proc parseWitFunc(json: JsonNode, env: string, interfac: Option[int] = int.none)
   result.env = env
   result.interfac = interfac
 
-proc collectFuncs(ctx: WitContext, json: JsonNode, package: int): seq[WitFunc] =
-  let package = ctx.packages[package]
+proc collectFuncs(ctx: WitContext, json: JsonNode, packageIdx: int): seq[WitFunc] =
+  let package = ctx.packages[packageIdx]
 
   for name, val in json:
     if val.hasKey("interface"):
@@ -150,7 +156,7 @@ proc collectFuncs(ctx: WitContext, json: JsonNode, package: int): seq[WitFunc] =
       let env = if ctx.interfaces[index].name == "":
         name
       else:
-        package.name & "/" & interfaceName
+        ctx.packages[ctx.interfaces[index].package].name & "/" & interfaceName
 
       for f in ctx.interfaces[index].funcs:
         var f = f
@@ -166,13 +172,14 @@ proc collectFuncsInRoot(ctx: WitContext, json: JsonNode) =
     var w = WitWorld()
     w.name = world["name"].getStr
     w.package = world["package"].getInt
-    ctx.worlds.add w
 
     if world.hasKey("imports"):
-      ctx.funcs.add ctx.collectFuncs(world["imports"], w.package)
+      w.funcs.add ctx.collectFuncs(world["imports"], w.package)
 
     if world.hasKey("exports"):
-      ctx.exports.add ctx.collectFuncs(world["exports"], w.package)
+      w.exports.add ctx.collectFuncs(world["exports"], w.package)
+
+    ctx.worlds.add w
 
 proc collectInterfaces(ctx: WitContext, json: JsonNode) =
   for interfac in json["interfaces"]:

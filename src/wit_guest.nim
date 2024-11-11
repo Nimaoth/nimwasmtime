@@ -13,17 +13,24 @@ func hostQuoteShell(s: string): string =
   else:
     result = quoteShell(s)
 
-macro wasmexport*(name: static[string], t: typed): untyped =
+macro wasmexport*(name: static[string], env: static[string], t: typed): untyped =
   if t.kind notin {nnkProcDef, nnkFuncDef}:
     error("Can only export procedures", t)
 
-  let attrib = &"""__attribute__((__export_name__("{name}"))) EMSCRIPTEN_KEEPALIVE"""
+  let module = env
+
+  let attrib = if module != "":
+    &"""__attribute__((__export_name__("{module}#{name}")))"""
+  else:
+    &"""__attribute__((__export_name__("{name}")))"""
+
+  # let attrib = &"""__attribute__((__export_name__("{name}"))) EMSCRIPTEN_KEEPALIVE"""
 
   let name = name.toCamelCase(false)
 
   let
     newProc = copyNimTree(t)
-    codeGen = nnkExprColonExpr.newTree(ident"codegendecl", newLit(attrib & " $# $#$#"))
+    codeGen = nnkExprColonExpr.newTree(ident"codegendecl", newLit(attrib & " EMSCRIPTEN_KEEPALIVE $# $#$#"))
   if newProc[4].kind == nnkEmpty:
     newProc[4] = nnkPragma.newTree(codeGen)
   else:
@@ -552,7 +559,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
 proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
   let importTempl = genAst():
-    proc foo(a: int): bool {.wasmexport("").} =
+    proc foo(a: int): bool {.wasmexport("", "").} =
       discard
 
   let importWrapperTempl = genAst():
@@ -601,6 +608,7 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
       funNode[0] = ident(fun.name.toCamelCase(false) & "Exported")
 
       funNode[4][0][1] = newLit(fun.name)
+      funNode[4][0][2] = newLit(fun.env)
 
       let retType = if flatFuncType.results.len == 0:
         ident"void"
@@ -746,7 +754,7 @@ proc genResourceLifetimeFuncs(ctx: WitContext, funcList: NimNode) =
     else:
       discard
 
-macro importWitImpl(witPath: static[string], cacheFile: static[string], dir: static[string]): untyped =
+macro importWitImpl(witPath: static[string], cacheFile: static[string], worldName: static[string], dir: static[string]): untyped =
   let path = if witPath.isAbsolute:
     witPath
   else:
@@ -772,10 +780,13 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], dir: sta
 
   ctx.genResourceLifetimeFuncs(funcList)
 
-  for f in ctx.funcs:
+  let world = ctx.getWorld(worldName)
+
+  for f in world.funcs:
     ctx.genFunction(funcList, f)
 
-  for f in ctx.exports:
+  for f in world.exports:
+    echo f
     ctx.genExport(funcList, f)
 
   let code = genAst(typeSection, funcList):
@@ -799,5 +810,11 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], dir: sta
 
   return code
 
-template importWit*(witPath: static[string], cacheFile: static[string] = "guest.nim"): untyped =
-  importWitImpl(witPath, cacheFile, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head)
+template importWit*(witPath: static[string], body: untyped): untyped =
+  var cacheFile {.compiletime, inject.} = "guest.nim"
+  var world {.compiletime, inject.} = ""
+
+  static:
+    body
+
+  importWitImpl(witPath, cacheFile, world, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head)

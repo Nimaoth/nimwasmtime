@@ -406,7 +406,7 @@ type
                                   a4: ptr ComponentValT; a5: csize_t): ptr WasmTrapT {.
       cdecl.}                ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:203:24
   ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:233:46
-  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:241:42
+  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:247:42
   GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
     name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16
@@ -1450,6 +1450,10 @@ proc defineResource*(linker: ptr ComponentLinkerT; env_name: cstring;
 proc resourceNew*(context: ptr ComponentContextT; user_id: csize_t;
                   resource: ptr ComponentValT; data: pointer): ptr ErrorT {.
     cdecl, importc: "wasmtime_component_resource_new".}
+proc defineInstance*(linker: ptr ComponentLinkerT;
+                     context: ptr ComponentContextT; component: ptr ComponentT;
+                     instance: ptr ComponentInstanceT): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_linker_define_instance".}
 proc instantiate*(linker: ptr ComponentLinkerT; context: ptr ComponentContextT;
                   component: ptr ComponentT;
                   instance_out: ptr ptr ComponentInstanceT;
