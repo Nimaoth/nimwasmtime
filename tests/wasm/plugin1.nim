@@ -3,12 +3,13 @@ import std/[macros, options, unicode]
 import wit_guest
 
 when defined(witRebuild):
-  static: hint("Rebuilding test.wit")
+  static: hint("Rebuilding wit")
   importWit "wit":
-    world = "test-world"
+    world = "plugin1"
+    cacheFile = "plugin1_guest.nim"
 else:
-  static: hint("Using cached test.wit (guest.nim)")
-  include guest
+  static: hint("Using cached wit")
+  include plugin1_guest
 
 proc emscripten_notify_memory_growth*(a: int32) {.exportc.} =
   discard
@@ -41,7 +42,7 @@ proc start() =
   testNoParams()
 
   echo "[guest] call testNoParams2"
-  testNoParams2()
+  testNoParams2(Baz(x: ws"uiae", c: Foo(x: ws"xvlc"), f: @@[Foo(x: ws"1"), Foo(x: ws"9"), Foo(x: ws"6")], d: (111, 222.333), gbruh: @@[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some))
 
   echo "[guest] call testSimpleParams"
   testSimpleParams(-123, -456, -789, -1592648, 123, 456, 789, 1592648, 147.258, 369.852, true, "ä".runeAt(0))
@@ -62,3 +63,6 @@ proc start() =
 
 proc foo() =
   echo "plugin1: foo"
+
+proc findStuff() =
+  echo "plugin1: findStuff "

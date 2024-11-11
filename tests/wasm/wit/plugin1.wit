@@ -1,0 +1,15 @@
+package my:test-package;
+
+world plugin1 {
+  use my:host/test-types.{bar, baz};
+
+  import env: interface {
+    use my:host/test-types.{bar, baz};
+    test-no-params2: func(b: baz);
+  }
+
+  import my:host/test-interface;
+  export my:plugin1/api;
+
+  export start: func();
+}

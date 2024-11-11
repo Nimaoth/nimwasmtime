@@ -1,0 +1,11 @@
+package my:test-package;
+
+world host {
+
+  import env: interface {
+    use my:host/test-types.{bar, baz};
+    test-no-params2: func(b: baz);
+  }
+
+  import my:host/test-interface;
+}

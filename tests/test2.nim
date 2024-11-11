@@ -18,7 +18,7 @@ template typeId*(_: typedesc[MyBlob]): int = 69
 when defined(witRebuild):
   static: hint("Rebuilding test.wit")
   importWit "wasm/wit", MyContext:
-    world = "test-world"
+    world = "host"
     mapName "blob", MyBlob
 else:
   static: hint("Using cached test.wit (host.nim)")
@@ -45,8 +45,8 @@ proc testInterfacePrint(host: MyContext, store: ptr ComponentContextT, lhs: var 
 proc testInterfaceBarBaz(host: MyContext, store: ptr ComponentContextT, a: int32, b: float32): float32 =
   result = a.float32 - b
 
-proc envTestNoParams2(host: MyContext, store: ptr ComponentContextT) =
-  echo "envTestNoParams2"
+proc envTestNoParams2(host: MyContext, store: ptr ComponentContextT, b: Baz) =
+  echo "envTestNoParams2 ", b
 
 proc testInterfaceTestNoParams(host: MyContext, store: ptr ComponentContextT) =
   echo "testInterfaceTestNoParams"
@@ -104,12 +104,12 @@ proc main() =
     return
 
   echo "[host] read file 1"
-  let component1 = engine.newComponent(readFile("tests/wasm/testc.wasm")).okOr(err):
+  let component1 = engine.newComponent(readFile("tests/wasm/plugin1.c.wasm")).okOr(err):
     echo "[host] Failed to create wasm component: ", err.msg
     return
 
   echo "[host] read file 2"
-  let component2 = engine.newComponent(readFile("tests/wasm/test_import.c.wasm")).okOr(err):
+  let component2 = engine.newComponent(readFile("tests/wasm/plugin2.c.wasm")).okOr(err):
     echo "[host] Failed to create wasm component: ", err.msg
     return
 

@@ -1,4 +1,4 @@
-package my:test-package;
+package my:host;
 
 interface test-types {
 
@@ -50,16 +50,16 @@ interface test-types {
   }
 }
 
-world plugin1 {
-  use test-types.{bar, baz};
+interface test-interface {
+  test-no-params: func();
+  test-simple-params: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char);
+  test-simple-params-ptr: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char, m: s32, n: s32, o: s32, p: s32, q: s32);
 
-  import env: interface {
-    use test-types.{bar, baz};
-    test-no-params2: func();
+  resource blob {
+    constructor(init: list<u8>);
+    write: func(bytes: list<u8>);
+    read: func(n: s32) -> list<u8>;
+    merge: static func(lhs: blob, rhs: blob) -> blob;
+    print: static func(lhs: borrow<blob>, rhs: borrow<blob>);
   }
-
-  import my:host/test-interface;
-  export my:plugin1/api;
-
-  export start: func();
 }
