@@ -1,5 +1,5 @@
 package my:plugin1;
 
-interface plugin1-api {
+interface api {
   foo: func();
 }

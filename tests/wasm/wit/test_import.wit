@@ -1,11 +1,7 @@
 package my:test-package;
 
-// interface plugin1 {
-//   foo: func();
-// }
-
-world plugin1-world {
-  import my:plugin1/plugin1-api;
+world plugin2 {
+  import my:plugin1/api;
 
   export start: func();
 }
