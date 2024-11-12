@@ -28,7 +28,9 @@ type
     StackOverflow = 0, MemoryOutOfBounds = 1, HeapMisaligned = 2,
     TableOutOfBounds = 3, IndirectCallToNull = 4, BadSignature = 5,
     IntegerOverflow = 6, IntegerDivisionByZero = 7, BadConversionToInteger = 8,
-    UnreachableCodeReached = 9, Interrupt = 10, OutOfFuel = 11
+    UnreachableCodeReached = 9, Interrupt = 10, AlwaysTrapAdapter = 11,
+    OutOfFuel = 12, AtomicWaitNonSharedMemory = 13, NullReference = 14,
+    ArrayOutOfBounds = 15, AllocationTooLarge = 16, CannotEnterComponent = 17
 type
   StructWasmtimeContext* = object
 type

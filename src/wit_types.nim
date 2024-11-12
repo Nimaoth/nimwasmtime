@@ -21,7 +21,13 @@ type
 
 template `@@`*[T, S](arr: array[S, T]): WitList[T] =
   let a = arr
-  WitList[T](data: cast[ptr UncheckedArray[T]](a[0].addr), len: arr.len)
+  WitList[T](data: cast[ptr UncheckedArray[T]](a[0].addr), len: a.len)
+
+func `@@`*[T](arr: openArray[T]): WitList[T] =
+  if arr.len > 0:
+    WitList[T](data: cast[ptr UncheckedArray[T]](arr[0].addr), len: arr.len)
+  else:
+    WitList[T](data: nil, len: 0)
 
 func wl*[T](data: ptr T, len: int): WitList[T] =
   WitList[T](data: cast[ptr UncheckedArray[T]](data), len: len)

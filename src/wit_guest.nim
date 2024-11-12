@@ -679,7 +679,10 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
         lowerCode.add freeCode
 
       if flatFuncType.resultsFlat:
-        discard
+        if flatFuncType.results.len > 0:
+          let t = flatFuncType.results[0].nimTypeName.ident
+          call = genAst(t, call):
+            cast[t](call)
       else:
         var loweredPtrArgs: seq[NimNode]
         var i = 0
@@ -786,7 +789,6 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], worldNam
     ctx.genFunction(funcList, f)
 
   for f in world.exports:
-    echo f
     ctx.genExport(funcList, f)
 
   let code = genAst(typeSection, funcList):
