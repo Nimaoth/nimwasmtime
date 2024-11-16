@@ -116,9 +116,42 @@ proc toCamelCase*(str: string, capitalizeFirst: bool): string =
       result.add part.capitalizeAscii
 
 proc getWitTypeName*(ctx: WitContext, typ: WitType): string =
+  defer:
+    echo "getWitTypeName ", typ, " -> ", result
   if typ.builtin != "":
     return typ.builtin
-  return ctx.types[typ.index].name
+  case ctx.types[typ.index].kind:
+
+  of Tuple:
+    result = "tuple<"
+    for i, f in ctx.types[typ.index].fields:
+      if i > 0:
+        result.add ", "
+      result.add ctx.getWitTypeName(f.typ)
+
+  of Option:
+    return "option<" & ctx.getWitTypeName(ctx.types[typ.index].optionTarget) & ">"
+
+  of List:
+    return "list<" & ctx.getWitTypeName(ctx.types[typ.index].listTarget) & ">"
+
+  of Result:
+    if ctx.types[typ.index].resultErrTarget.builtin == "void":
+      return "result<" & ctx.getWitTypeName(ctx.types[typ.index].resultOkTarget) & ">"
+
+    return "result<" & ctx.getWitTypeName(ctx.types[typ.index].resultOkTarget) & ", " & ctx.getWitTypeName(ctx.types[typ.index].resultErrTarget) & ">"
+
+  of Handle:
+    let targetType = ctx.types[typ.index].handleTarget
+    if ctx.types[typ.index].owned:
+      return ctx.getWitTypeName(targetType)
+    else:
+      return "borrow<" & ctx.getWitTypeName(ctx.types[typ.index].handleTarget) & ">"
+
+  else:
+    if ctx.types[typ.index].name == "":
+      error("type without name: " & $ctx.types[typ.index])
+    return ctx.types[typ.index].name
 
 proc getNimName*(ctx: WitContext, str: string, capitalizeFirst: bool): string =
   ctx.nameMap.withValue(str, name):

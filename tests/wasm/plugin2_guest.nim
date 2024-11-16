@@ -119,6 +119,13 @@ proc findStuff*(s: WitList[WitString]; cb: sink Callback; cb2: sink Callback): W
   result = wl(cast[ptr typeof(result[0])](cast[ptr int32](retArea[0].addr)[]),
               cast[ptr int32](retArea[4].addr)[])
 
+proc apiCallLaterImported(a0: int32): void {.
+    wasmimport("call-later", "my:plugin1/api").}
+proc callLater*(cb: sink Callback): void {.nodestroy.} =
+  var arg0: int32
+  arg0 = cast[int32](cb.handle - 1)
+  apiCallLaterImported(arg0)
+
 proc testInterfaceTestNoParamsImported(): void {.
     wasmimport("test-no-params", "my:host/test-interface").}
 proc testNoParams*(): void {.nodestroy.} =
@@ -291,14 +298,18 @@ proc handleCallbackExported(a0: int32; a1: int32; a2: int32): int32 {.
   cast[int32](handleCallback(cb, s))
 
 type
-  OnCallback = proc (s: WitString): bool
+  OnCallback = object
+    cb: proc (s: WitString): bool {.gcsafe, raises: [].}
 proc handleCallback(cb: Callback; s: WitString): bool =
-  cast[ptr CallbackData[OnCallback]](cb.data).data(s)
+  cast[ptr CallbackData[OnCallback]](cb.data).data.cb(s)
 
 var handleKeyCallback: uint32 = addCallback(
     ws("my:test-package/callback-handlers"), ws("handle-callback"))
 proc handleKey(_: typedesc[OnCallback]): uint32 =
   handleKeyCallback
+
+template sig(_: typedesc[OnCallback]): untyped =
+  typeof(OnCallback().cb)
 
 proc handleCallback2(cb: Callback; s: int32): int32
 proc handleCallback2Exported(a0: int32; a1: int32): int32 {.
@@ -311,11 +322,42 @@ proc handleCallback2Exported(a0: int32; a1: int32): int32 {.
   cast[int32](handleCallback2(cb, s))
 
 type
-  OnCallback2 = proc (s: int32): int32
+  OnCallback2 = object
+    cb: proc (s: int32): int32 {.gcsafe, raises: [].}
 proc handleCallback2(cb: Callback; s: int32): int32 =
-  cast[ptr CallbackData[OnCallback2]](cb.data).data(s)
+  cast[ptr CallbackData[OnCallback2]](cb.data).data.cb(s)
 
 var handleKeyCallback2: uint32 = addCallback(
     ws("my:test-package/callback-handlers"), ws("handle-callback2"))
 proc handleKey(_: typedesc[OnCallback2]): uint32 =
   handleKeyCallback2
+
+template sig(_: typedesc[OnCallback2]): untyped =
+  typeof(OnCallback2().cb)
+
+proc handleOnLater(cb: Callback; o: Option[WitString]): void
+proc handleOnLaterExported(a0: int32; a1: int32; a2: int32; a3: int32): void {.
+    wasmexport("handle-on-later", "my:test-package/callback-handlers").} =
+  var
+    cb: Callback
+    o: Option[WitString]
+  cb.handle = a0 + 1
+  if a1 != 0:
+    var temp: WitString
+    temp = ws(cast[ptr char](a2), a3)
+    o = temp.some
+  handleOnLater(cb, o)
+
+type
+  OnOnLater = object
+    cb: proc (o: Option[WitString]): void {.gcsafe, raises: [].}
+proc handleOnLater(cb: Callback; o: Option[WitString]): void =
+  cast[ptr CallbackData[OnOnLater]](cb.data).data.cb(o)
+
+var handleKeyOnLater: uint32 = addCallback(
+    ws("my:test-package/callback-handlers"), ws("handle-on-later"))
+proc handleKey(_: typedesc[OnOnLater]): uint32 =
+  handleKeyOnLater
+
+template sig(_: typedesc[OnOnLater]): untyped =
+  typeof(OnOnLater().cb)

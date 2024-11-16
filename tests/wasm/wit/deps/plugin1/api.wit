@@ -4,6 +4,7 @@ interface callbacks {
   use my:host/callback-types.{callback};
   invoke-callback: func(cb: borrow<callback>, s: string) -> bool;
   invoke-callback2: func(cb: borrow<callback>, s: s32) -> s32;
+  invoke-on-later: func(cb: borrow<callback>, o: option<string>);
 }
 
 interface api {
@@ -14,4 +15,7 @@ interface api {
   /// @callback cb invoke-callback
   /// @callback cb2 invoke-callback2
   find-stuff: func(s: list<string>, cb: callback, cb2: callback) -> list<string>;
+
+  /// @callback cb invoke-on-later
+  call-later: func(cb: callback);
 }

@@ -84,7 +84,7 @@ proc callbackTypesNewCallback(host: MyContext, store: ptr ComponentContextT, dat
     host.callbacks.withValue(drop, fun):
       echo "Call drop for ", data
       fun[].call(store, [data.toVal], []).okOr(err):
-        echo "Failed to call dealloc callback for key ", key, ": ", err
+        echo "Failed to call dealloc callback for key ", key, ": ", err.msg
     do:
       echo "No dealloc callback registered for key ", key
 
@@ -169,18 +169,14 @@ proc main(): WasmtimeResult[void] =
     echo "[host] Failed to create wasm component: ", err.msg
     return
 
+  # Define gue functions for callbacks
   component1.iterateImports proc(path: string, name: string, typ: ComponentItemType) =
-    echo "path: ", path, ", name: ", name, ", typ: ", typ
+    # echo "path: ", path, ", name: ", name, ", typ: ", typ
     if (path == "callbacks" or path.endsWith("/callbacks")) and name.startsWith("invoke-"):
-      echo "========================== define"
+      echo "define path: ", path, ", name: ", name, ", typ: ", typ
       let e = linker.defineFunc(path, name):
-        echo "[host] ----------------- ", path, "#", name, ": ", parameters
+        # echo "[host] ----------------- ", path, "#", name, ": ", parameters
         let cb = ?store.resourceHostData(parameters[0].addr, Callback)
-        # type Callback = object
-        #   data: uint32
-        #   key: uint32
-
-        # let cb = parameters[0].to(Callback)
         ctx.callbacks.withValue(cb.key, fun):
           ?fun[].call(store, parameters, results)
         do:
@@ -216,10 +212,10 @@ proc main(): WasmtimeResult[void] =
 
   assert instance != nil
 
-  ctx.currentInstance = instance
-  instance.call(store.context, "start", [], 0)
   ctx.currentInstance = instance2
   instance2.call(store.context, "start", [], 0)
+  ctx.currentInstance = instance
+  instance.call(store.context, "start", [], 0)
 
   echo "[host] ------------ Finished main"
 

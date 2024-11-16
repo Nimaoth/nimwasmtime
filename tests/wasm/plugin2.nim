@@ -1,4 +1,4 @@
-import std/[macros, options, unicode, sugar, tables, strutils, genasts, strformat, os]
+import std/[macros, options, unicode, sugar, tables, strutils, genasts, strformat, os, typetraits]
 
 import wit_guest, wit, wit_gen
 
@@ -35,10 +35,13 @@ proc genCallbackGlue(ctx: WitContext, world: WitWorld, importSection: var NimNod
 
     let code = genAst(typeName, handleIdent, handleKeyIdent, handleName, returnType, callbackHandlersInterface,
         parameters = ident"parameters", args = ident"args", cb = ident"cb"):
-      type typeName = proc(parameters): returnType
-      proc handleIdent(cb: Callback, parameters): returnType = cast[ptr CallbackData[typeName]](cb.data).data(args)
+      type typeName = object
+        cb: proc(parameters): returnType {.gcsafe, raises: [].}
+      proc handleIdent(cb: Callback, parameters): returnType =
+        cast[ptr CallbackData[typeName]](cb.data).data.cb(args)
       var handleKeyIdent: uint32 = addCallback(ws(callbackHandlersInterface), ws(handleName))
       proc handleKey(_: typedesc[typeName]): uint32 = handleKeyIdent
+      template sig(_: typedesc[typeName]): untyped = typeof(typeName().cb)
 
     var parameters: seq[NimNode]
     var args: seq[NimNode]
@@ -101,7 +104,7 @@ proc deallocCallback(data: uint32) =
     let drop = cast[ptr DropImpl](data)
     drop[](cast[pointer](data))
 
-proc wrapCallback[T](cb: T): Callback =
+proc wrapCallback[K](T: typedesc, cb: K): Callback =
   let cc = create(CallbackData[T])
   proc drop(p: pointer) {.cdecl.} =
     echo "plugin2: drop ", cast[int](p)
@@ -109,12 +112,12 @@ proc wrapCallback[T](cb: T): Callback =
     `=destroy`(p[])
     dealloc(p)
 
-  cc[] = CallbackData[T](drop: drop, data: cb)
+  cc[] = CallbackData[T](drop: drop, data: T(cb: cb))
   newCallback(cast[uint32](cc), T.handleKey, deallocCallbackKey)
 
-proc findStuff(l: WitList[WitString], cb: OnCallback): WitList[WitString] =
-  let cb = wrapCallback(cb)
-  let cb2 = wrapCallback proc(a: int32): int32 = a * a
+proc findStuff(l: WitList[WitString], cb: OnCallback.sig): WitList[WitString] =
+  let cb = OnCallback.wrapCallback(cb)
+  let cb2 = OnCallback2.wrapCallback proc(a: int32): int32 = a * a
   findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], cb, cb2)
 
 proc NimMain() {.importc.}
@@ -127,7 +130,12 @@ proc start() =
   echo "plugin2: start"
   foo()
   echo "plugin2: mid"
-  echo "plugin2: -> ", findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], (s) => s.len mod 2 == 1)
+  echo "plugin2: -> ", findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], (s) {.closure, gcsafe, raises: [].} => s.len mod 2 == 1)
   echo "===================================="
-  echo "plugin2: -> ", findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], (s) => s.len mod 2 == 0)
+  echo "plugin2: -> ", findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], (s) {.closure, gcsafe, raises: [].} => s.len mod 2 == 0)
   echo "plugin2: end"
+
+  let cb = OnOnLater.wrapCallback proc(a: Option[WitString]): void =
+    echo "plugin2: later ", a
+
+  callLater(cb)

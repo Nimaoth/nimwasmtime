@@ -320,6 +320,24 @@ proc invokeCallback2*(cb: Callback; s: int32): int32 {.nodestroy.} =
   let res = callbacksInvokeCallback2Imported(arg0, arg1)
   result = cast[int32](res)
 
+proc callbacksInvokeOnLaterImported(a0: int32; a1: int32; a2: int32; a3: int32): void {.
+    wasmimport("invoke-on-later", "my:plugin1/callbacks").}
+proc invokeOnLater*(cb: Callback; o: Option[WitString]): void {.nodestroy.} =
+  var
+    arg0: int32
+    arg1: int32
+    arg2: int32
+    arg3: int32
+  arg0 = cast[int32](cb.handle - 1)
+  arg1 = o.isSome.int32
+  if o.isSome:
+    if o.get.len > 0:
+      arg2 = cast[int32](o.get[0].addr)
+    else:
+      arg2 = 0
+    arg3 = o.get.len
+  callbacksInvokeOnLaterImported(arg0, arg1, arg2, arg3)
+
 proc start(): void
 proc startExported(): void {.wasmexport("start", "").} =
   start()
@@ -347,3 +365,10 @@ proc findStuffExported(a0: int32; a1: int32; a2: int32; a3: int32): int32 {.
     cast[ptr int32](findStuffRetArea[0].addr)[] = 0
   cast[ptr int32](findStuffRetArea[4].addr)[] = res.len
   cast[int32](findStuffRetArea[0].addr)
+
+proc callLater(cb: sink Callback): void
+proc callLaterExported(a0: int32): void {.
+    wasmexport("call-later", "my:plugin1/api").} =
+  var cb: Callback
+  cb.handle = a0 + 1
+  callLater(cb)

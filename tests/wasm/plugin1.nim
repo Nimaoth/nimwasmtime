@@ -40,6 +40,8 @@ proc emscripten_notify_memory_growth*(a: int32) {.exportc.} =
 proc NimMain() {.importc.}
 proc emscripten_stack_init() {.importc.}
 
+var gcb: Callback
+
 proc start() =
   emscripten_stack_init()
   NimMain()
@@ -67,6 +69,10 @@ proc start() =
 
   echo b3.read(9)
 
+  echo "plugin1: call later"
+  invokeOnLater(gcb, some(ws"jo"))
+  echo "plugin1: call later done"
+
 proc foo() =
   echo "plugin1: foo"
 
@@ -79,3 +85,6 @@ proc findStuff(s: WitList[WitString], cb: sink Callback, cb2: sink Callback): Wi
 
   echo "plugin1: ", invokeCallback2(cb2, res.len.int32)
   @@res
+
+proc callLater(cb: sink Callback) =
+  gcb = cb.ensureMove
