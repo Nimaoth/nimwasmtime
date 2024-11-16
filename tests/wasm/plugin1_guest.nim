@@ -46,12 +46,21 @@ type
     j*: Voodoo
   Blob* = object
     handle*: int32
+  Callback* = object
+    handle*: int32
 proc testInterfaceBlobDrop(a: int32): void {.
     wasmimport("[resource-drop]blob", "my:host/test-interface").}
 proc `=copy`*(a: var Blob; b: Blob) {.error.}
 proc `=destroy`*(a: Blob) =
   if a.handle != 0:
     testInterfaceBlobDrop(a.handle - 1)
+
+proc callbackTypesCallbackDrop(a: int32): void {.
+    wasmimport("[resource-drop]callback", "my:host/callback-types").}
+proc `=copy`*(a: var Callback; b: Callback) {.error.}
+proc `=destroy`*(a: Callback) =
+  if a.handle != 0:
+    callbackTypesCallbackDrop(a.handle - 1)
 
 proc envTestNoParams2Imported(a0: int32): void {.
     wasmimport("test-no-params2", "env").}
@@ -171,6 +180,27 @@ proc testSimpleParamsPtr*(a: int8; b: int16; c: int32; d: int64; e: uint8;
   cast[ptr int32](retArea[72].addr)[] = cast[int32](q)
   testInterfaceTestSimpleParamsPtrImported(cast[int32](retArea[0].addr))
 
+proc testInterfaceAddCallbackImported(a0: int32; a1: int32; a2: int32; a3: int32): int32 {.
+    wasmimport("add-callback", "my:host/test-interface").}
+proc addCallback*(env: WitString; name: WitString): uint32 {.nodestroy.} =
+  var
+    arg0: int32
+    arg1: int32
+    arg2: int32
+    arg3: int32
+  if env.len > 0:
+    arg0 = cast[int32](env[0].addr)
+  else:
+    arg0 = 0
+  arg1 = env.len
+  if name.len > 0:
+    arg2 = cast[int32](name[0].addr)
+  else:
+    arg2 = 0
+  arg3 = name.len
+  let res = testInterfaceAddCallbackImported(arg0, arg1, arg2, arg3)
+  result = cast[uint32](res)
+
 proc testInterfaceNewBlobImported(a0: int32; a1: int32): int32 {.
     wasmimport("[constructor]blob", "my:host/test-interface").}
 proc newBlob*(init: WitList[uint8]): Blob {.nodestroy.} =
@@ -234,6 +264,62 @@ proc print*(lhs: Blob; rhs: Blob): void {.nodestroy.} =
   arg1 = cast[int32](rhs.handle - 1)
   testInterfacePrintImported(arg0, arg1)
 
+proc callbackTypesNewCallbackImported(a0: int32; a1: int32; a2: int32): int32 {.
+    wasmimport("[constructor]callback", "my:host/callback-types").}
+proc newCallback*(data: uint32; key: uint32; drop: uint32): Callback {.nodestroy.} =
+  var
+    arg0: int32
+    arg1: int32
+    arg2: int32
+  arg0 = cast[int32](data)
+  arg1 = cast[int32](key)
+  arg2 = cast[int32](drop)
+  let res = callbackTypesNewCallbackImported(arg0, arg1, arg2)
+  result.handle = res + 1
+
+proc callbackTypesDataImported(a0: int32): int32 {.
+    wasmimport("[method]callback.data", "my:host/callback-types").}
+proc data*(self: Callback): uint32 {.nodestroy.} =
+  var arg0: int32
+  arg0 = cast[int32](self.handle - 1)
+  let res = callbackTypesDataImported(arg0)
+  result = cast[uint32](res)
+
+proc callbackTypesKeyImported(a0: int32): int32 {.
+    wasmimport("[method]callback.key", "my:host/callback-types").}
+proc key*(self: Callback): uint32 {.nodestroy.} =
+  var arg0: int32
+  arg0 = cast[int32](self.handle - 1)
+  let res = callbackTypesKeyImported(arg0)
+  result = cast[uint32](res)
+
+proc callbacksInvokeCallbackImported(a0: int32; a1: int32; a2: int32): int32 {.
+    wasmimport("invoke-callback", "my:plugin1/callbacks").}
+proc invokeCallback*(cb: Callback; s: WitString): bool {.nodestroy.} =
+  var
+    arg0: int32
+    arg1: int32
+    arg2: int32
+  arg0 = cast[int32](cb.handle - 1)
+  if s.len > 0:
+    arg1 = cast[int32](s[0].addr)
+  else:
+    arg1 = 0
+  arg2 = s.len
+  let res = callbacksInvokeCallbackImported(arg0, arg1, arg2)
+  result = res != 0
+
+proc callbacksInvokeCallback2Imported(a0: int32; a1: int32): int32 {.
+    wasmimport("invoke-callback2", "my:plugin1/callbacks").}
+proc invokeCallback2*(cb: Callback; s: int32): int32 {.nodestroy.} =
+  var
+    arg0: int32
+    arg1: int32
+  arg0 = cast[int32](cb.handle - 1)
+  arg1 = cast[int32](s)
+  let res = callbacksInvokeCallback2Imported(arg0, arg1)
+  result = cast[int32](res)
+
 proc start(): void
 proc startExported(): void {.wasmexport("start", "").} =
   start()
@@ -242,6 +328,22 @@ proc foo(): void
 proc fooExported(): void {.wasmexport("foo", "my:plugin1/api").} =
   foo()
 
-proc findStuff(): void
-proc findStuffExported(): void {.wasmexport("find-stuff", "my:plugin1/api").} =
-  findStuff()
+proc findStuff(s: WitList[WitString]; cb: sink Callback; cb2: sink Callback): WitList[
+    WitString]
+var findStuffRetArea: array[16, uint8]
+proc findStuffExported(a0: int32; a1: int32; a2: int32; a3: int32): int32 {.
+    wasmexport("find-stuff", "my:plugin1/api").} =
+  var
+    s: WitList[WitString]
+    cb: Callback
+    cb2: Callback
+  s = wl(cast[ptr typeof(s[0])](a0), a1)
+  cb.handle = a2 + 1
+  cb2.handle = a3 + 1
+  let res = findStuff(s, cb, cb2)
+  if res.len > 0:
+    cast[ptr int32](findStuffRetArea[0].addr)[] = cast[int32](res[0].addr)
+  else:
+    cast[ptr int32](findStuffRetArea[0].addr)[] = 0
+  cast[ptr int32](findStuffRetArea[4].addr)[] = res.len
+  cast[int32](findStuffRetArea[0].addr)

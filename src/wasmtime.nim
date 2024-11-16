@@ -155,6 +155,7 @@ proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, pa
       result.removePrefix("WASMTIME_STRATEGY_")
       result.removePrefix("WASMTIME_COMPONENT_VAL_KIND_")
       result.removePrefix("WASMTIME_COMPONENT_RESOURCE_KIND_")
+      result.removePrefix("WASMTIME_COMPONENT_ITEM_TYPE_")
     result.removePrefix("WASMTIME_")
     result = processName(result)
 
@@ -1125,7 +1126,7 @@ proc funcNew*[T](linker: ptr ComponentLinkerT, env: string, name: string,
 
   return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
 
-template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped) =
+template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped): untyped =
   block:
     proc cb(s: ptr ComponentContextT, data: ptr int, p: openArray[ComponentValT], r: var openArray[ComponentValT]): ptr WasmTrapT =
       proc inner(store {.inject.}: ptr ComponentContextT, parameters {.inject.}: openArray[ComponentValT], results {.inject.}: var openArray[ComponentValT]): WasmtimeResult[void] =
@@ -1141,7 +1142,8 @@ template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, bo
       nil
 
     let funcName {.inject.} = name
-    ?linker.funcNew[:int](env, funcName, cb)
+    let res = linker.funcNew[:int](env, funcName, cb)
+    res
 
 proc resourceHostData*(ctx: ptr ComponentContextT; val: ptr ComponentValT;
                        T: typedesc): WasmtimeResult[ptr T] =
@@ -1276,3 +1278,28 @@ proc resourceNew*[T](context: ptr ComponentContextT, data: sink T): WasmtimeResu
     return err.toResult(ComponentValT)
 
   return wasmtime.ok(res.ensureMove)
+
+proc getExport*(component: ptr ComponentT, name: string, parentIndex = ComponentExportIndexT.none): Option[ComponentExportIndexT] =
+  var index: ComponentExportIndexT
+  let parentIndex = parentIndex
+  let parentIndexPtr = if parentIndex.isSome: parentIndex.get.addr else: nil
+  if component.getExport(name.cstring, name.len.csize_t, parentIndexPtr, index.addr):
+    return index.some
+
+type
+  ComponentImportsCallback* = proc (path: string, name: string, typ: ComponentItemType)
+
+proc toString(s: cstring, l: csize_t): string =
+  result = newStringOfCap(l.int)
+  for i in 0..<l.int:
+    result.add s[i]
+
+proc iterateImports*(component: ptr ComponentT, cb: ComponentImportsCallback) =
+  var data = cb
+
+  proc cbInner(data: pointer, path: cstring, pathLen: csize_t, name: cstring, nameLen: csize_t, typ: ComponentItemTypeT) {.cdecl.} =
+    let cb = cast[ptr ComponentImportsCallback](data)[]
+    cb(toString(path, pathLen), toString(name, nameLen), typ.ComponentItemType)
+
+  component.iterateImports(cbInner, data.addr)
+

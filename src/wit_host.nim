@@ -176,9 +176,13 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
             ?store.resourceDrop(parameters[i].addr)
           body.add c
 
-    let code = genAst(linker, env = fun.env, name = fun.name, body):
-      linker.defineFunc(env, name):
-        body
+    let code = genAst(linker, env = fun.env, name = fun.name, body, e = ident"e"):
+      block:
+        let e = block:
+          linker.defineFunc(env, name):
+            body
+        if e.isErr:
+          return e
 
     defines.add code
 

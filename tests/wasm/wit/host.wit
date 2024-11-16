@@ -8,4 +8,5 @@ world host {
   }
 
   import my:host/test-interface;
+  import my:host/callback-types;
 }

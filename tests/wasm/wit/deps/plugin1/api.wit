@@ -1,7 +1,17 @@
 package my:plugin1;
 
+interface callbacks {
+  use my:host/callback-types.{callback};
+  invoke-callback: func(cb: borrow<callback>, s: string) -> bool;
+  invoke-callback2: func(cb: borrow<callback>, s: s32) -> s32;
+}
+
 interface api {
+  use my:host/callback-types.{callback};
+
   foo: func();
 
-  find-stuff: func();
+  /// @callback cb invoke-callback
+  /// @callback cb2 invoke-callback2
+  find-stuff: func(s: list<string>, cb: callback, cb2: callback) -> list<string>;
 }

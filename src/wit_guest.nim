@@ -236,8 +236,9 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ:
     outCode.add code
 
   of "s8", "s16", "s32", "s64", "u8", "u16", "u32", "u64", "f32", "f64":
-    let code = genAst(loweredArg = loweredArgs[0], param = param):
-      param = loweredArg
+    let t = ctx.getTypeName(typ, context)
+    let code = genAst(loweredArg = loweredArgs[0], param = param, t):
+      param = cast[t](loweredArg)
     outCode.add code
 
   of "string":
@@ -391,7 +392,7 @@ proc lift(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimN
     ctx.lift(loweredArgs[loweredI..^1], args[i], p.typ, outCode, context)
     loweredI += ctx.flatTypeSize(p.typ)
 
-proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
+proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
   let importTempl = genAst():
     proc foo(a: int): bool {.wasmimport("", "").}
 
@@ -557,7 +558,7 @@ proc genFunction(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
       funcList.add funNode
 
-proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
+proc genExport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
   let importTempl = genAst():
     proc foo(a: int): bool {.wasmexport("", "").} =
       discard
@@ -647,7 +648,7 @@ proc genExport(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           ident(p.name)
 
       for i, arg in args:
-        let t = ctx.getTypeName(fun.params[i].typ, Parameter)
+        let t = ctx.getTypeName(fun.params[i].typ, Field)
         vars.add nnkIdentDefs.newTree(arg, t, newEmptyNode())
         call.add arg
 
@@ -757,7 +758,19 @@ proc genResourceLifetimeFuncs(ctx: WitContext, funcList: NimNode) =
     else:
       discard
 
-macro importWitImpl(witPath: static[string], cacheFile: static[string], worldName: static[string], dir: static[string]): untyped =
+proc replace*(node: NimNode, key: NimNode, repl: seq[NimNode]) =
+  for i, c in node:
+    if c == key:
+      node.del(i)
+      for k, r in repl:
+        node.insert(i + k, r)
+    else:
+      c.replace(key, repl)
+
+macro importWitImpl(witPath: static[string], cacheFile: static[string], worldName: static[string], dir: static[string],
+    customCodeGen:static[proc(
+      ctx: WitContext, world: WitWorld, importSection: var NimNode, typeSection: var NimNode, funcList: var NimNode
+    )]): untyped =
   let path = if witPath.isAbsolute:
     witPath
   else:
@@ -777,26 +790,31 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], worldNam
   var ctx = newWitContext(json)
   ctx.useCustomBuiltinTypes = true
 
-  let typeSection = ctx.genTypeSection(host=false)
-
+  var typeSection = ctx.genTypeSection(host=false)
   var funcList = nnkStmtList.newTree()
+  var importSection = nnkStmtList.newTree()
 
   ctx.genResourceLifetimeFuncs(funcList)
 
   let world = ctx.getWorld(worldName)
 
   for f in world.funcs:
-    ctx.genFunction(funcList, f)
+    ctx.genImport(funcList, f)
 
   for f in world.exports:
     ctx.genExport(funcList, f)
 
-  let code = genAst(typeSection, funcList):
+  if customCodeGen != nil:
+    customCodeGen(ctx, world, importSection, typeSection, funcList)
+
+  let code = genAst(importSection, typeSection, funcList):
     {.push hint[DuplicateModuleImport]:off.}
     import std/[options]
     from std/unicode import Rune
     import results, wit_types, wit_runtime
     {.pop.}
+
+    importSection
 
     typeSection
 
@@ -815,8 +833,13 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], worldNam
 template importWit*(witPath: static[string], body: untyped): untyped =
   var cacheFile {.compiletime, inject.} = "guest.nim"
   var world {.compiletime, inject.} = ""
+  var customCodeGenCode {.compiletime, inject.}: proc(ctx: WitContext, world: WitWorld, importSection: var NimNode, typeSection: var NimNode, funcList: var NimNode)
+
+  template customCodeGen*(b: untyped) =
+    customCodeGenCode = proc(ctx {.inject.}: WitContext, world {.inject.}: WitWorld, importSection {.inject.}: var NimNode, typeSection {.inject.}: var NimNode, funcList {.inject.}: var NimNode) =
+      b
 
   static:
     body
 
-  importWitImpl(witPath, cacheFile, world, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head)
+  importWitImpl(witPath, cacheFile, world, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head, customCodeGenCode)

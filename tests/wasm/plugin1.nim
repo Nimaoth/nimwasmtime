@@ -1,4 +1,4 @@
-import std/[macros, options, unicode]
+import std/[macros, options, unicode, strutils]
 
 import wit_guest
 
@@ -37,7 +37,13 @@ proc emscripten_notify_memory_growth*(a: int32) {.exportc.} =
 #   echo "[guest][barz] ", f, ", ", g
 #   g
 
+proc NimMain() {.importc.}
+proc emscripten_stack_init() {.importc.}
+
 proc start() =
+  emscripten_stack_init()
+  NimMain()
+
   echo "[guest] call testNoParams"
   testNoParams()
 
@@ -64,5 +70,12 @@ proc start() =
 proc foo() =
   echo "plugin1: foo"
 
-proc findStuff() =
-  echo "plugin1: findStuff "
+proc findStuff(s: WitList[WitString], cb: sink Callback, cb2: sink Callback): WitList[WitString] =
+  echo "plugin1: findStuff ", s, ", ", cb
+  var res: seq[WitString]
+  for i in 0..<s.len:
+    if invokeCallback(cb, s[i]):
+      res.add s[i]
+
+  echo "plugin1: ", invokeCallback2(cb2, res.len.int32)
+  @@res

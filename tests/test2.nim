@@ -3,17 +3,35 @@ import wasmtime, wit_host
 
 type MyContext = ref object
   counter: int
+  callbacks: Table[uint32, ptr ComponentFuncT]
+  instanceToComponent: Table[ptr ComponentInstanceT, ptr ComponentT]
+  currentInstance: ptr ComponentInstanceT = nil
 
 type MyBlob = object
   i: int = 1
   blobName: string
   arr: seq[uint8]
 
+type Callback = object
+  data: uint32
+  key: uint32
+  drop: proc()
+
+# proc `=copy`*(a: var Callback, b: Callback) {.error.}
+# proc `=copy`*(a: var MyBlob, b: MyBlob) {.error.}
+
+proc `=destroy`*(b: Callback) =
+  if b.data != 0:
+    echo "--------------------------------- delete Callback ", b.data, b.key
+    b.drop()
+
 proc `=destroy`*(b: MyBlob) =
   if b.i != 0:
     echo "--------------------------------- delete MyBlob ", b
 
+# todo: auto generate unique type id for each resource
 template typeId*(_: typedesc[MyBlob]): int = 69
+template typeId*(_: typedesc[Callback]): int = 420
 
 when defined(witRebuild):
   static: hint("Rebuilding test.wit")
@@ -61,9 +79,50 @@ proc testInterfaceTestSimpleParamsPtr(host: MyContext, store: ptr ComponentConte
     j: float64, k: bool, l: Rune, m: int32, n: int32, o: int32, p: int32, q: int32) =
   echo &"{a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}, {m}, {n}, {o}, {p}, {q}"
 
+proc callbackTypesNewCallback(host: MyContext, store: ptr ComponentContextT, data: uint32, key: uint32, drop: uint32): Callback =
+  proc dropImpl() =
+    host.callbacks.withValue(drop, fun):
+      echo "Call drop for ", data
+      fun[].call(store, [data.toVal], []).okOr(err):
+        echo "Failed to call dealloc callback for key ", key, ": ", err
+    do:
+      echo "No dealloc callback registered for key ", key
+
+  Callback(data: data, key: key, drop: dropImpl)
+
+proc callbackTypesData(host: MyContext, store: ptr ComponentContextT, self: var Callback): uint32 =
+  self.data
+
+proc callbackTypesKey(host: MyContext, store: ptr ComponentContextT, self: var Callback): uint32 =
+  self.key
+
+proc testInterfaceAddCallback(host: MyContext, store: ptr ComponentContextT, env: string, name: string): uint32 =
+  echo &"testInterfaceAddCallback {env}, {name}"
+  let instance = host.currentInstance
+  var component: ptr ComponentT = host.instanceToComponent[instance]
+  let instanceIndex = if env != "":
+    component.getExport(env)
+  else:
+    ComponentExportIndexT.none
+
+  echo instanceIndex
+  let exportIndex = component.getExport(name, instanceIndex)
+  if exportIndex.isNone:
+    echo &"Failed to find export ", name, " in ", instanceIndex
+    return uint32.high
+
+  var fun: ptr ComponentFuncT = nil
+  if not instance.getFuncByIndex(store, exportIndex.get, fun.addr):
+    echo "Failed to get func"
+    return
+
+  let key = host.callbacks.len.uint32
+  host.callbacks[key] = fun
+  key
+
 proc call(instance: ptr ComponentInstanceT, context: ptr ComponentContextT, name: string, params: openArray[ComponentValT], nresults: static[int]) =
   var f: ptr ComponentFuncT = nil
-  if not instance.getFunc(context, cast[ptr uint8](name[0].addr), name.len.csize_t, f.addr):
+  if not instance.getFunc(context, name.cstring, name.len.csize_t, f.addr):
     echo &"[host] Failed to get func '{name}'"
     return
 
@@ -80,7 +139,7 @@ proc call(instance: ptr ComponentInstanceT, context: ptr ComponentContextT, name
   if nresults > 0:
     echo &"[host] call func {name} -> {res}"
 
-proc main() =
+proc main(): WasmtimeResult[void] =
   echo "[host] Start main"
   let config = newConfig()
   let engine = newEngine(config)
@@ -89,6 +148,8 @@ proc main() =
 
   let store = engine.newComponentStore(nil, nil)
   # defer: store.delete()
+
+  var instance2: ptr ComponentInstanceT = nil
 
   var ctx = MyContext(counter: 1)
   linker.defineComponent(ctx).okOr(err):
@@ -108,6 +169,25 @@ proc main() =
     echo "[host] Failed to create wasm component: ", err.msg
     return
 
+  component1.iterateImports proc(path: string, name: string, typ: ComponentItemType) =
+    echo "path: ", path, ", name: ", name, ", typ: ", typ
+    if (path == "callbacks" or path.endsWith("/callbacks")) and name.startsWith("invoke-"):
+      echo "========================== define"
+      let e = linker.defineFunc(path, name):
+        echo "[host] ----------------- ", path, "#", name, ": ", parameters
+        let cb = ?store.resourceHostData(parameters[0].addr, Callback)
+        # type Callback = object
+        #   data: uint32
+        #   key: uint32
+
+        # let cb = parameters[0].to(Callback)
+        ctx.callbacks.withValue(cb.key, fun):
+          ?fun[].call(store, parameters, results)
+        do:
+          echo "No callback registered for key ", cb.key
+          return
+        ?store.resourceDrop(parameters[0].addr)
+
   echo "[host] read file 2"
   let component2 = engine.newComponent(readFile("tests/wasm/plugin2.c.wasm")).okOr(err):
     echo "[host] Failed to create wasm component: ", err.msg
@@ -118,16 +198,17 @@ proc main() =
   linker.instantiate(store.context, component1, instance.addr, trap.addr).okOr(err):
     echo "[host] Failed to create component instance: ", err.msg
     return
+  ctx.instanceToComponent[instance] = component1
 
   linker.defineInstance(store.context, component1, instance).okOr(err):
     echo "[host] Failed to define instance in linker: ", err.msg
     return
 
   echo "[host] create instance"
-  var instance2: ptr ComponentInstanceT = nil
   linker.instantiate(store.context, component2, instance2.addr, trap.addr).okOr(err):
     echo "[host] Failed to create component instance 2: ", err.msg
     return
+  ctx.instanceToComponent[instance2] = component2
 
   trap.okOr(err):
     echo "[host][trap] Failed to create component instance: ", err.msg
@@ -135,9 +216,11 @@ proc main() =
 
   assert instance != nil
 
+  ctx.currentInstance = instance
   instance.call(store.context, "start", [], 0)
+  ctx.currentInstance = instance2
   instance2.call(store.context, "start", [], 0)
 
   echo "[host] ------------ Finished main"
 
-main()
+echo main()

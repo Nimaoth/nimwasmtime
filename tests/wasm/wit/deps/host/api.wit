@@ -54,6 +54,7 @@ interface test-interface {
   test-no-params: func();
   test-simple-params: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char);
   test-simple-params-ptr: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char, m: s32, n: s32, o: s32, p: s32, q: s32);
+  add-callback: func(env: string, name: string) -> u32;
 
   resource blob {
     constructor(init: list<u8>);
@@ -62,4 +63,23 @@ interface test-interface {
     merge: static func(lhs: blob, rhs: blob) -> blob;
     print: static func(lhs: borrow<blob>, rhs: borrow<blob>);
   }
+}
+
+interface callback-types {
+  // record callback {
+  //   data: u32,
+  //   key: u32,
+  //   drop: u32,
+  // }
+
+  resource callback {
+    constructor(data: u32, key: u32, drop: u32);
+    data: func() -> u32;
+    key: func() -> u32;
+  }
+}
+
+interface callbacks-impl {
+  use callback-types.{callback};
+  dealloc-callback: func(data: u32);
 }

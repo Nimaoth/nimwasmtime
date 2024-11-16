@@ -61,6 +61,7 @@ type
     resource*: WitType
     params*: seq[WitFuncParam]
     results*: seq[WitType]
+    docs*: string
 
   WitInterface* = object
     name*: string
@@ -114,6 +115,11 @@ proc toCamelCase*(str: string, capitalizeFirst: bool): string =
     else:
       result.add part.capitalizeAscii
 
+proc getWitTypeName*(ctx: WitContext, typ: WitType): string =
+  if typ.builtin != "":
+    return typ.builtin
+  return ctx.types[typ.index].name
+
 proc getNimName*(ctx: WitContext, str: string, capitalizeFirst: bool): string =
   ctx.nameMap.withValue(str, name):
     return name[].toCamelCase(capitalizeFirst)
@@ -137,6 +143,9 @@ proc parseWitFunc(json: JsonNode, env: string, interfac: Option[int] = int.none)
     result.resource = kind["static"].jsonTo(WitType)
   else:
     error("Invalid func kind " & $kind)
+
+  if json.hasKey("docs"):
+    result.docs = json["docs"]["contents"].getStr
 
   result.params = json["params"].elems.mapIt((it["name"].getStr, it["type"].jsonTo(WitType)))
   result.results = json["results"].elems.mapIt(it["type"].jsonTo(WitType))

@@ -2,6 +2,9 @@ package my:test-package;
 
 world plugin2 {
   import my:plugin1/api;
+  import my:host/test-interface;
+  export my:host/callbacks-impl;
+  export callback-handlers;
 
   export start: func();
 }
