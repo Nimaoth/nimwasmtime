@@ -570,7 +570,7 @@ proc `$`*(self: ptr WasmImporttypeT): string =
   result.add ": "
   result.add $self.type()
 
-proc toCamelCase*(str: string, capitalizeFirst: bool): string =
+proc toCamelCase(str: string, capitalizeFirst: bool): string =
   for i, part in enumerate(str.split("-")):
     if i == 0 and not capitalizeFirst:
       result.add part
@@ -1131,9 +1131,9 @@ proc funcNew*[T](linker: ptr ComponentLinkerT, env: string, name: string,
 
   return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
 
-type FuncCallback*[T] = proc(ctx: ptr ContextT, caller: ptr CallerT, data: ptr T, params: openArray[ValRawT]): ptr WasmTrapT
+type FuncCallback*[T] = proc(ctx: ptr ContextT, caller: ptr CallerT, data: ptr T, params: var openArray[ValRawT]): ptr WasmTrapT
 
-proc funcNewUnchecked*[T](linker: ptr LinkerT, env: string, name: string,
+proc defineFuncUnchecked*[T](linker: ptr LinkerT, env: string, name: string,
     callback: FuncCallback[T], ty: ptr WasmFunctypeT, data: ptr T = nil,
     finalizer: proc (a0: ptr T): void = nil): WasmtimeResult[void] =
 
@@ -1171,8 +1171,8 @@ proc funcNewUnchecked*[T](linker: ptr LinkerT, env: string, name: string,
 
 template defineFuncUnchecked*(linker: ptr LinkerT, env: string, name: string, ty: ptr WasmFunctypeT, body: untyped): WasmtimeResult[void] =
   block:
-    proc cb(s: ptr ContextT, c: ptr CallerT, data: ptr int, p: openArray[ValRawT]): ptr WasmTrapT =
-      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: openArray[ValRawT]): WasmtimeResult[void] =
+    proc cb(s: ptr ContextT, c: ptr CallerT, data: ptr int, p: var openArray[ValRawT]): ptr WasmTrapT =
+      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: var openArray[ValRawT]): WasmtimeResult[void] =
         # echo "[host] " & name & &" <- {parameters.len}"
         # defer:
         #   echo "[host] " & name & &" -> {parameters.len}"
@@ -1185,7 +1185,7 @@ template defineFuncUnchecked*(linker: ptr LinkerT, env: string, name: string, ty
       nil
 
     let funcName {.inject.} = name
-    let res = linker.funcNewUnchecked[:int](env, funcName, cb, ty)
+    let res = linker.defineFuncUnchecked[:int](env, funcName, cb, ty)
     res
 
 template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped): untyped =

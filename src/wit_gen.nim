@@ -290,7 +290,14 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[Ni
     ctx.lower(loweredArgs[loweredI..^1], args[i], r, outCode, context)
     loweredI += ctx.flatTypeSize(r)
 
-proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode, context: WitNimTypeNameContext, memoryAccess: proc(a: NimNode): NimNode, depth: int = 0) =
+type WitLiftContext* = object
+  memoryAccess*: proc(a: NimNode): NimNode = nil
+  resourceAccess*: proc(typ: WitType, arg: NimNode, param: NimNode): NimNode = nil
+
+proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode,
+    context: WitNimTypeNameContext,
+    liftContext: WitLiftContext,
+    depth: int = 0) =
   # let typ = ctx.despecialize(typ)
   # echo &"lift {param.repr}: {typ}, {loweredArgs[0].treeRepr}"
   case typ.builtin
@@ -319,7 +326,7 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
         param = ws(cast[ptr char](loweredPtr), loweredLen)
       outCode.add code
     else:
-      let mem = memoryAccess(loweredArgs[0])
+      let mem = if liftContext.memoryAccess != nil: liftContext.memoryAccess(loweredArgs[0]) else: loweredArgs[0]
       let code = genAst(mem, loweredLen = loweredArgs[1], param = param, p = ident("p" & $depth), i = ident("i" & $depth)):
         block:
           let p = cast[ptr UncheckedArray[char]](mem)
@@ -337,7 +344,7 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
           param = wl(cast[ptr typeof(param[0])](loweredPtr), loweredLen)
         outCode.add code
       else:
-        let mem = memoryAccess(loweredArgs[0])
+        let mem = if liftContext.memoryAccess != nil: liftContext.memoryAccess(loweredArgs[0]) else: loweredArgs[0]
 
         let i = ident("i" & $depth)
         let p = ident("p" & $depth)
@@ -356,7 +363,7 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
             k += param.byteSize
             c
 
-        ctx.lift(elemPtrs, elem, userType.listTarget, liftElem, context, memoryAccess, depth + 1)
+        ctx.lift(elemPtrs, elem, userType.listTarget, liftElem, context, liftContext, depth + 1)
 
         let code = genAst(mem, loweredLen = loweredArgs[1], param = param, p, i, liftElem):
           block:
@@ -384,7 +391,7 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       let child = ident"temp"
       let childDecl = nnkVarSection.newTree(nnkIdentDefs.newTree(child, t, newEmptyNode()))
       var lowerChild = nnkStmtList.newTree()
-      ctx.lift(loweredArgs[1..^1], child, userType.optionTarget, lowerChild, context, memoryAccess, depth + 1)
+      ctx.lift(loweredArgs[1..^1], child, userType.optionTarget, lowerChild, context, liftContext, depth + 1)
       let code = genAst(loweredTag = loweredArgs[0], param, lowerChild, t, childDecl, child):
         if loweredTag != 0:
           childDecl
@@ -401,8 +408,8 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       let errChildDecl = nnkVarSection.newTree(nnkIdentDefs.newTree(errChild, errType, newEmptyNode()))
       var lowerChild = nnkStmtList.newTree()
       var lowerError = nnkStmtList.newTree()
-      ctx.lift(loweredArgs[1..^1], okChild, userType.resultOkTarget, lowerChild, context, memoryAccess, depth + 1)
-      ctx.lift(loweredArgs[1..^1], errChild, userType.resultErrTarget, lowerError, context, memoryAccess, depth + 1)
+      ctx.lift(loweredArgs[1..^1], okChild, userType.resultOkTarget, lowerChild, context, liftContext, depth + 1)
+      ctx.lift(loweredArgs[1..^1], errChild, userType.resultErrTarget, lowerError, context, liftContext, depth + 1)
 
       let okCase = if okType.repr == "void":
         genAst(param, okType, errType):
@@ -445,7 +452,7 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
         let typ = ctx.getTypeName(f.typ, context)
         let temp = ident"temp"
         let tempDecl = nnkVarSection.newTree(nnkIdentDefs.newTree(temp, typ, newEmptyNode()))
-        ctx.lift(loweredArgs[1..^1], temp, f.typ, lowerCode, context, memoryAccess, depth + 1)
+        ctx.lift(loweredArgs[1..^1], temp, f.typ, lowerCode, context, liftContext, depth + 1)
         let caseCode = if typ.repr == "void":
           genAst(param, typ, t = objectTypeName, k = kindName):
             param = t(kind: k)
@@ -470,20 +477,23 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
       var loweredI = 0
       for i, f in userType.fields:
         let fieldAccess = nnkDotExpr.newTree(param, ident(f.name.toCamelCase(false)))
-        ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context, memoryAccess, depth + 1)
+        ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context, liftContext, depth + 1)
         loweredI += ctx.flatTypeSize(f.typ)
 
     of Tuple:
       var loweredI = 0
       for i, f in userType.fields:
         let fieldAccess = nnkBracketExpr.newTree(param, newLit(i))
-        ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context, memoryAccess, depth + 1)
+        ctx.lift(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context, liftContext, depth + 1)
         loweredI += ctx.flatTypeSize(f.typ)
 
     of Handle:
-      let code = genAst(arg = loweredArgs[0], param):
-        param.handle = arg + 1
-      outCode.add code
+      if liftContext.resourceAccess != nil:
+        outCode.add liftContext.resourceAccess(typ, loweredArgs[0], param)
+      else:
+        let code = genAst(arg = loweredArgs[0], param):
+          param.handle = arg + 1
+        outCode.add code
 
     else:
       error("Not implemented lift(" & $userType.kind & ")")
@@ -491,16 +501,16 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
   else:
     error("Not implemented lift(" & $typ.builtin & ")")
 
-proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode, context: WitNimTypeNameContext, memoryAccess: proc(a: NimNode): NimNode) =
+proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode, context: WitNimTypeNameContext, liftContext: WitLiftContext) =
   var loweredI = 0
   for i, r in results:
     # echo &"{i}, {loweredI}: lift {r}"
-    ctx.lift(loweredArgs[loweredI..^1], args[i], r, outCode, context, memoryAccess)
+    ctx.lift(loweredArgs[loweredI..^1], args[i], r, outCode, context, liftContext)
     loweredI += ctx.flatTypeSize(r)
 
-proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode, context: WitNimTypeNameContext, memoryAccess: proc(a: NimNode): NimNode) =
+proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode, context: WitNimTypeNameContext, liftContext: WitLiftContext) =
   var loweredI = 0
   for i, p in params:
     # echo &"{i}, {loweredI}: lift {p}"
-    ctx.lift(loweredArgs[loweredI..^1], args[i], p.typ, outCode, context, memoryAccess)
+    ctx.lift(loweredArgs[loweredI..^1], args[i], p.typ, outCode, context, liftContext)
     loweredI += ctx.flatTypeSize(p.typ)

@@ -7,7 +7,7 @@ world plugin1 {
   }
 
   import my:host/test-interface;
-  import my:plugin1/callbacks;
+  // import my:plugin1/callbacks;
   export my:plugin1/api;
 
   export start: func();

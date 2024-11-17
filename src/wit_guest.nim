@@ -204,7 +204,8 @@ proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           call = genAst(resultName, call):
             let resultName = call
           proc memoryAccess(a: NimNode): NimNode = a
-          ctx.lift(@[resultName], results, fun.results, liftCode, Return, memoryAccess)
+          var liftContext = WitLiftContext(memoryAccess: memoryAccess)
+          ctx.lift(@[resultName], results, fun.results, liftCode, Return, liftContext)
 
       else:
         call.add retAreaPtr
@@ -220,7 +221,8 @@ proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           i += r.byteSize
 
         proc memoryAccess(a: NimNode): NimNode = a
-        ctx.lift(loweredPtrArgs, results, fun.results, liftCode, Return, memoryAccess)
+        var liftContext = WitLiftContext(memoryAccess: memoryAccess)
+        ctx.lift(loweredPtrArgs, results, fun.results, liftCode, Return, liftContext)
 
       funNode[6] = nnkStmtList.newTree()
       funNode[6].add vars
@@ -339,7 +341,8 @@ proc genExport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
             ident("a" & $i)
 
         proc memoryAccess(a: NimNode): NimNode = a
-        ctx.lift(loweredArgs, args, fun.params, liftCode, Parameter, memoryAccess)
+        var liftContext = WitLiftContext(memoryAccess: memoryAccess)
+        ctx.lift(loweredArgs, args, fun.params, liftCode, Parameter, liftContext)
 
       else:
         # Args passed through pointer
@@ -354,7 +357,8 @@ proc genExport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           i += p.byteSize
 
         proc memoryAccess(a: NimNode): NimNode = a
-        ctx.lift(loweredPtrArgs, args, fun.params, liftCode, Parameter, memoryAccess)
+        var liftContext = WitLiftContext(memoryAccess: memoryAccess)
+        ctx.lift(loweredPtrArgs, args, fun.params, liftCode, Parameter, liftContext)
 
         let freeCode = genAst(retAreaSize):
           cabi_dealloc(a0, retAreaSize, 4) # todo: alignment

@@ -1,10 +1,55 @@
 import std/[strformat, os, macros, strutils, json, genasts, options, tables, sugar]
-import wit, wit_gen
+import wit, wit_gen, wasmtime
 
 when not declared(buildOS):
   const buildOS {.magic: "BuildOS".}: string = hostOS
 const windowsHost = buildOS == "windows"
 const cmdPrefix = when windowsHost: "cmd /E:ON /C " else: ""
+
+
+type
+  Slot = object
+    data: pointer
+    drop: proc(data: pointer, callDestroy: bool) {.cdecl.}
+
+  WasmModuleResources* = object
+    resources: seq[Slot]
+
+proc resourceNew*[T](self: var WasmModuleResources, data: sink T): WasmtimeResult[int32] =
+  proc dropImpl(b: pointer, callDestroy: bool) {.cdecl.} =
+    let b = cast[ptr T](b)
+    if callDestroy:
+      `=destroy`(b[])
+    deallocShared(b)
+
+  let d = createShared(T)
+  d[] = data.ensureMove
+
+  var index = self.resources.len
+  for i, r in self.resources:
+    if r.data == nil:
+      index = i
+      break
+
+  if index == self.resources.len:
+    self.resources.add Slot()
+
+  self.resources[index] = Slot(data: d, drop: dropImpl)
+
+  return wasmtime.ok(index.int32)
+
+proc resourceHostData*(self: var WasmModuleResources, handle: int32, T: typedesc): WasmtimeResult[ptr T] =
+  assert handle >= 0
+  assert handle < self.resources.len
+  assert self.resources[handle].data != nil
+  return wasmtime.ok(cast[ptr T](self.resources[handle].data))
+
+proc resourceDrop*(self: var WasmModuleResources, handle: int32, callDestroy: bool): WasmtimeResult[void] =
+  assert handle >= 0
+  assert handle < self.resources.len
+  assert self.resources[handle].data != nil
+  self.resources[handle].drop(self.resources[handle].data, callDestroy)
+  self.resources[handle] = Slot()
 
 func hostQuoteShell(s: string): string =
   ## Quote ``s``, so it can be safely passed to shell.
@@ -12,6 +57,35 @@ func hostQuoteShell(s: string): string =
     result = quoteShellWindows(s)
   else:
     result = quoteShell(s)
+
+
+proc coreTypeToFieldName(t: CoreType): string =
+  case t.normalize
+  of I32: "i32"
+  of I64: "i64"
+  of F32: "f32"
+  of F64: "f64"
+  # todo
+  # of V128: "v128"
+  # of AnyRef: "anyref"
+  # of ExternRef: "externref"
+  # of FuncRef: "funcref"
+  else:
+    error("not implemented")
+
+proc coreTypeToWasmValkindName(t: CoreType): string =
+  case t.normalize
+  of I32: "I32"
+  of I64: "I64"
+  of F32: "F32"
+  of F64: "F64"
+  # todo
+  # of V128: "
+  # of AnyRef: "anyref"
+  # of ExternRef: "externref"
+  # of FuncRef: "funcref"
+  else:
+    error("not implemented")
 
 macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap: static[Table[string, string]], worldName: static[string], dir: static[string], hostType: untyped): untyped =
   let path = if witPath.isAbsolute:
@@ -58,9 +132,16 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
 
     case t.kind
     of Resource:
-      # let code = genAst(linker, env = t.env, name = t.name, typ = ident(ctx.getNimName(t.name, true))):
-      #   ?linker.defineResource(env, name, typ)
-      # defines.add code
+      let dropName = "[resource-drop]" & t.name
+      let code = genAst(host, linker, env = t.env, name = t.name, dropName, typ = ident(ctx.getNimName(t.name, true)), e = ident"e"):
+        block:
+          let e = block:
+            linker.defineFuncUnchecked(env, dropName, newFunctype([WasmValkind.I32], [])):
+              ?host.resources.resourceDrop(parameters[0].i32, callDestroy=true)
+          if e.isErr:
+            return e
+
+      defines.add code
       discard
 
     else:
@@ -130,16 +211,13 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         if userType.kind == Handle:
           let typ = ctx.getTypeName(p.typ, Field)
           if userType.owned:
-            let c = genAst(store, name, ptrName = ident(name.repr & "Ptr"), typ, i):
-              let ptrName = ?store.resourceHostData(parameters[i].addr, typ)
-              var name = ptrName[]
-              `=wasMoved`(ptrName[])
-              ?store.resourceDrop(parameters[i].addr)
+            let c = genAst(host, name, ptrName = ident(name.repr & "Ptr"), typ, i):
+              var name: typ
             body.add c
 
           else:
-            let c = genAst(store, name, typ, i):
-              let name = ?store.resourceHostData(parameters[i].addr, typ)
+            let c = genAst(host, name, typ, i):
+              var name: ptr typ
             body.add c
 
         else:
@@ -147,6 +225,22 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
           let c = genAst(name, typ, i):
             var name: typ
           body.add c
+
+
+    proc resourceAccess(typ: WitType, arg: NimNode, param: NimNode): NimNode =
+      let userType = ctx.types[typ.index]
+      assert userType.kind == Handle
+      let typ = ctx.getTypeName(typ, Field)
+      if userType.owned:
+        return genAst(host, arg, param, ptrName = ident("resPtr"), typ):
+          block:
+            let ptrName = ?host.resources.resourceHostData(arg, typ)
+            param = ptrName[]
+            ?host.resources.resourceDrop(arg, callDestroy=false)
+
+      else:
+        return genAst(host, arg, param, typ):
+          param = ?host.resources.resourceHostData(arg, typ)
 
     # lift parameters
     if flatFuncType.paramsFlat:
@@ -156,17 +250,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
 
       let loweredArgs = collect:
         for i in 0..flatFuncTargetType.params.high:
-          let field = case flatFuncTargetType.params[i].normalize
-          of I32: "i32"
-          of I64: "i64"
-          of F32: "f32"
-          of F64: "f64"
-          # of V128: "v128"
-          # of AnyRef: "anyref"
-          # of ExternRef: "externref"
-          # of FuncRef: "funcref"
-          else:
-            error("not implemented")
+          let field = flatFuncTargetType.params[i].coreTypeToFieldName
           genAst(i, field = ident(field)):
             parameters[i].field
 
@@ -174,7 +258,8 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         genAst(memory, a):
           memory[a].addr
 
-      ctx.lift(loweredArgs, args, fun.params, body, Parameter, memoryAccess)
+      var liftContext = WitLiftContext(memoryAccess: memoryAccess, resourceAccess: resourceAccess)
+      ctx.lift(loweredArgs, args, fun.params, body, Parameter, liftContext)
     else:
       let args = collect:
         for p in fun.params:
@@ -185,17 +270,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         for p in flatFuncTargetType.params:
           while i mod p.byteAlignment != 0:
             inc i
-          let field = case p.normalize
-          of I32: "i32"
-          of I64: "i64"
-          of F32: "f32"
-          of F64: "f64"
-          # of V128: "v128"
-          # of AnyRef: "anyref"
-          # of ExternRef: "externref"
-          # of FuncRef: "funcref"
-          else:
-            error("not implemented")
+          let field = p.coreTypeToFieldName
           let c = genAst(i, memory, t = p.nimTypeName.ident, field = ident(field)):
             cast[ptr t](memory[parameters[0].i32 + i].addr)[]
           i += p.byteSize
@@ -205,7 +280,9 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         genAst(memory, a):
           memory[a].addr
 
-      ctx.lift(loweredArgs, args, fun.params, body, Parameter, memoryAccess)
+      var liftContext = WitLiftContext(memoryAccess: memoryAccess, resourceAccess: resourceAccess)
+      ctx.lift(loweredArgs, args, fun.params, body, Parameter, liftContext)
+
 
     # call
     if fun.results.len > 0:
@@ -220,38 +297,36 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         let userType = ctx.types[r.index]
         if userType.kind == Handle and userType.owned:
           let typ = ctx.getTypeName(r, Field)
-          callAndResult = genAst(store, res, call):
+          callAndResult = genAst(host, res, call):
             let res = call
-            parameters[0] = ?store.resourceNew(res)
+            parameters[0].i32 = ?host.resources.resourceNew(res)
 
       body.add callAndResult
 
     else:
       body.add call
 
-    # drop
-    for i, p in fun.params:
-      var name = ident(p.name.toCamelCase(false))
-      if p.typ.builtin == "":
-        let userType = ctx.types[p.typ.index]
-        if userType.kind == Handle and not userType.owned:
-          let typ = ctx.getTypeName(p.typ, Field)
-          let c = genAst(store, name, typ, i):
-            ?store.resourceDrop(parameters[i].addr)
-          body.add c
+    # todo
+    # # lower results
+    # if fun.results.len > 0:
+    #   if flatFuncType.resultsFlat:
+    #     discard
+    #   else:
+    #     ctx.lower(loweredArgs, args, fun.results, body, Return)
 
     var parameterTypes = nnkBracket.newTree()
     var resultTypes = nnkBracket.newTree()
 
     for t in flatFuncType.params:
-      let name = case t.normalize
-      of I32: "I32"
-      of I64: "I64"
-      of F32: "F32"
-      of F64: "F64"
-      else:
-        error("not implemented")
+      let name = t.coreTypeToWasmValkindName
       parameterTypes.add nnkDotExpr.newTree(ident"WasmValkind", ident(name))
+
+    for t in flatFuncType.results:
+      let name = t.coreTypeToWasmValkindName
+      if flatFuncType.resultsFlat:
+        resultTypes.add nnkDotExpr.newTree(ident"WasmValkind", ident(name))
+      else:
+        parameterTypes.add nnkDotExpr.newTree(ident"WasmValkind", ident(name))
 
     let code = genAst(store, linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, res, memory, mainMemory = ident"mainMemory"):
       block:

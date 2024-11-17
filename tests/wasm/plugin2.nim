@@ -97,28 +97,28 @@ else:
 proc emscripten_notify_memory_growth*(a: int32) {.exportc.} =
   discard
 
-var deallocCallbackKey: uint32 = addCallback(ws"my:host/callbacks-impl", ws"dealloc-callback")
-proc deallocCallback(data: uint32) =
-  echo "plugin2: dealloc callback ", data
-  if data != 0:
-    let drop = cast[ptr DropImpl](data)
-    drop[](cast[pointer](data))
+# var deallocCallbackKey: uint32 = addCallback(ws"my:host/callbacks-impl", ws"dealloc-callback")
+# proc deallocCallback(data: uint32) =
+#   echo "plugin2: dealloc callback ", data
+#   if data != 0:
+#     let drop = cast[ptr DropImpl](data)
+#     drop[](cast[pointer](data))
 
-proc wrapCallback[K](T: typedesc, cb: K): Callback =
-  let cc = create(CallbackData[T])
-  proc drop(p: pointer) {.cdecl.} =
-    echo "plugin2: drop ", cast[int](p)
-    let p = cast[ptr CallbackData[T]](p)
-    `=destroy`(p[])
-    dealloc(p)
+# proc wrapCallback[K](T: typedesc, cb: K): Callback =
+#   let cc = create(CallbackData[T])
+#   proc drop(p: pointer) {.cdecl.} =
+#     echo "plugin2: drop ", cast[int](p)
+#     let p = cast[ptr CallbackData[T]](p)
+#     `=destroy`(p[])
+#     dealloc(p)
 
-  cc[] = CallbackData[T](drop: drop, data: T(cb: cb))
-  newCallback(cast[uint32](cc), T.handleKey, deallocCallbackKey)
+#   cc[] = CallbackData[T](drop: drop, data: T(cb: cb))
+#   newCallback(cast[uint32](cc), T.handleKey, deallocCallbackKey)
 
-proc findStuff(l: WitList[WitString], cb: OnCallback.sig): WitList[WitString] =
-  let cb = OnCallback.wrapCallback(cb)
-  let cb2 = OnCallback2.wrapCallback proc(a: int32): int32 = a * a
-  findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], cb, cb2)
+# proc findStuff(l: WitList[WitString], cb: OnCallback.sig): WitList[WitString] =
+#   let cb = OnCallback.wrapCallback(cb)
+#   let cb2 = OnCallback2.wrapCallback proc(a: int32): int32 = a * a
+#   findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], cb, cb2)
 
 proc NimMain() {.importc.}
 proc emscripten_stack_init() {.importc.}
@@ -130,12 +130,12 @@ proc start() =
   echo "plugin2: start"
   foo()
   echo "plugin2: mid"
-  echo "plugin2: -> ", findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], (s) {.closure, gcsafe, raises: [].} => s.len mod 2 == 1)
+  # echo "plugin2: -> ", findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], (s) {.closure, gcsafe, raises: [].} => s.len mod 2 == 1)
   echo "===================================="
-  echo "plugin2: -> ", findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], (s) {.closure, gcsafe, raises: [].} => s.len mod 2 == 0)
+  # echo "plugin2: -> ", findStuff(@@[ws"hello, world", ws"a", ws"ab", ws"abc", ws"abcd", ws"abcde"], (s) {.closure, gcsafe, raises: [].} => s.len mod 2 == 0)
   echo "plugin2: end"
 
-  let cb = OnOnLater.wrapCallback proc(a: Option[WitString]): void =
-    echo "plugin2: later ", a
+  # let cb = OnOnLater.wrapCallback proc(a: Option[WitString]): void =
+  #   echo "plugin2: later ", a
 
-  callLater(cb)
+  # callLater(cb)

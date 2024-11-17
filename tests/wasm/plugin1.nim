@@ -40,51 +40,52 @@ proc emscripten_notify_memory_growth*(a: int32) {.exportc.} =
 proc NimMain() {.importc.}
 proc emscripten_stack_init() {.importc.}
 
-var gcb: Callback
+# var gcb: Callback
 
 proc start() =
   emscripten_stack_init()
   NimMain()
 
-  echo "[guest] call testNoParams"
+  echo "[plugin1] call testNoParams"
   testNoParams()
 
-  echo "[guest] call testNoParams2"
+  echo "[plugin1] call testNoParams2"
   testNoParams2(Baz(x: ws"uiae", c: Foo(x: ws"xvlc"), f: @@[Foo(x: ws"1"), Foo(x: ws"9"), Foo(x: ws"6")], d: (111, 222.333), gbruh: @@[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some))
 
-  echo "[guest] call testSimpleParams"
+  echo "[plugin1] call testSimpleParams"
   testSimpleParams(-123, -456, -789, -1592648, 123, 456, 789, 1592648, 147.258, 369.852, true, "ä".runeAt(0))
 
-  echo "[guest] call testSimpleParamsPtr"
+  echo "[plugin1] call testSimpleParamsPtr"
   testSimpleParamsPtr(-123, -456, -789, -1592648, 123, 456, 789, 1592648, 147.258, 369.852, true, "ä".runeAt(0), 9, 8, 7, 6, 5)
 
+  echo "[plugin1] create blobs"
   var b1 = newBlob(@@[1.uint8, 2, 3])
   var b2 = newBlob(@@[4.uint8, 5, 6])
   print(b1, b2)
-  echo "b1: ", b1, ", ", b2
+  echo "[plugin1] b1: ", b1, ", ", b2
   let b3 = merge(b1.ensureMove, b2.ensureMove)
-  echo "b3: ", b3
+  echo "[plugin1] b3: ", b3
   b3.write(@@[42.uint8, 69])
   b3.write(@@[127.uint8, 63])
 
-  echo b3.read(9)
+  echo "[plugin1] read: ", b3.read(9)
 
-  echo "plugin1: call later"
-  invokeOnLater(gcb, some(ws"jo"))
-  echo "plugin1: call later done"
+  echo "[plugin1] call later"
+  # invokeOnLater(gcb, some(ws"jo"))
+  echo "[plugin1] call later done"
 
 proc foo() =
-  echo "plugin1: foo"
+  echo "[plugin1] foo"
 
-proc findStuff(s: WitList[WitString], cb: sink Callback, cb2: sink Callback): WitList[WitString] =
-  echo "plugin1: findStuff ", s, ", ", cb
-  var res: seq[WitString]
-  for i in 0..<s.len:
-    if invokeCallback(cb, s[i]):
-      res.add s[i]
+# proc findStuff(s: WitList[WitString], cb: sink Callback, cb2: sink Callback): WitList[WitString] =
+#   echo "[plugin1] findStuff ", s, ", ", cb
+#   var res: seq[WitString]
+#   # for i in 0..<s.len:
+#   #   if invokeCallback(cb, s[i]):
+#   #     res.add s[i]
 
-  echo "plugin1: ", invokeCallback2(cb2, res.len.int32)
-  @@res
+#   # echo "[plugin1] ", invokeCallback2(cb2, res.len.int32)
+#   @@res
 
-proc callLater(cb: sink Callback) =
-  gcb = cb.ensureMove
+# proc callLater(cb: sink Callback) =
+#   gcb = cb.ensureMove

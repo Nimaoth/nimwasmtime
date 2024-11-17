@@ -79,7 +79,7 @@ interface callback-types {
   }
 }
 
-interface callbacks-impl {
-  use callback-types.{callback};
-  dealloc-callback: func(data: u32);
-}
+//interface callbacks-impl {
+//  use callback-types.{callback};
+//  dealloc-callback: func(data: u32);
+//}
