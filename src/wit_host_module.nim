@@ -60,7 +60,7 @@ func hostQuoteShell(s: string): string =
 
 
 proc coreTypeToFieldName(t: CoreType): string =
-  case t.normalize
+  case t
   of I32: "i32"
   of I64: "i64"
   of F32: "f32"
@@ -74,7 +74,7 @@ proc coreTypeToFieldName(t: CoreType): string =
     error("not implemented")
 
 proc coreTypeToWasmValkindName(t: CoreType): string =
-  case t.normalize
+  case t
   of I32: "I32"
   of I64: "I64"
   of F32: "F32"
@@ -171,7 +171,9 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       ident(funcNimName.toCamelCase(false) & "")
 
     let memory = ident"memory"
+    let reallocImpl = ident"reallocImpl"
     var needsMemory = false
+    var needsRealloc = false
 
     var decl = funDeclTempl.copy()
     decl[0] = implName
@@ -227,7 +229,6 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
             var name: typ
           body.add c
 
-
     proc resourceAccess(typ: WitType, arg: NimNode, param: NimNode): NimNode =
       let userType = ctx.types[typ.index]
       assert userType.kind == Handle
@@ -251,7 +252,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
 
       let loweredArgs = collect:
         for i in 0..flatFuncTargetType.params.high:
-          let field = flatFuncTargetType.params[i].coreTypeToFieldName
+          let field = flatFuncTargetType.params[i].toCoreType.coreTypeToFieldName
           genAst(i, field = ident(field)):
             parameters[i].field
 
@@ -273,7 +274,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
           while i mod p.byteAlignment != 0:
             inc i
           needsMemory = true
-          let field = p.coreTypeToFieldName
+          let field = p.toCoreType.coreTypeToFieldName
           let c = genAst(i, memory, t = p.nimTypeName.ident, field = ident(field)):
             cast[ptr t](memory[parameters[0].i32 + i].addr)[]
           i += p.byteSize
@@ -306,34 +307,91 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       else:
         body.add callAndResult
 
-        # todo
         # lower results
-        if fun.results.len > 0:
-          if flatFuncType.resultsFlat:
-            # todo: multi return values
-            let field = ident(flatFuncType.results[0].coreTypeToFieldName)
-            let t = ident(flatFuncType.results[0].normalize.nimTypeName)
-            echo flatFuncType
-            let c = genAst(field, t, res):
-              parameters[0].field = cast[t](res)
+        if flatFuncType.resultsFlat:
+          # todo: multi return values
+          let field = ident(flatFuncType.results[0].toCoreType.coreTypeToFieldName)
+          let t = ident(flatFuncType.results[0].toCoreType.nimTypeName)
+          echo flatFuncType
+          let c = genAst(field, t, res):
+            parameters[0].field = cast[t](res)
+          body.add c
+        else:
+          let retArea = ident"retArea"
+          var needsRetArea = false
+          block:
+            let c = genAst(retArea):
+              let retArea = parameters[^1].i32
             body.add c
+
+          var loweredPtrArgs: seq[NimNode]
+          var i = 0
+          for r in flatFuncTargetType.results:
+            while i mod r.byteAlignment != 0:
+              inc i
+            needsMemory = true
+            let code = genAst(memory, retArea, nimType = r.nimTypeName.ident, index = i):
+              cast[ptr nimType](memory[retArea + index].addr)[]
+            loweredPtrArgs.add code
+            i += r.byteSize
+
+          let results = if fun.results.len == 1:
+            @[res]
           else:
-            # ctx.lower(loweredArgs, args, fun.results, body, Return)
-            discard
+            collect:
+              for i in 0..fun.results.high:
+                nnkBracketExpr.newTree(res, newLit(i))
+
+          proc memoryAccess(a: NimNode): NimNode =
+            needsMemory = true
+            genAst(memory, a):
+              memory[a].addr
+
+          proc memoryAlloc(param: NimNode, typ: WitType, depth: int): tuple[code: NimNode, dataPtr: NimNode] =
+            needsRealloc = true
+            needsMemory = true
+            result.dataPtr = ident("dataPtrWasm" & $depth)
+
+            let byteSize = if typ.builtin == "string":
+              1
+            else:
+              let userType = ctx.types[typ.index]
+              ctx.byteSize(userType.listTarget)
+
+            result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, t = ident"t", args = ident"args", results = ident"results"):
+              let dataPtr = block:
+                var t: ptr WasmTrapT = nil
+                var args: array[4, ValT]
+                args[0].kind = WasmValkind.I32.ValkindT
+                args[0].of_field.i32 = 0 # original ptr
+                args[1].kind = WasmValkind.I32.ValkindT
+                args[1].of_field.i32 = 0 # original len
+                args[2].kind = WasmValkind.I32.ValkindT
+                args[2].of_field.i32 = 4 # alignment
+                args[3].kind = WasmValkind.I32.ValkindT
+                args[3].of_field.i32 = (param.len * byteSize).int32 # byte size
+                var results: array[1, ValT]
+                ?reallocImpl.addr.call(store, args, results, t.addr)
+                assert results[0].kind == WasmValkind.I32.ValkindT
+                results[0].of_field.i32
+              # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr
+
+          var lowerContext = WitLowerContext(memoryAccess: memoryAccess, memoryAlloc: memoryAlloc, convertToCoreTypes: false, copyMemory: true)
+          ctx.lower(loweredPtrArgs, results, fun.results, body, Return, lowerContext)
+          discard
 
     else:
       body.add call
-
 
     var parameterTypes = nnkBracket.newTree()
     var resultTypes = nnkBracket.newTree()
 
     for t in flatFuncType.params:
-      let name = t.coreTypeToWasmValkindName
+      let name = t.toCoreType.coreTypeToWasmValkindName
       parameterTypes.add nnkDotExpr.newTree(ident"WasmValkind", ident(name))
 
     for t in flatFuncType.results:
-      let name = t.coreTypeToWasmValkindName
+      let name = t.toCoreType.coreTypeToWasmValkindName
       if flatFuncType.resultsFlat:
         resultTypes.add nnkDotExpr.newTree(ident"WasmValkind", ident(name))
       else:
@@ -346,12 +404,19 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     else:
       nnkStmtList.newTree()
 
-    let code = genAst(linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, memoryDecl):
+    var reallocDecl = if needsRealloc:
+      genAst(reallocImplName = reallocImpl):
+        let reallocImplName = caller.getExport("cabi_realloc").get.of_field.func_field
+    else:
+      nnkStmtList.newTree()
+
+    let code = genAst(linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, memoryDecl, reallocDecl):
       block:
         let e = block:
           var ty: ptr WasmFunctypeT = newFunctype(parameterTypes, resultTypes)
           linker.defineFuncUnchecked(env, name, ty):
             memoryDecl
+            reallocDecl
             body
 
         if e.isErr:

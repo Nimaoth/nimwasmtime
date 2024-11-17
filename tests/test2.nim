@@ -123,6 +123,21 @@ proc testInterfaceAddCallback(host: MyContext, store: ptr ComponentContextT, env
   host.callbacks[key] = fun
   key
 
+proc testInterfaceTestSimpleReturn(host: MyContext, store: ptr ComponentContextT, x: int32): int32 =
+  echo "[host] testInterfaceTestSimpleReturn ", x
+  return x * 2
+
+proc testInterfaceTestSimpleReturn2(host: MyContext, store: ptr ComponentContextT, x: int8): int8 =
+  echo "[host] testInterfaceTestSimpleReturn2 ", x
+  return x * 2
+
+proc testInterfaceTestSimpleReturnPtr(host: MyContext, store: ptr ComponentContextT, x: int8): Bar =
+  echo "[host] testInterfaceTestSimpleReturnPtr ", x
+  return Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true)
+
+proc testInterfaceTestSimpleReturnPtr2(host: MyContext; store: ptr ComponentContextT): Baz =
+  return Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])
+
 proc call(instance: ptr ComponentInstanceT, context: ptr ComponentContextT, name: string, params: openArray[ComponentValT], nresults: static[int]) =
   var f: ptr ComponentFuncT = nil
   if not instance.getFunc(context, name.cstring, name.len.csize_t, f.addr):

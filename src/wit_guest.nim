@@ -118,7 +118,7 @@ proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
           ident("a" & $i)
 
       for i, t in flatFuncType.params:
-        let n = ident(t.normalize.nimTypeName)
+        let n = ident(t.nimTypeName)
         funNode[3].add nnkIdentDefs.newTree(args[i], n, newEmptyNode())
 
       funcList.add funNode
@@ -162,7 +162,7 @@ proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
       let needsRetArea = not flatFuncType.paramsFlat or not flatFuncType.resultsFlat
       if needsRetArea:
-        var retAreaSize = max(flatFuncTargetType.paramsByteSize, flatFuncTargetType.resultsByteSize)
+        var retAreaSize = max(flatFuncTargetType.toCoreType.paramsByteSize, flatFuncTargetType.toCoreType.resultsByteSize)
         let retAreaType = nnkBracketExpr.newTree(ident"array", newLit(retAreaSize), ident"uint8")
         vars.add nnkIdentDefs.newTree(retArea, retAreaType, newEmptyNode())
 
@@ -176,11 +176,11 @@ proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
             ident("arg" & $i)
 
         for i, arg in loweredArgs:
-          let t = ident(flatFuncType.params[i].normalize.nimTypeName)
+          let t = ident(flatFuncType.params[i].nimTypeName)
           vars.add nnkIdentDefs.newTree(arg, t, newEmptyNode())
           call.add arg
 
-        ctx.lower(loweredArgs, args, fun.params, lowerCode, Parameter)
+        ctx.lower(loweredArgs, args, fun.params, lowerCode, Parameter, WitLowerContext(convertToCoreTypes: false))
 
       else:
         # Pass args through pointer
@@ -191,12 +191,12 @@ proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
         for p in flatFuncTargetType.params:
           while i mod p.byteAlignment != 0:
             inc i
-          let code = genAst(retArea, nimType = p.normalize.nimTypeName.ident, index = newLit(i)):
+          let code = genAst(retArea, nimType = p.nimTypeName.ident, index = newLit(i)):
             cast[ptr nimType](retArea[index].addr)[]
           loweredPtrArgs.add code
           i += p.byteSize
 
-        ctx.lower(loweredPtrArgs, args, fun.params, lowerCode, Parameter)
+        ctx.lower(loweredPtrArgs, args, fun.params, lowerCode, Parameter, WitLowerContext(convertToCoreTypes: false))
 
       if flatFuncType.resultsFlat:
         if fun.results.len > 0:
@@ -316,7 +316,7 @@ proc genExport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
       let retArea = ident(fun.name.toCamelCase(false) & "RetArea")
 
       let needsRetArea = not flatFuncType.paramsFlat or not flatFuncType.resultsFlat
-      let retAreaSize = max(flatFuncTargetType.paramsByteSize, flatFuncTargetType.resultsByteSize)
+      let retAreaSize = max(flatFuncTargetType.toCoreType.paramsByteSize, flatFuncTargetType.toCoreType.resultsByteSize)
       if needsRetArea:
         let retAreaType = nnkBracketExpr.newTree(ident"array", newLit(retAreaSize), ident"uint8")
         funcList.add nnkVarSection.newTree(nnkIdentDefs.newTree(retArea, retAreaType, newEmptyNode()))

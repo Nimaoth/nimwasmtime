@@ -2,18 +2,28 @@ import std/[strformat, macros, strutils, json, jsonutils, enumerate, options, se
 
 type
   CoreType* = enum
-    I8
-    I16
     I32
     I64
     F32
     F64
+
+  SimpleComponentType* = enum
+    Bool,
+    S8, U8, S16, U16, S32, U32, S64, U64,
+    F32, F64,
+    Char,
 
   CoreFuncType* = object
     paramsFlat*: bool # Whether the parameters should be flattened into arguments
     resultsFlat*: bool # Whether the results should be flattened into arguments
     params*: seq[CoreType]
     results*: seq[CoreType]
+
+  ComponentFuncType* = object
+    paramsFlat*: bool # Whether the parameters should be flattened into arguments
+    resultsFlat*: bool # Whether the results should be flattened into arguments
+    params*: seq[SimpleComponentType]
+    results*: seq[SimpleComponentType]
 
   WitFlattenContext* = enum Lower, Lift
 
@@ -351,6 +361,24 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
 
   ctx.types = res.ensureMove
 
+proc toCoreType*(typ: SimpleComponentType): CoreType =
+  case typ
+  of Bool: CoreType.I32
+  of S8, U8, S16, U16, S32, U32: CoreType.I32
+  of S64, U64: CoreType.I64
+  of F32: CoreType.F32
+  of F64: CoreType.F64
+  of Char: CoreType.I32
+
+proc toCoreTypes*(typ: openArray[SimpleComponentType]): seq[CoreType] =
+  typ.mapIt(it.toCoreType)
+
+proc toCoreType*(typ: ComponentFuncType): CoreFuncType =
+  result.paramsFlat = typ.paramsFlat
+  result.resultsFlat = typ.resultsFlat
+  result.params = typ.params.toCoreTypes
+  result.results = typ.results.toCoreTypes
+
 proc builtinToNimName*(ctx: WitContext, builtin: string): string =
   return case builtin
   of "void": "void"
@@ -377,12 +405,25 @@ proc builtinToNimName*(ctx: WitContext, builtin: string): string =
 
 proc nimTypeName*(typ: CoreType): string =
   return case typ
-  of I8: "int8"
-  of I16: "int16"
   of I32: "int32"
   of I64: "int64"
   of F32: "float32"
   of F64: "float64"
+
+proc nimTypeName*(typ: SimpleComponentType): string =
+  return case typ
+  of Bool: "bool"
+  of S8: "int8"
+  of S16: "int16"
+  of S32: "int32"
+  of S64: "int64"
+  of U8: "uint8"
+  of U16: "uint16"
+  of U32: "uint32"
+  of U64: "uint64"
+  of F32: "float32"
+  of F64: "float64"
+  of Char: "Rune"
 
 proc despecialize(ctx: WitContext, typ: WitType): WitUserType =
   case typ.builtin
@@ -413,65 +454,85 @@ proc discriminantType(cases: int): WitType =
   else:
     assert false
 
-proc flattenType*(ctx: WitContext, typ: WitType): seq[CoreType]
+proc flattenType*(ctx: WitContext, typ: WitType): seq[SimpleComponentType]
 
-proc flattenList(ctx: WitContext, typ: WitUserType): seq[CoreType] =
+proc flattenList(ctx: WitContext, typ: WitUserType): seq[SimpleComponentType] =
   # todo: static len
-  result = @[CoreType.I32, CoreType.I32]
+  result = @[SimpleComponentType.S32, SimpleComponentType.S32]
 
-proc flattenRecord(ctx: WitContext, typ: WitUserType): seq[CoreType] =
+proc flattenRecord(ctx: WitContext, typ: WitUserType): seq[SimpleComponentType] =
   for f in typ.fields:
     result.add ctx.flattenType(f.typ)
 
-proc normalize*(a: CoreType): CoreType =
-  case a
-  of I8, I16: I32
-  else: a
-
-proc join(a, b: CoreType): CoreType =
-  let a = a.normalize
-  let b = b.normalize
-  if a == b:
+proc join(a, b: SimpleComponentType): SimpleComponentType =
+  let ac = a.toCoreType
+  let bc = b.toCoreType
+  if ac == bc:
     return a
-  if (a == I32 and b == F32) or (a == F32 and b == I32):
-    return I32
-  return I64
+  if (ac == I32 and bc == F32) or (ac == F32 and bc == I32):
+    return S32
+  return S64
 
 func byteSize*(self: CoreType): int =
   case self
-  of I8: 1
-  of I16: 2
   of I32, F32: 4
   of I64, F64: 8
 
 func byteAlignment*(self: CoreType): int =
   case self
-  of I8: 1
-  of I16: 2
   of I32, F32: 4
   of I64, F64: 8
 
+func byteSize*(self: SimpleComponentType): int =
+  case self
+  of S8, U8, Bool: 1
+  of S16, U16: 2
+  of S32, U32, F32, Char: 4
+  of S64, U64, F64: 8
+
+func byteAlignment*(self: SimpleComponentType): int =
+  case self
+  of S8, U8, Bool: 1
+  of S16, U16: 2
+  of S32, U32, F32, Char: 4
+  of S64, U64, F64: 8
+
 func paramsByteSize*(self: CoreFuncType): int =
+  var maxAlignment = 1
   for p in self.params:
     while result mod p.byteAlignment != 0:
       inc result
+    maxAlignment = max(maxAlignment, p.byteAlignment)
     result += p.byteSize
 
+  while result mod maxAlignment != 0:
+    inc result
+
 func resultsByteSize*(self: CoreFuncType): int =
+  var maxAlignment = 1
   for p in self.results:
     while result mod p.byteAlignment != 0:
       inc result
+    maxAlignment = max(maxAlignment, p.byteAlignment)
     result += p.byteSize
+
+  while result mod maxAlignment != 0:
+    inc result
 
 proc byteSize*(ctx: WitContext, typ: WitType): int =
   let flat = ctx.flattenType(typ)
+  var maxAlignment = 1
   for p in flat:
     while result mod p.byteAlignment != 0:
       inc result
+    maxAlignment = max(maxAlignment, p.byteAlignment)
     result += p.byteSize
 
-proc flattenVariant(ctx: WitContext, typ: WitUserType): seq[CoreType] =
-  var flat: seq[CoreType] = @[]
+  while result mod maxAlignment != 0:
+    inc result
+
+proc flattenVariant(ctx: WitContext, typ: WitUserType): seq[SimpleComponentType] =
+  var flat: seq[SimpleComponentType] = @[]
   for c in typ.fields:
     if c.typ.index != 0 or c.typ.builtin != "void":
       for i, ft in ctx.flattenType(c.typ):
@@ -487,28 +548,32 @@ proc flattenVariant(ctx: WitContext, typ: WitUserType): seq[CoreType] =
     valueAlignment = max(valueAlignment, result[i].byteAlignment)
 
   result[0] = case valueAlignment
-  of 1: I8
-  of 2: I16
-  of 4: I32
-  of 8: I64
+  of 1: S8
+  of 2: S16
+  of 4: S32
+  of 8: S64
   else:
     error("Invalid alignment for variant " & $typ)
 
-proc flattenType*(ctx: WitContext, typ: WitType): seq[CoreType] =
+proc flattenType*(ctx: WitContext, typ: WitType): seq[SimpleComponentType] =
   let typ = ctx.despecialize(typ)
   result = case typ.kind
   of Builtin:
     case typ.name
     of "void": @[]
-    of "bool": @[CoreType.I32]
-    of "char": @[CoreType.I32]
-    of "string": @[CoreType.I32, CoreType.I32]
-    of "s8", "u8": @[CoreType.I8]
-    of "s16", "u16": @[CoreType.I16]
-    of "s32", "u32": @[CoreType.I32]
-    of "s64", "u64": @[CoreType.I64]
-    of "f32": @[CoreType.F32]
-    of "f64": @[CoreType.F64]
+    of "bool": @[SimpleComponentType.Bool]
+    of "char": @[SimpleComponentType.Char]
+    of "string": @[SimpleComponentType.S32, SimpleComponentType.S32]
+    of "s8": @[SimpleComponentType.S8]
+    of "s16": @[SimpleComponentType.S16]
+    of "s32": @[SimpleComponentType.S32]
+    of "s64": @[SimpleComponentType.S64]
+    of "u8": @[SimpleComponentType.U8]
+    of "u16": @[SimpleComponentType.U16]
+    of "u32": @[SimpleComponentType.U32]
+    of "u64": @[SimpleComponentType.U64]
+    of "f32": @[SimpleComponentType.F32]
+    of "f64": @[SimpleComponentType.F64]
     else:
       assert false
       @[]
@@ -517,7 +582,7 @@ proc flattenType*(ctx: WitContext, typ: WitType): seq[CoreType] =
   of Record: ctx.flattenRecord(typ)
   of Variant: ctx.flattenVariant(typ)
   of Flags: ctx.flattenType(discriminantType(typ.cases.len))
-  of Resource, Handle: @[CoreType.I32]
+  of Resource, Handle: @[SimpleComponentType.S32]
 
   else:
     error("Not implemented: flattenType(" & $typ & ")")
@@ -552,18 +617,18 @@ proc flatTypeSize*(ctx: WitContext, typ: WitType): int =
     assert false
     0
 
-proc flattenTypes(ctx: WitContext, types: openArray[WitType]): seq[CoreType] =
+proc flattenTypes(ctx: WitContext, types: openArray[WitType]): seq[SimpleComponentType] =
   for t in types:
     result.add ctx.flattenType(t)
 
-proc flattenTypes(ctx: WitContext, params: openArray[WitFuncParam]): seq[CoreType] =
+proc flattenTypes(ctx: WitContext, params: openArray[WitFuncParam]): seq[SimpleComponentType] =
   for p in params:
     result.add ctx.flattenType(p.typ)
 
 const MAX_FLAT_PARAMS = 16
 const MAX_FLAT_RESULTS = 1
 
-proc flattenFuncType*(ctx: WitContext, fun: WitFunc, context: WitFlattenContext): tuple[actual: CoreFuncType, target: CoreFuncType] =
+proc flattenFuncType*(ctx: WitContext, fun: WitFunc, context: WitFlattenContext): tuple[actual: ComponentFuncType, target: ComponentFuncType] =
   result.target.params = ctx.flattenTypes(fun.params)
   result.target.results = ctx.flattenTypes(fun.results)
 
@@ -573,17 +638,17 @@ proc flattenFuncType*(ctx: WitContext, fun: WitFunc, context: WitFlattenContext)
   result.actual = result.target
 
   if result.actual.params.len > MAX_FLAT_PARAMS:
-    result.actual.params = @[CoreType.I32]
+    result.actual.params = @[SimpleComponentType.S32]
     result.actual.paramsFlat = false
 
   if result.actual.results.len > MAX_FLAT_RESULTS:
     case context
     of Lower:
-      result.actual.params.add @[CoreType.I32]
+      result.actual.params.add @[SimpleComponentType.S32]
       result.actual.results = @[]
       result.actual.resultsFlat = false
     of Lift:
-      result.actual.results = @[CoreType.I32]
+      result.actual.results = @[SimpleComponentType.S32]
       result.actual.resultsFlat = false
 
 proc newWitContext*(witJson: JsonNode): WitContext =

@@ -52,12 +52,16 @@ interface test-types {
 }
 
 interface test-interface {
+  use test-types.{bar, baz};
+
   test-no-params: func();
   test-simple-params: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char);
   test-simple-params-ptr: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char, m: s32, n: s32, o: s32, p: s32, q: s32);
   add-callback: func(env: string, name: string) -> u32;
   test-simple-return: func(x: s32) -> s32;
   test-simple-return2: func(x: s8) -> s8;
+  test-simple-return-ptr: func(x: s8) -> bar;
+  test-simple-return-ptr2: func() -> baz;
 
   resource blob {
     constructor(init: list<u8>);

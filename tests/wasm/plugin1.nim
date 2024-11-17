@@ -78,7 +78,13 @@ proc start() =
   echo "[plugin1] -> ", testSimpleReturn(123)
 
   echo "[plugin1] call testSimpleReturn2"
-  echo "[plugin1] -> ", testSimpleReturn(69)
+  echo "[plugin1] -> ", testSimpleReturn2(42)
+
+  echo "[plugin1] call testSimpleReturnPtr"
+  echo "[plugin1] -> ", testSimpleReturnPtr(42)
+
+  echo "[plugin1] call testSimpleReturnPtr2"
+  echo "[plugin1] -> ", testSimpleReturnPtr2()
 
 proc foo() =
   echo "[plugin1] foo"

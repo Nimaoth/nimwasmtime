@@ -1,8 +1,20 @@
 import std/[macros, options, strutils, genasts, sugar]
 import wit
 
-type WitNimTypeNameContext* = enum Field, Parameter, Return
-type WitParamTypeKind* = enum Builtin, User, OwnedResource, BorrowedResource
+
+type
+  WitNimTypeNameContext* = enum Field, Parameter, Return
+  WitParamTypeKind* = enum Builtin, User, OwnedResource, BorrowedResource
+
+  WitLiftContext* = object
+    memoryAccess*: proc(a: NimNode): NimNode = nil
+    resourceAccess*: proc(typ: WitType, arg: NimNode, param: NimNode): NimNode = nil
+
+  WitLowerContext* = object
+    convertToCoreTypes*: bool = true
+    copyMemory*: bool = false
+    memoryAccess*: proc(a: NimNode): NimNode = nil
+    memoryAlloc*: proc(param: NimNode, typ: WitType, depth: int): tuple[code: NimNode, dataPtr: NimNode] = nil
 
 proc getParamTypeKind*(ctx: WitContext, typ: WitType): WitParamTypeKind =
   if typ.builtin != "":
@@ -140,57 +152,135 @@ proc genTypeSection*(ctx: WitContext, host: bool): NimNode =
     else:
       discard
 
-proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode, context: WitNimTypeNameContext) =
+proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode, context: WitNimTypeNameContext, lowerContext: WitLowerContext, depth: int = 0) =
   # let typ = ctx.despecialize(typ)
   # echo &"lower {param.repr}: {typ}, {loweredArgs[0].treeRepr}, {typ}"
+
   case typ.builtin
   of "void":
     outCode.add nnkDiscardStmt.newTree(newEmptyNode())
 
   of "bool":
-    let code = genAst(loweredArg = loweredArgs[0], param = param):
-      loweredArg = cast[int32](param)
+    let code = if lowerContext.convertToCoreTypes:
+      genAst(loweredArg = loweredArgs[0], param):
+        loweredArg = cast[int32](param)
+    else:
+      genAst(loweredArg = loweredArgs[0], param):
+        loweredArg = param
     outCode.add code
 
   of "char":
-    let code = genAst(loweredArg = loweredArgs[0], param = param):
-      loweredArg = cast[int32](param)
+    let code = if lowerContext.convertToCoreTypes:
+      genAst(loweredArg = loweredArgs[0], param):
+        loweredArg = cast[int32](param)
+    else:
+      genAst(loweredArg = loweredArgs[0], param):
+        loweredArg = param
     outCode.add code
 
   of "s8", "s16", "u8", "u16", "s32", "u32":
-    let code = genAst(loweredArg = loweredArgs[0], param = param):
-      loweredArg = cast[int32](param)
+    let code = if lowerContext.convertToCoreTypes:
+      genAst(loweredArg = loweredArgs[0], param):
+        loweredArg = cast[int32](param)
+    else:
+      genAst(loweredArg = loweredArgs[0], param):
+        loweredArg = param
     outCode.add code
 
   of "s64", "u64":
-    let code = genAst(loweredArg = loweredArgs[0], param = param):
-      loweredArg = cast[int64](param)
+    let code = if lowerContext.convertToCoreTypes:
+      genAst(loweredArg = loweredArgs[0], param):
+        loweredArg = cast[int64](param)
+    else:
+      genAst(loweredArg = loweredArgs[0], param):
+        loweredArg = param
     outCode.add code
 
   of "f32", "f64":
-    let code = genAst(loweredArg = loweredArgs[0], param = param):
+    let code = genAst(loweredArg = loweredArgs[0], param):
       loweredArg = param
     outCode.add code
 
   of "string":
-    let code = genAst(loweredPtr = loweredArgs[0], loweredLen = loweredArgs[1], param = param):
+    var dataPtr = genAst(param):
+      param[0].addr
+
+    let reallocCode = if lowerContext.memoryAlloc != nil:
+      let (c, d) = lowerContext.memoryAlloc(param, typ, depth)
+      dataPtr = d
+      c
+    else:
+      nnkStmtList.newTree()
+
+    let copyCode = if lowerContext.copyMemory:
+      let i = ident("i" & $depth)
+
+      genAst(param, i, dataPtr):
+        block:
+          for i in 0..<param.len:
+            cast[ptr char](memory[dataPtr + i].addr)[] = param[i]
+    else:
+      nnkStmtList.newTree()
+
+    let code = genAst(loweredPtr = loweredArgs[0], loweredLen = loweredArgs[1], param, dataPtr, reallocCode, copyCode):
       if param.len > 0:
-        loweredPtr = cast[int32](param[0].addr)
+        reallocCode
+        loweredPtr = cast[int32](dataPtr)
+        copyCode
       else:
         loweredPtr = 0
-      loweredLen = param.len
+      loweredLen = cast[int32](param.len)
     outCode.add code
 
   of "":
     let userType = ctx.types[typ.index]
     case userType.kind
     of List:
-      let code = genAst(loweredPtr = loweredArgs[0], loweredLen = loweredArgs[1], param = param):
+      var dataPtr = genAst(param):
+        param[0].addr
+
+      let reallocCode = if lowerContext.memoryAlloc != nil:
+        let (c, d) = lowerContext.memoryAlloc(param, typ, depth)
+        dataPtr = d
+        c
+      else:
+        nnkStmtList.newTree()
+
+      let copyCode = if lowerContext.copyMemory:
+        let i = ident("i" & $depth)
+        let p = ident("p" & $depth)
+        let lowerElem = nnkStmtList.newTree()
+        let elem = genAst(param, i):
+          param[i]
+
+        let flatTypeSize = ctx.byteSize(userType.listTarget)
+        var k = 0
+        let elemPtrs = collect:
+          for param in ctx.flattenType(userType.listTarget):
+            while k mod param.byteAlignment != 0:
+              inc k
+            let c = genAst(i, k, p, flatTypeSize, dataPtr, nimType = param.nimTypeName.ident):
+              cast[ptr nimType](memory[dataPtr + i * flatTypeSize + k].addr)[]
+            k += param.byteSize
+            c
+
+        ctx.lower(elemPtrs, elem, userType.listTarget, lowerElem, context, lowerContext, depth + 1)
+
+        genAst(param, p, i, lowerElem):
+          block:
+            for i in 0..<param.len:
+              lowerElem
+      else:
+        nnkStmtList.newTree()
+
+      let code = genAst(loweredPtr = loweredArgs[0], loweredLen = loweredArgs[1], dataPtr, reallocCode, copyCode, param):
         if param.len > 0:
-          loweredPtr = cast[int32](param[0].addr)
+          reallocCode
+          loweredPtr = cast[int32](dataPtr)
+          copyCode
         else:
           loweredPtr = 0
-        loweredLen = param.len
+        loweredLen = cast[int32](param.len)
       outCode.add code
 
     of Enum:
@@ -208,7 +298,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
     of Option:
       let childAccess = nnkDotExpr.newTree(param, ident("get"))
       var lowerChild = nnkStmtList.newTree()
-      ctx.lower(loweredArgs[1..^1], childAccess, userType.optionTarget, lowerChild, context)
+      ctx.lower(loweredArgs[1..^1], childAccess, userType.optionTarget, lowerChild, context, lowerContext, depth + 1)
       let code = genAst(loweredTag = loweredArgs[0], param, lowerChild):
         loweredTag = param.isSome.int32
         if param.isSome:
@@ -219,9 +309,9 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       let childAccess = nnkDotExpr.newTree(param, ident("value"))
       let errAccess = nnkDotExpr.newTree(param, ident("error"))
       var lowerChild = nnkStmtList.newTree()
-      ctx.lower(loweredArgs[1..^1], childAccess, userType.resultOkTarget, lowerChild, context)
+      ctx.lower(loweredArgs[1..^1], childAccess, userType.resultOkTarget, lowerChild, context, lowerContext, depth + 1)
       var lowerError = nnkStmtList.newTree()
-      ctx.lower(loweredArgs[1..^1], errAccess, userType.resultErrTarget, lowerError, context)
+      ctx.lower(loweredArgs[1..^1], errAccess, userType.resultErrTarget, lowerError, context, lowerContext, depth + 1)
       let code = genAst(loweredTag = loweredArgs[0], param, lowerChild, lowerError):
         loweredTag = param.isErr.int32
         if param.isOk:
@@ -234,7 +324,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       var loweredI = 0
       for i, f in userType.fields:
         let fieldAccess = nnkDotExpr.newTree(param, ident(f.name.toCamelCase(false)))
-        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context)
+        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context, lowerContext, depth + 1)
         loweredI += ctx.flatTypeSize(f.typ)
       return
 
@@ -242,7 +332,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       var loweredI = 0
       for i, f in userType.fields:
         let fieldAccess = nnkBracketExpr.newTree(param, newLit(i))
-        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context)
+        ctx.lower(loweredArgs[loweredI..^1], fieldAccess, f.typ, outCode, context, lowerContext, depth + 1)
         loweredI += ctx.flatTypeSize(f.typ)
       return
 
@@ -253,7 +343,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       for f in userType.fields:
         let fieldAccess = nnkDotExpr.newTree(param, ident(f.name.toCamelCase(false)))
         var caseCode = nnkStmtList.newTree()
-        ctx.lower(loweredArgs[1..^1], fieldAccess, f.typ, caseCode, context)
+        ctx.lower(loweredArgs[1..^1], fieldAccess, f.typ, caseCode, context, lowerContext, depth + 1)
         cases.add nnkOfBranch.newTree(ident(f.name.toCamelCase(true)), caseCode)
 
       if addElse:
@@ -275,23 +365,19 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
   else:
     error("Not implemented lower(" & $typ.builtin & ")")
 
-proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode, context: WitNimTypeNameContext) =
+proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode, context: WitNimTypeNameContext, lowerContext: WitLowerContext = WitLowerContext()) =
   var loweredI = 0
   for i, p in params:
     # echo &"{i}, {loweredI}: lower {p}"
-    ctx.lower(loweredArgs[loweredI..^1], args[i], p.typ, outCode, context)
+    ctx.lower(loweredArgs[loweredI..^1], args[i], p.typ, outCode, context, lowerContext)
     loweredI += ctx.flatTypeSize(p.typ)
 
-proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode, context: WitNimTypeNameContext) =
+proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode, context: WitNimTypeNameContext, lowerContext: WitLowerContext = WitLowerContext()) =
   var loweredI = 0
   for i, r in results:
     # echo &"{i}, {loweredI}: lower {r}"
-    ctx.lower(loweredArgs[loweredI..^1], args[i], r, outCode, context)
+    ctx.lower(loweredArgs[loweredI..^1], args[i], r, outCode, context, lowerContext)
     loweredI += ctx.flatTypeSize(r)
-
-type WitLiftContext* = object
-  memoryAccess*: proc(a: NimNode): NimNode = nil
-  resourceAccess*: proc(typ: WitType, arg: NimNode, param: NimNode): NimNode = nil
 
 proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ: WitType, outCode: NimNode,
     context: WitNimTypeNameContext,
@@ -305,7 +391,7 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
 
   of "bool":
     let code = genAst(loweredArg = loweredArgs[0], param = param):
-      param = loweredArg != 0
+      param = loweredArg.bool
     outCode.add code
 
   of "char":
@@ -357,8 +443,9 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
           for param in ctx.flattenType(userType.listTarget):
             while k mod param.byteAlignment != 0:
               inc k
-            let c = genAst(i, k, p, flatTypeSize):
-              cast[ptr int32](p[i * flatTypeSize + k].addr)[]
+            let t = param.nimTypeName.ident
+            let c = genAst(i, k, p, t, flatTypeSize):
+              cast[ptr t](p[i * flatTypeSize + k].addr)[]
             k += param.byteSize
             c
 
@@ -371,7 +458,6 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
             for i in 0..<param.len:
               liftElem
         outCode.add code
-
 
     of Enum:
       let t = ctx.getTypeName(typ, context)
@@ -500,14 +586,14 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
   else:
     error("Not implemented lift(" & $typ.builtin & ")")
 
-proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode, context: WitNimTypeNameContext, liftContext: WitLiftContext) =
+proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], results: openArray[WitType], outCode: NimNode, context: WitNimTypeNameContext, liftContext: WitLiftContext = WitLiftContext()) =
   var loweredI = 0
   for i, r in results:
     # echo &"{i}, {loweredI}: lift {r}"
     ctx.lift(loweredArgs[loweredI..^1], args[i], r, outCode, context, liftContext)
     loweredI += ctx.flatTypeSize(r)
 
-proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode, context: WitNimTypeNameContext, liftContext: WitLiftContext) =
+proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], args: openArray[NimNode], params: openArray[WitFuncParam], outCode: NimNode, context: WitNimTypeNameContext, liftContext: WitLiftContext = WitLiftContext()) =
   var loweredI = 0
   for i, p in params:
     # echo &"{i}, {loweredI}: lift {p}"

@@ -116,6 +116,13 @@ proc testInterfaceTestSimpleReturn2(host: MyContext, store: ptr ContextT, x: int
   echo "[host] testInterfaceTestSimpleReturn2 ", x
   return x * 2
 
+proc testInterfaceTestSimpleReturnPtr(host: MyContext, store: ptr ContextT, x: int8): Bar =
+  echo "[host] testInterfaceTestSimpleReturnPtr ", x
+  return Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true)
+
+proc testInterfaceTestSimpleReturnPtr2(host: MyContext; store: ptr ContextT): Baz =
+  return Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])
+
 proc main(): WasmtimeResult[void] =
   let config = newConfig()
   let engine = newEngine(config)
