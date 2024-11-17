@@ -18,11 +18,23 @@ type
   ProfilingStrategy* {.size: sizeof(cuint).} = enum
     ProfilingStrategyNone = 0, Jitdump = 1, Vtune = 2, Perfmap = 3
 type
+  ComponentValKind* {.size: sizeof(cuint).} = enum
+    Bool = 0, S8 = 1, U8 = 2, S16 = 3, U16 = 4, S32 = 5, U32 = 6, S64 = 7,
+    U64 = 8, Float32 = 9, Float64 = 10, Char = 11, String = 12, List = 13,
+    Record = 14, Tuple = 15, Variant = 16, Enum = 17, Option = 18, Result = 19,
+    Flags = 20, Resource = 21
+type
+  ComponentItemType* {.size: sizeof(cuint).} = enum
+    Component = 0, ComponentInstance = 1, ComponentFunc = 2, Interface = 3,
+    Module = 4, CoreFunc = 5, Resource_enumval = 6
+type
   TrapCode* {.size: sizeof(cuint).} = enum
     StackOverflow = 0, MemoryOutOfBounds = 1, HeapMisaligned = 2,
     TableOutOfBounds = 3, IndirectCallToNull = 4, BadSignature = 5,
     IntegerOverflow = 6, IntegerDivisionByZero = 7, BadConversionToInteger = 8,
-    UnreachableCodeReached = 9, Interrupt = 10, OutOfFuel = 11
+    UnreachableCodeReached = 9, Interrupt = 10, AlwaysTrapAdapter = 11,
+    OutOfFuel = 12, AtomicWaitNonSharedMemory = 13, NullReference = 14,
+    ArrayOutOfBounds = 15, AllocationTooLarge = 16, CannotEnterComponent = 17
 type
   StructWasmtimeContext* = object
 type
@@ -32,11 +44,15 @@ type
 type
   StructWasmStoreT* = object
 type
+  StructWasmtimeComponentStore* = object
+type
   StructWasmTabletypeT* = object
 type
   StructWasmtimeLinker* = object
 type
   StructWasmModuleT* = object
+type
+  StructWasmtimeComponentT* = object
 type
   StructWasmtimeCallFuture* = object
 type
@@ -45,6 +61,8 @@ type
   StructWasmtimeCaller* = object
 type
   StructWasmEngineT* = object
+type
+  StructWasmtimeComponentContext* = object
 type
   StructWasmtimeModule* = object
 type
@@ -74,9 +92,15 @@ type
 type
   StructWasmExterntypeT* = object
 type
+  StructWasmtimeComponentLinkerT* = object
+type
   StructWasmImporttypeT* = object
 type
+  StructWasmtimeComponentInstanceT* = object
+type
   StructWasmMemorytypeT* = object
+type
+  StructWasmtimeComponentFuncT* = object
 type
   StructWasmtimeStore* = object
 type
@@ -320,6 +344,83 @@ type
     new_stack*: NewStackMemoryCallbackT
     finalizer*: proc (a0: pointer): void {.cdecl.}
   StackCreatorT* = StructWasmtimeStackCreatorT ## Generated based on wasmtime/crates/c-api/include/wasmtime/async.h:350:3
+  ComponentStoreT* = StructWasmtimeComponentStore ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:30:41
+  ComponentContextT* = StructWasmtimeComponentContext ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:31:43
+  ComponentValKindT* = uint8 ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:35:17
+  ComponentValT* = StructWasmtimeComponentValT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:166:3
+  StructWasmtimeComponentValT* {.pure, inheritable, bycopy.} = object
+    kind*: ComponentValKindT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:163:16
+    payload*: ComponentValPayloadT_typedef
+  ComponentValRecordFieldT* = StructWasmtimeComponentValRecordFieldT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:172:3
+  StructWasmtimeComponentValRecordFieldT* {.pure, inheritable, bycopy.} = object
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:169:16
+    val*: ComponentValT
+  StructWasmtimeComponentValVecT* {.pure, inheritable, bycopy.} = object
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:103:1
+    data*: ptr ComponentValT
+  ComponentValVecT* = object of StructWasmtimeComponentValVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:103:1
+  StructWasmtimeComponentValRecordFieldVecT* {.pure, inheritable, bycopy.} = object
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:106:1
+    data*: ptr ComponentValRecordFieldT
+  ComponentValRecordFieldVecT* = object of StructWasmtimeComponentValRecordFieldVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:106:1
+  StructWasmtimeComponentValFlagsVecT* {.pure, inheritable, bycopy.} = object
+    size*: csize_t           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:109:1
+    data*: ptr WasmNameT
+  ComponentValFlagsVecT* = object of StructWasmtimeComponentValFlagsVecT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:109:1
+  StructWasmtimeComponentValVariantT* {.pure, inheritable, bycopy.} = object
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:116:16
+    val*: ptr ComponentValT
+  ComponentValVariantT* = StructWasmtimeComponentValVariantT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:119:3
+  StructWasmtimeComponentValResultT* {.pure, inheritable, bycopy.} = object
+    val*: ptr ComponentValT  ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:123:16
+    error*: bool
+  ComponentValResultT* = StructWasmtimeComponentValResultT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:126:3
+  StructWasmtimeComponentValEnumT* {.pure, inheritable, bycopy.} = object
+    name*: WasmNameT         ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:129:16
+  ComponentValEnumT* = StructWasmtimeComponentValEnumT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:131:3
+  StructWasmtimeComponentValResourceT* {.pure, inheritable, bycopy.} = object
+    data*: pointer           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:133:16
+  ComponentValResourceT* = StructWasmtimeComponentValResourceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:135:3
+  ComponentValPayloadT* {.union, bycopy.} = object
+    boolean*: bool           ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:137:15
+    s8*: int8
+    u8*: uint8
+    s16*: int16
+    u16*: uint16
+    s32*: int32
+    u32*: uint32
+    s64*: int64
+    u64*: uint64
+    f32*: cfloat
+    f64*: cdouble
+    character*: uint32
+    string_field*: WasmNameT
+    list*: ComponentValVecT
+    record*: ComponentValRecordFieldVecT
+    tuple_field*: ComponentValVecT
+    variant*: ComponentValVariantT
+    enumeration*: ComponentValEnumT
+    option*: ptr ComponentValT
+    result*: ComponentValResultT
+    flags*: ComponentValFlagsVecT
+    resource*: ComponentValResourceT
+  ComponentValPayloadT_typedef* = ComponentValPayloadT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:160:3
+  StructWasmtimeComponentExportIndexT* {.pure, inheritable, bycopy.} = object
+    id*: uint64              ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:175:16
+    index*: uint32
+  ComponentExportIndexT* = StructWasmtimeComponentExportIndexT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:178:3
+  ComponentT* = StructWasmtimeComponentT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:192:37
+  ComponentLinkerT* = StructWasmtimeComponentLinkerT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:202:44
+  ComponentFuncCallbackT* = proc (a0: ptr ComponentContextT; a1: pointer;
+                                  a2: ptr ComponentValT; a3: csize_t;
+                                  a4: ptr ComponentValT; a5: csize_t): ptr WasmTrapT {.
+      cdecl.}                ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:211:24
+  ComponentItemTypeT* = uint8 ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:228:17
+  ComponentImportsCallbackT* = proc (a0: pointer; a1: cstring; a2: csize_t;
+                                     a3: cstring; a4: csize_t;
+                                     a5: ComponentItemTypeT): void {.cdecl.} ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:240:16
+  ComponentInstanceT* = StructWasmtimeComponentInstanceT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:267:46
+  ComponentFuncT* = StructWasmtimeComponentFuncT ## Generated based on wasmtime/crates/c-api/include/wasmtime/component.h:281:42
   GuestprofilerT* = StructWasmtimeGuestprofiler ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:31:39
   StructWasmtimeGuestprofilerModules* {.pure, inheritable, bycopy.} = object
     name*: ptr WasmNameT     ## Generated based on wasmtime/crates/c-api/include/wasmtime/profiling.h:48:16
@@ -1293,6 +1394,115 @@ proc preInstantiateAsync*(instance_pre: ptr InstancePreT; store: ptr ContextT;
     importc: "wasmtime_instance_pre_instantiate_async".}
 proc hostStackCreatorSet*(a0: ptr WasmConfigT; a1: ptr StackCreatorT): void {.
     cdecl, importc: "wasmtime_config_host_stack_creator_set".}
+proc componentModelSet*(a0: ptr WasmConfigT; a1: bool): void {.cdecl,
+    importc: "wasmtime_config_component_model_set".}
+proc newComponentStore*(engine: ptr WasmEngineT; data: pointer;
+                        finalizer: proc (a0: pointer): void {.cdecl.}): ptr ComponentStoreT {.
+    cdecl, importc: "wasmtime_component_store_new".}
+proc context*(store: ptr ComponentStoreT): ptr ComponentContextT {.cdecl,
+    importc: "wasmtime_component_store_context".}
+proc delete*(store: ptr ComponentStoreT): void {.cdecl,
+    importc: "wasmtime_component_store_delete".}
+proc limiter*(store: ptr ComponentStoreT; memory_size: int64;
+              table_elements: int64; instances: int64; tables: int64;
+              memories: int64): void {.cdecl, importc: "wasmtime_component_store_limiter".}
+proc newEmpty*(out_arg: ptr ComponentValVecT): void {.cdecl,
+    importc: "wasmtime_component_val_vec_new_empty".}
+proc newUninitialized*(out_arg: ptr ComponentValVecT; a1: csize_t): void {.
+    cdecl, importc: "wasmtime_component_val_vec_new_uninitialized".}
+proc new*(out_arg: ptr ComponentValVecT; a1: csize_t; a2: ptr ComponentValT): void {.
+    cdecl, importc: "wasmtime_component_val_vec_new".}
+proc copy*(out_arg: ptr ComponentValVecT; a1: ptr ComponentValVecT): void {.
+    cdecl, importc: "wasmtime_component_val_vec_copy".}
+proc delete*(a0: ptr ComponentValVecT): void {.cdecl,
+    importc: "wasmtime_component_val_vec_delete".}
+proc newEmpty*(out_arg: ptr ComponentValRecordFieldVecT): void {.cdecl,
+    importc: "wasmtime_component_val_record_field_vec_new_empty".}
+proc newUninitialized*(out_arg: ptr ComponentValRecordFieldVecT; a1: csize_t): void {.
+    cdecl, importc: "wasmtime_component_val_record_field_vec_new_uninitialized".}
+proc new*(out_arg: ptr ComponentValRecordFieldVecT; a1: csize_t;
+          a2: ptr ComponentValRecordFieldT): void {.cdecl,
+    importc: "wasmtime_component_val_record_field_vec_new".}
+proc copy*(out_arg: ptr ComponentValRecordFieldVecT;
+           a1: ptr ComponentValRecordFieldVecT): void {.cdecl,
+    importc: "wasmtime_component_val_record_field_vec_copy".}
+proc delete*(a0: ptr ComponentValRecordFieldVecT): void {.cdecl,
+    importc: "wasmtime_component_val_record_field_vec_delete".}
+proc newEmpty*(out_arg: ptr ComponentValFlagsVecT): void {.cdecl,
+    importc: "wasmtime_component_val_flags_vec_new_empty".}
+proc newUninitialized*(out_arg: ptr ComponentValFlagsVecT; a1: csize_t): void {.
+    cdecl, importc: "wasmtime_component_val_flags_vec_new_uninitialized".}
+proc new*(out_arg: ptr ComponentValFlagsVecT; a1: csize_t; a2: ptr WasmNameT): void {.
+    cdecl, importc: "wasmtime_component_val_flags_vec_new".}
+proc copy*(out_arg: ptr ComponentValFlagsVecT; a1: ptr ComponentValFlagsVecT): void {.
+    cdecl, importc: "wasmtime_component_val_flags_vec_copy".}
+proc delete*(a0: ptr ComponentValFlagsVecT): void {.cdecl,
+    importc: "wasmtime_component_val_flags_vec_delete".}
+proc set*(flags: ptr ComponentValFlagsVecT; index: uint32; enabled: bool): void {.
+    cdecl, importc: "wasmtime_component_val_flags_set".}
+proc test*(flags: ptr ComponentValFlagsVecT; index: uint32): bool {.cdecl,
+    importc: "wasmtime_component_val_flags_test".}
+proc fromBinary*(engine: ptr WasmEngineT; buf: ptr uint8; len: csize_t;
+                 component_out: ptr ptr ComponentT): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_from_binary".}
+proc delete*(a0: ptr ComponentT): void {.cdecl,
+    importc: "wasmtime_component_delete".}
+proc newComponentLinker*(engine: ptr WasmEngineT): ptr ComponentLinkerT {.cdecl,
+    importc: "wasmtime_component_linker_new".}
+proc linkWasi*(linker: ptr ComponentLinkerT; trap_out: ptr ptr WasmTrapT): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_linker_link_wasi".}
+proc funcNew*(linker: ptr ComponentLinkerT; env_name: cstring;
+              env_name_len: csize_t; name: cstring; len: csize_t;
+              callback: ComponentFuncCallbackT; data: pointer;
+              finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_linker_func_new".}
+proc iterateImports*(component: ptr ComponentT; cb: ComponentImportsCallbackT;
+                     data: pointer): void {.cdecl,
+    importc: "wasmtime_component_iterate_imports".}
+proc defineResource*(linker: ptr ComponentLinkerT; env_name: cstring;
+                     env_name_len: csize_t; name: cstring; len: csize_t;
+                     user_id: csize_t;
+                     finalizer: proc (a0: pointer): void {.cdecl.}): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_linker_define_resource".}
+proc resourceNew*(context: ptr ComponentContextT; user_id: csize_t;
+                  resource: ptr ComponentValT; data: pointer): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_resource_new".}
+proc defineInstance*(linker: ptr ComponentLinkerT;
+                     context: ptr ComponentContextT; component: ptr ComponentT;
+                     instance: ptr ComponentInstanceT): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_linker_define_instance".}
+proc instantiate*(linker: ptr ComponentLinkerT; context: ptr ComponentContextT;
+                  component: ptr ComponentT;
+                  instance_out: ptr ptr ComponentInstanceT;
+                  trap_out: ptr ptr WasmTrapT): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_linker_instantiate".}
+proc getExport*(component: ptr ComponentT; name: cstring; name_len: csize_t;
+                parent_index: ptr ComponentExportIndexT;
+                index_out: ptr ComponentExportIndexT): bool {.cdecl,
+    importc: "wasmtime_component_get_export".}
+proc getFuncByIndex*(instance: ptr ComponentInstanceT;
+                     context: ptr ComponentContextT;
+                     index: ComponentExportIndexT;
+                     item_out: ptr ptr ComponentFuncT): bool {.cdecl,
+    importc: "wasmtime_component_instance_get_func_by_index".}
+proc getFunc*(instance: ptr ComponentInstanceT; context: ptr ComponentContextT;
+              name: cstring; name_len: csize_t; item_out: ptr ptr ComponentFuncT): bool {.
+    cdecl, importc: "wasmtime_component_instance_get_func".}
+proc call*(func_arg: ptr ComponentFuncT; context: ptr ComponentContextT;
+           params: ptr ComponentValT; params_len: csize_t;
+           results: ptr ComponentValT; results_len: csize_t;
+           trap_out: ptr ptr WasmTrapT): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_func_call".}
+proc valNew*(): ptr ComponentValT {.cdecl, importc: "wasmtime_component_val_new".}
+proc valDelete*(val: ptr ComponentValT): void {.cdecl,
+    importc: "wasmtime_component_val_delete".}
+proc resourceDrop*(context: ptr ComponentContextT; val: ptr ComponentValT): ptr ErrorT {.
+    cdecl, importc: "wasmtime_component_resource_drop".}
+proc resourceHostData*(context: ptr ComponentContextT; val: ptr ComponentValT;
+                       data: ptr pointer): ptr ErrorT {.cdecl,
+    importc: "wasmtime_component_resource_host_data".}
+proc resourceDump*(val: ptr ComponentValT): WasmNameT {.cdecl,
+    importc: "wasmtime_component_resource_dump".}
 proc clone*(engine: ptr WasmEngineT): ptr WasmEngineT {.cdecl,
     importc: "wasmtime_engine_clone".}
 proc incrementEpoch*(engine: ptr WasmEngineT): void {.cdecl,
@@ -1344,14 +1554,14 @@ proc newTable*(store: ptr ContextT; ty: ptr WasmTabletypeT; init: ptr ValT;
     importc: "wasmtime_table_new".}
 proc type*(store: ptr ContextT; table: ptr TableT): ptr WasmTabletypeT {.cdecl,
     importc: "wasmtime_table_type".}
-proc get*(store: ptr ContextT; table: ptr TableT; index: uint32; val: ptr ValT): bool {.
+proc get*(store: ptr ContextT; table: ptr TableT; index: uint64; val: ptr ValT): bool {.
     cdecl, importc: "wasmtime_table_get".}
-proc set*(store: ptr ContextT; table: ptr TableT; index: uint32; value: ptr ValT): ptr ErrorT {.
+proc set*(store: ptr ContextT; table: ptr TableT; index: uint64; value: ptr ValT): ptr ErrorT {.
     cdecl, importc: "wasmtime_table_set".}
-proc size*(store: ptr ContextT; table: ptr TableT): uint32 {.cdecl,
+proc size*(store: ptr ContextT; table: ptr TableT): uint64 {.cdecl,
     importc: "wasmtime_table_size".}
-proc grow*(store: ptr ContextT; table: ptr TableT; delta: uint32;
-           init: ptr ValT; prev_size: ptr uint32): ptr ErrorT {.cdecl,
+proc grow*(store: ptr ContextT; table: ptr TableT; delta: uint64;
+           init: ptr ValT; prev_size: ptr uint64): ptr ErrorT {.cdecl,
     importc: "wasmtime_table_grow".}
 proc newTrap*(msg: cstring; msg_len: csize_t): ptr WasmTrapT {.cdecl,
     importc: "wasmtime_trap_new".}
@@ -1365,321 +1575,42 @@ proc wasmtimeFrameModuleName*(a0: ptr WasmFrameT): ptr WasmNameT {.cdecl,
 import
   std / [options]
 
-template vec(T: untyped; unchecked: bool = true): untyped =
-  type
-    ItemType = typeof(T().data[])
-  proc `=copy`*(self: var T; src: T) {.error.}
-  proc clone*(self: T): T =
-    self.addr.copy(result.addr)
+from std / unicode import Rune, `$`
 
+proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.}
+template vecType(T: untyped; unchecked: bool = true): untyped =
+  proc `=copy`*(self: var T; src: T) {.error.}
   proc `=destroy`*(self: T) =
     if self.data != nil:
       self.addr.delete()
 
-  func toVec*(s: openArray[ItemType]): T =
-    if s.len > 0:
-      when unchecked:
-        result.addr.new(s.len.csize_t,
-                        cast[ptr UncheckedArray[ItemType]](s[0].addr))
-      else:
-        result.addr.new(s.len.csize_t, s[0].addr)
-    else:
-      result.addr.newEmpty()
 
-  func empty*(_: typedesc[T]): T =
-    result.addr.newEmpty()
-
-  func low*(self: T): int =
-    0
-
-  func high*(self: T): int =
-    self.size.int - 1
-
-  func len*(self: T): int =
-    self.size.int
-
-  func uncheckedArray*(self: T): ptr UncheckedArray[ItemType] =
-    cast[ptr UncheckedArray[ItemType]](self.data)
-
-  func `[]`*(self: var T; index: int): var ItemType =
-    assert index in 0 ..< self.len
-    self.uncheckedArray[index]
-
-  func `[]`*(self: T; index: int): lent ItemType =
-    assert index in 0 ..< self.len
-    self.uncheckedArray[index]
-
-  func `[]=`*(self: T; index: int; value: sink ItemType) =
-    assert index in 0 ..< self.len
-    self.uncheckedArray[index] = value
-
-  func `$`*(self: T): string =
-    var res = "["
-    for i in 0 ..< self.len:
-      if i > 0:
-        res.add ", "
-      when compiles($self.uncheckedArray[i]):
-        res.add $self.uncheckedArray[i]
-      else:
-        res.add $cast[uint64](self.uncheckedArray[i])
-    res.add "]"
-
-  iterator items*(self: T): lent ItemType =
-    for i in 0 ..< self.len:
-      yield self.uncheckedArray[i]
-
-  iterator pairs*(self: T): (int, lent ItemType) =
-    for i in 0 ..< self.len:
-      yield (i, self.uncheckedArray[i])
-
-  
-vec(WasmByteVecT)
-vec(WasmExporttypeVecT)
-vec(WasmExternVecT)
-vec(WasmExterntypeVecT)
-vec(WasmFrameVecT)
-vec(WasmFunctypeVecT)
-vec(WasmGlobaltypeVecT)
-vec(WasmImporttypeVecT)
-vec(WasmMemorytypeVecT)
-vec(WasmTabletypeVecT)
-vec(WasmValVecT)
-vec(WasmValtypeVecT)
-type
-  WasmByte* = WasmByteT
-type
-  WasmByteVec* = WasmByteVecT
-type
-  WasmExporttypeVec* = WasmExporttypeVecT
-type
-  WasmExternVec* = WasmExternVecT
-type
-  WasmExterntypeVec* = WasmExterntypeVecT
-type
-  WasmFrameVec* = WasmFrameVecT
-type
-  WasmFunctypeVec* = WasmFunctypeVecT
-type
-  WasmGlobaltypeVec* = WasmGlobaltypeVecT
-type
-  WasmImporttypeVec* = WasmImporttypeVecT
-type
-  WasmMemorytypeVec* = WasmMemorytypeVecT
-type
-  WasmTabletypeVec* = WasmTabletypeVecT
-type
-  WasmValVec* = WasmValVecT
-type
-  WasmValtypeVec* = WasmValtypeVecT
-proc strVal*(name: WasmNameT): string =
-  result = newStringOfCap(name.size.int)
-  for i in 0 ..< name.size.int:
-    result.add cast[ptr UncheckedArray[char]](name.data)[i]
-
-proc `$`*(self: ptr WasmExterntypeT): string =
-  if self == nil:
-    return "nil"
-  result = ""
-  case self.kind.WasmExternkind
-  of ExternFunc:
-    let f = self.asFunctype
-    let params = f.params
-    let results = f.results
-    result.add "("
-    for i in 0 ..< params[].size.int:
-      if i > 0:
-        result.add ", "
-      {.push, warning[HoleEnumConv]: off.}
-      let kind = params[][i].kind.WasmValkind
-      {.pop.}
-      result.add $kind
-    result.add ") -> ("
-    for i in 0 ..< results[].size.int:
-      if i > 0:
-        result.add ", "
-      {.push, warning[HoleEnumConv]: off.}
-      let kind = results[][i].kind.WasmValkind
-      {.pop.}
-      result.add $kind
-    result.add ")"
+vecType(WasmByteVecT)
+vecType(WasmExporttypeVecT)
+vecType(WasmExternVecT)
+vecType(WasmExterntypeVecT)
+vecType(WasmFrameVecT)
+vecType(WasmFunctypeVecT)
+vecType(WasmGlobaltypeVecT)
+vecType(WasmImporttypeVecT)
+vecType(WasmMemorytypeVecT)
+vecType(WasmTabletypeVecT)
+vecType(WasmValVecT)
+vecType(WasmValtypeVecT)
+vecType(ComponentValFlagsVecT, unchecked = false)
+vecType(ComponentValRecordFieldVecT, unchecked = false)
+vecType(ComponentValVecT, unchecked = false)
+proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.} =
+  case self.kind.ComponentValKind
+  of String:
+    `=destroy`(self.payload.string_field)
+  of List:
+    `=destroy`(self.payload.list)
+  of Record:
+    `=destroy`(self.payload.record)
+  of Tuple:
+    `=destroy`(self.payload.tuple_field)
+  of Flags:
+    `=destroy`(self.payload.flags)
   else:
     discard
-
-proc `$`*(self: ptr WasmExporttypeT): string =
-  if self == nil:
-    return "nil"
-  let name = self.name()
-  if name == nil:
-    result.add "nil"
-  else:
-    result.add name[].strVal
-  result.add ": "
-  result.add $self.type()
-
-proc `$`*(self: ptr WasmImporttypeT): string =
-  if self == nil:
-    return "nil"
-  let name = self.name()
-  if name == nil:
-    result.add "nil"
-  else:
-    result.add name[].strVal
-  result.add ": "
-  result.add $self.type()
-
-type
-  WasmtimeResultKind* = enum
-    Ok, Err
-  WasmtimeResult*[T] = object
-    case kind*: WasmtimeResultKind
-    of Ok:
-      when T isnot void:
-        val*: T
-    of Err:
-      err*: tuple[msg: string, status: int, trace: WasmFrameVecT]
-proc msg*(err: ptr ErrorT): string =
-  var name: WasmNameT
-  err.message(name.addr)
-  result = name.strVal
-
-proc msg*(err: ptr WasmTrapT): string =
-  var name: WasmNameT
-  err.message(name.addr)
-  result = name.strVal
-
-proc exitStatus*(err: ptr ErrorT): int =
-  var exitStatus: cint
-  if err.exitStatus(exitStatus.addr):
-    return exitStatus.int
-  return -1
-
-proc getWasmTrace*(err: ptr ErrorT): WasmFrameVecT =
-  wasmTrace(err, result.addr)
-
-proc getWasmTrace*(err: ptr WasmTrapT): WasmFrameVecT =
-  trace(err, result.addr)
-
-proc exitStatus*(err: ptr WasmTrapT): int =
-  var exitStatus: uint8
-  if err.code(exitStatus.addr):
-    return exitStatus.int
-  return -1
-
-proc ok*[T](val: sink T): WasmtimeResult[T] =
-  WasmtimeResult[T](kind: Ok, val: val)
-
-proc ok*(): WasmtimeResult[void] =
-  WasmtimeResult[void](kind: Ok)
-
-proc isOk*[T](self: WasmtimeResult[T]): bool =
-  self.kind == Ok
-
-proc isErr*[T](self: WasmtimeResult[T]): bool =
-  self.kind == Err
-
-proc toResult*(err: ptr ErrorT; T: typedesc): WasmtimeResult[T] =
-  if err == nil:
-    WasmtimeResult[T](kind: Ok)
-  else:
-    let msg = err.msg()
-    let exitStatus = err.exitStatus()
-    let trace = err.getWasmTrace()
-    WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
-
-proc toResult*(err: ptr WasmTrapT; T: typedesc): WasmtimeResult[T] =
-  if err == nil:
-    WasmtimeResult[T](kind: Ok)
-  else:
-    let msg = err.msg()
-    let exitStatus = err.exitStatus()
-    let trace = err.getWasmTrace()
-    WasmtimeResult[T](kind: Err, err: (msg, exitStatus, trace))
-
-template okOr*[T](res: WasmtimeResult[T]; body: untyped): T =
-  let temp = res
-  if temp.isOk:
-    when T isnot void:
-      temp.val
-  else:
-    body
-
-template okOr*[T](res: WasmtimeResult[T]; err: untyped; body: untyped): T =
-  let temp = res
-  if temp.isOk:
-    when T isnot void:
-      temp.val
-  else:
-    let err {.cursor.} = res.err
-    body
-
-template okOr*(res: ptr ErrorT; err: untyped; body: untyped): untyped =
-  let temp = res.toResult(void)
-  if not temp.isOk:
-    let err {.cursor.} = res
-    body
-
-template okOr*(res: ptr WasmTrapT; err: untyped; body: untyped): untyped =
-  let temp = res.toResult(void)
-  if not temp.isOk:
-    let err {.cursor.} = res
-    body
-
-proc newModule*(engine: ptr WasmEngineT; wasm: openArray[uint8]): WasmtimeResult[
-    ptr ModuleT] =
-  var res: ptr ModuleT = nil
-  let err = engine.newModule(wasm[0].addr, wasm.len.csize_t, res.addr)
-  if err != nil:
-    return err.toResult(ptr ModuleT)
-  return res.ok
-
-proc newModule*(engine: ptr WasmEngineT; wasm: string): WasmtimeResult[
-    ptr ModuleT] =
-  var res: ptr ModuleT = nil
-  let err = engine.newModule(cast[ptr uint8](wasm[0].addr), wasm.len.csize_t,
-                             res.addr)
-  if err != nil:
-    return err.toResult(ptr ModuleT)
-  return res.ok
-
-proc imports*(module: ptr ModuleT): WasmImporttypeVecT =
-  module.imports(result.addr)
-
-proc exports*(module: ptr ModuleT): WasmExporttypeVecT =
-  module.exports(result.addr)
-
-proc instantiate*(linker: ptr LinkerT; store: ptr ContextT; module: ptr ModuleT;
-                  trap: ptr ptr WasmTrapT): WasmtimeResult[InstanceT] =
-  var instance: InstanceT
-  let err = linker.instantiate(store, module, instance.addr, trap)
-  if err != nil:
-    return err.toResult(InstanceT)
-  return instance.ok
-
-proc getExport*(instance: InstanceT; store: ptr ContextT; index: int): Option[
-    tuple[name: string, extern: ExternT]] =
-  var name: cstring = ""
-  var nameLen: csize_t = 0
-  var res: ExternT
-  if not store.exportNth(instance.addr, index.csize_t, name.addr, nameLen.addr,
-                         res.addr):
-    return
-  (name.toOpenArray(0, nameLen.int - 1).join(), res).some
-
-proc getExport*(instance: InstanceT; store: ptr ContextT; name: string): Option[
-    ExternT] =
-  var instance = instance
-  var res: ExternT
-  if not store.exportGet(instance.addr, name.cstring, name.len.csize_t, res.addr):
-    return
-  res.some
-
-proc data*[T](arr: openArray[T]): ptr T =
-  if arr.len == 0:
-    nil
-  else:
-    arr[0].addr
-
-proc call*(f: ptr FuncT; store: ptr ContextT; args: openArray[ValT];
-           results: openArray[ValT]; trap: ptr ptr WasmTrapT): ptr ErrorT =
-  store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t,
-             trap)

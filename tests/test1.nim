@@ -1,213 +1,178 @@
-# This is just an example to get you started. You may wish to put all of your
-# tests into a single file, or separate them into multiple `test1`, `test2`
-# etc. files (better names are recommended, just make sure the name starts with
-# the letter 't').
-#
-# To run these tests, simply execute `nimble test`.
+import std/[strformat, options, macros, tables, unicode]
+import wasmtime, wit_host_module
 
-import std/[strformat, sugar, options]
+type MyContext = ref object
+  resources: WasmModuleResources
+  counter: int
+  callbacks: Table[uint32, ptr ExternT]
+  # instanceToComponent: Table[ptr ComponentInstanceT, ptr ComponentT]
+  # currentInstance: ptr ComponentInstanceT = nil
 
-import unittest
+type MyBlob = object
+  i: int = 1
+  blobName: string
+  arr: seq[uint8]
 
-import nimwasmtime
+type Callback = object
+  data: uint32
+  key: uint32
+  drop: proc() {.raises: [].}
 
-proc main*() =
-  let config = WasmConfig.new()
-  let engine = WasmEngine.new(config)
-  let linker = WasmtimeLinker.new(engine)
-  let store = WasmtimeStore.new(engine, nil, nil)
+# proc `=copy`*(a: var Callback, b: Callback) {.error.}
+# proc `=copy`*(a: var MyBlob, b: MyBlob) {.error.}
+
+proc `=destroy`*(b: Callback) =
+  if b.data != 0:
+    echo "[host] --------------------------------- delete Callback ", b.data, b.key
+    b.drop()
+
+proc `=destroy`*(b: MyBlob) =
+  if b.i != 0:
+    echo "[host] --------------------------------- delete MyBlob ", b
+
+# todo: auto generate unique type id for each resource
+template typeId*(_: typedesc[MyBlob]): int = 69
+template typeId*(_: typedesc[Callback]): int = 420
+
+when defined(witRebuild):
+  static: hint("Rebuilding test.wit")
+  importWit "wasm/wit", MyContext:
+    cacheFile = "host_module.nim"
+    world = "host"
+    mapName "blob", MyBlob
+else:
+  static: hint("Using cached test.wit (host.nim)")
+  include host_module
+
+proc testInterfaceNewBlob(host: MyContext, store: ptr ContextT, init: seq[uint8]): MyBlob =
+  result = MyBlob(blobName: "constr" & $host.counter, arr: init)
+  host.counter.inc
+
+proc testInterfaceWrite(host: MyContext, store: ptr ContextT, self: var MyBlob, bytes: seq[uint8]) =
+  self.arr.add bytes
+
+proc testInterfaceRead(host: MyContext, store: ptr ContextT, self: var MyBlob, n: int32): seq[uint8] =
+  defer:
+    echo "[host] ############################# read ", self, ", ", n, " -> ", result
+  let l = min(self.arr.len, n.int)
+  return self.arr[0..<l]
+
+proc testInterfaceMerge(host: MyContext, store: ptr ContextT, lhs: sink MyBlob, rhs: sink MyBlob): MyBlob =
+  echo "[host] ================================== merge ", lhs, ", ", rhs
+  result = MyBlob(blobName: "merge" & $host.counter, arr: lhs.arr & rhs.arr)
+  host.counter.inc
+
+proc testInterfacePrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, rhs: var MyBlob) =
+  echo "[host] ================================== print ", lhs, ", ", rhs
+
+# proc testInterfaceBarBaz(host: MyContext, store: ptr ContextT, a: int32, b: float32): float32 =
+#   result = a.float32 - b
+
+proc envTestNoParams2(host: MyContext, store: ptr ContextT, b: Baz) =
+  echo "[host] envTestNoParams2 ", b
+
+proc testInterfaceTestNoParams(host: MyContext, store: ptr ContextT) =
+  echo "[host] testInterfaceTestNoParams"
+
+proc testInterfaceTestSimpleParams(host: MyContext, store: ptr ContextT,
+    a: int8, b: int16, c: int32, d: int64, e: uint8, f: uint16, g: uint32, h: uint64, i: float32,
+    j: float64, k: bool, l: Rune) =
+  echo &"[host] {a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}"
+
+proc testInterfaceTestSimpleParamsPtr(host: MyContext, store: ptr ContextT,
+    a: int8, b: int16, c: int32, d: int64, e: uint8, f: uint16, g: uint32, h: uint64, i: float32,
+    j: float64, k: bool, l: Rune, m: int32, n: int32, o: int32, p: int32, q: int32) =
+  echo &"[host] {a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}, {m}, {n}, {o}, {p}, {q}"
+
+proc callbackTypesNewCallback(host: MyContext, store: ptr ContextT, data: uint32, key: uint32, drop: uint32): Callback =
+  proc dropImpl() =
+    host.callbacks.withValue(drop, fun):
+      echo "[host] Call drop for ", data
+      var trap: ptr WasmTrapT = nil
+      fun[].of_field.func_field.addr.call(store, [], [], trap.addr).toResult(void).okOr(err):
+        echo "[host] Failed to call dealloc callback for key ", key, ": ", err.msg
+
+      trap.okOr(err):
+        echo "[host] Failed to call dealloc callback for key ", key, ": ", err.msg
+    do:
+      echo "[host] No dealloc callback registered for key ", key
+
+  Callback(data: data, key: key, drop: dropImpl)
+
+proc callbackTypesData(host: MyContext, store: ptr ContextT, self: var Callback): uint32 =
+  self.data
+
+proc callbackTypesKey(host: MyContext, store: ptr ContextT, self: var Callback): uint32 =
+  self.key
+
+proc testInterfaceAddCallback(host: MyContext, store: ptr ContextT, env: string, name: string): uint32 =
+  discard
+
+proc testInterfaceTestSimpleReturn(host: MyContext, store: ptr ContextT, x: int32): int32 =
+  echo "[host] testInterfaceTestSimpleReturn ", x
+  return x * 2
+
+proc testInterfaceTestSimpleReturn2(host: MyContext, store: ptr ContextT, x: int8): int8 =
+  echo "[host] testInterfaceTestSimpleReturn2 ", x
+  return x * 2
+
+proc testInterfaceTestSimpleReturnPtr(host: MyContext, store: ptr ContextT, x: int8): Bar =
+  echo "[host] testInterfaceTestSimpleReturnPtr ", x
+  return Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true)
+
+proc testInterfaceTestSimpleReturnPtr2(host: MyContext; store: ptr ContextT): Baz =
+  return Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])
+
+proc main(): WasmtimeResult[void] =
+  let config = newConfig()
+  let engine = newEngine(config)
+
+  let linker = engine.newLinker()
+  defer: linker.delete()
+
+  let store = engine.newStore(nil, nil)
+  defer: store.delete()
+
   let context = store.context()
 
-  let wasmBytes = readFile("test.wasm")
-  let module = WasmtimeModule.new(engine.it, wasmBytes).okOr(err):
-    echo "Failed to create wasm module: ", err.msg
+  let wasiConfig = newWasiConfig()
+
+  wasiConfig.inheritStdin()
+  wasiConfig.inheritStderr()
+  wasiConfig.inheritStdout()
+  context.setWasi(wasiConfig).toResult(void).okOr(err):
+    echo "[host] Failed to setup wasi: ", err.msg
     return
 
-  let moduleImports = module.imports
-  let moduleExports = module.exports
-
-  echo "Imports:"
-  for i, e in moduleImports:
-    echo &"  {i}: {e}"
-
-  echo "Exports:"
-  for i, e in moduleExports:
-    echo &"  {i}: {e}"
-
-  let wasiConfig = wasi_config_new()
-  wasi_config_inherit_argv(wasiConfig)
-  wasi_config_inherit_env(wasiConfig)
-  wasi_config_inherit_stdin(wasiConfig)
-  wasi_config_inherit_stdout(wasiConfig)
-  wasi_config_inherit_stderr(wasiConfig)
-  wasmtime_context_set_wasi(context, wasiConfig)
+  let wasmBytes = readFile("tests/wasm/plugin1.m.wasm")
+  let module = engine.newModule(wasmBytes).okOr(err):
+    echo "[host] Failed to load wasm module: ", err.msg
+    return
 
   linker.defineWasi().okOr(err):
-    echo "Failed to create linker: ", err.msg
+    echo "[host] Failed to create linker: ", err.msg
     return
 
-  block:
-    let paramTypes = [
-      wasm_valtype_new(I32),
-      wasm_valtype_new(I64),
-    ]
-    var paramTypesVec: wasm_valtype_vec_t
-    wasm_valtype_vec_new(paramTypesVec.addr, paramTypes.len.csize_t, paramTypes[0].addr)
-
-    let resultTypes = [
-      wasm_valtype_new(I32),
-    ]
-    var resultTypesVec: wasm_valtype_vec_t
-    wasm_valtype_vec_new(resultTypesVec.addr, resultTypes.len.csize_t, resultTypes[0].addr)
-
-    var funcType = wasm_functype_new(paramTypesVec.addr, resultTypesVec.addr)
-    defer:
-      funcType.delete()
-
-    proc cb(env: pointer, caller: ptr WasmtimeCaller, args: ptr UncheckedArray[WasmtimeVal],
-      nargs: csize_t, results: ptr UncheckedArray[WasmtimeVal], nresults: csize_t):
-        ptr wasm_trap_t {.cdecl.} =
-      echo &"host test {args[0]}, {args[1]}"
-      results[0] = 42069.int32.toWasmtimeVal
-
-    linker.defineFunc("env", "host_test", funcType, cb).okOr(err):
-      echo "Failed to define host function"
-
-  let instance = linker.instantiate(context, module, nil).okOr(err):
-    echo "Failed to instantiate wasm module: ", err.msg
+  var ctx = MyContext(counter: 1)
+  linker.defineComponent(ctx).okOr(err):
+    echo "[host] Failed to define component: ", err.msg
     return
 
-  echo "instance exports"
-  for i in 0..<moduleExports.len:
-    let mainExport = instance.getExport(context, i)
-    if mainExport.isNone:
-      echo &"  {i}: none"
-      continue
-    echo &"  {i}: {mainExport.get.name}"
-
-  let mainExport = instance.getExport(context, "wasm_main")
-  assert mainExport.isSome
-  assert mainExport.get.kind == Func
-  echo mainExport
-
-  echo "Call wasm_main"
-  mainExport.get.`of`.`func`.addr.call(context, [], [], nil).toResult(void).okOr(err):
-    echo &"Failed to call wasm_main: {err.msg}"
+  var trap: ptr WasmTrapT = nil
+  let instance = linker.instantiate(context, module, trap.addr).okOr(err):
+    echo "[host] Failed to instantiate wasm module: ", err.msg
     return
 
-  let memoryExport = instance.getExport(context, "memory")
-  assert memoryExport.isSome
-  assert memoryExport.get.kind == Memory
-
-  discard memoryExport.get.`of`.memory.addr.grow(context, 1).okOr(err):
-    echo "Failed to grow memory: ", err
-    0
-
-  let memoryData = memoryExport.get.memory.data(context)
-  echo memoryData[0..<5]
-
-  echo "Called wasm_main"
-
-  let testAddExport = instance.getExport(context, "test_add")
-  assert testAddExport.isSome
-  assert testAddExport.get.kind == Func
-
-  echo "Call add"
-  var res: array[1, WasmtimeVal]
-  testAddExport.get.function.call(context, [
-      123.int32.toWasmtimeVal, 456.int32.toWasmtimeVal
-      ], res, nil).toResult(void).okOr(err):
-
-    echo &"Failed to call test_add: {err.msg}"
+  trap.okOr(err):
+    echo "[trap] Failed to instantiate wasm module: ", err.msg
     return
 
-  echo "-> ", testAddExport.get.function.call(context, int32, 456.int32, 789.int32)
+  let mainExport = instance.getExport(context, "start")
+  mainExport.get.of_field.func_field.addr.call(context, [], [], trap.addr).toResult(void).okOr(err):
+    echo "[host] Failed to call hello: ", err.msg
+    return
 
+  echo "[host] ------------ Finished main"
 
-  echo "Called add -> ", res
-
-
-proc main2*() =
-  var v: wasm_byte_vec_t
-  wasm_byte_vec_new_uninitialized(v.addr, 10)
-  echo v
-
-
-  let config = WasmConfig.new()
-  let engine = WasmEngine.new(config)
-  let store = WasmStore.new(engine)
-  echo "Created store"
-
-  let err = WasmtimeError.new("hello world")
-  echo cast[int](err)
-  echo err.msg
-
-  let wasmBytes = readFile("/mnt/c/Absytree/wasm/test.wasm")
-  var wasmBytesVec: wasm_byte_vec_t
-  wasm_byte_vec_new(wasmBytesVec.addr, wasmBytes.len.csize_t, cast[ptr wasm_byte_t](wasmBytes[0].addr))
-
-  echo "Validate: ", store.it.wasm_module_validate(wasmBytesVec.addr)
-  let module = store.it.wasm_module_new(wasmBytesVec.addr)
-  assert module != nil
-  echo "Created module"
-
-  var moduleExports: wasm_exporttype_vec_t
-  module.wasm_module_exports(moduleExports.addr)
-  echo "Module exports: ", moduleExports.size.int
-  for i in 0..<moduleExports.size.int:
-    let e: ptr wasm_exporttype_t = moduleExports.data[i]
-    echo "  ", i, ": ", e.wasm_exporttype_name[], ", ", e.wasm_exporttype_type
-
-  var moduleImports: wasm_importtype_vec_t
-  module.wasm_module_imports(moduleImports.addr)
-  echo "Module imports: ", moduleImports.size.int
-  for i in 0..<moduleImports.size.int:
-    let e: ptr wasm_importtype_t = moduleImports.data[i]
-    echo "  ", i, ": ", e.wasm_importtype_name[], ", ", e.wasm_importtype_type
-
-  var imports: seq[ptr wasm_extern_t] = @[]
-  var importsVec: wasm_extern_vec_t
-  wasm_extern_vec_new(importsVec.addr, imports.len.csize_t, imports[0].addr)
-  let instance = store.it.wasm_instance_new(module, importsVec.addr, nil)
-  assert instance != nil
-  echo "Created instance"
-
-  var instanceExports: wasm_extern_vec_t
-  instance.wasm_instance_exports(instanceExports.addr)
-  echo "Exports: ", instanceExports
-
-  for i in 0..<instanceExports.size.int:
-    let e: ptr wasm_extern_t = instanceExports.data[i]
-    echo "  ", i, ": ", e.wasm_extern_kind, ", ", e.wasm_extern_type
-    case e.wasm_extern_kind
-    of Func:
-      let f = e.wasm_extern_as_func()
-      # let exportType: ptr wasm_exporttype_t =
-      # let name = exportType.wasm_exporttype_name()
-      # echo "Export: ", name[]
-
-      # let t = e.wasm_as_func
-      assert f != nil
-
-      echo f[]
-
-    else:
-      discard
-
-  let paramTypes = [
-    wasm_valtype_new(I32),
-    wasm_valtype_new(F32),
-  ]
-  var paramTypesVec: wasm_valtype_vec_t
-  wasm_valtype_vec_new(paramTypesVec.addr, paramTypes.len.csize_t, paramTypes[0].addr)
-
-  let resultTypes = [
-    wasm_valtype_new(I64),
-    wasm_valtype_new(ExternRef),
-  ]
-  var resultTypesVec: wasm_valtype_vec_t
-  wasm_valtype_vec_new(resultTypesVec.addr, resultTypes.len.csize_t, resultTypes[0].addr)
-
-  var funcType = wasm_functype_new(paramTypesVec.addr, resultTypesVec.addr)
-
-main()
+echo main()
+echo "no crash"
