@@ -1,4 +1,4 @@
-import std/[os, macros, strutils, json, sets, enumerate, tables, options]
+import std/[os, macros, strutils, json, sets, enumerate, tables, options, sequtils]
 import results as ress
 
 const nimWasmtimeStatic* {.booldefine.} = true
@@ -1061,6 +1061,11 @@ proc getExport*(instance: InstanceT, store: ptr ContextT, name: string):
     return
   res.some
 
+proc getExport*(caller: ptr CallerT; name: string): Option[ExternT] =
+  var res: ExternT
+  if caller.wasmtimeCallerExportGet(name.cstring, name.len.csize_t, res.addr):
+    return res.some
+
 proc data*[T](arr: openArray[T]): ptr T =
   if arr.len == 0:
     nil
@@ -1125,6 +1130,63 @@ proc funcNew*[T](linker: ptr ComponentLinkerT, env: string, name: string,
       newTrap(msg.cstring, msg.len.csize_t)
 
   return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
+
+type FuncCallback*[T] = proc(ctx: ptr ContextT, caller: ptr CallerT, data: ptr T, params: openArray[ValRawT]): ptr WasmTrapT
+
+proc funcNewUnchecked*[T](linker: ptr LinkerT, env: string, name: string,
+    callback: FuncCallback[T], ty: ptr WasmFunctypeT, data: ptr T = nil,
+    finalizer: proc (a0: ptr T): void = nil): WasmtimeResult[void] =
+
+  type Data = object
+    callback: FuncCallback[T]
+    data: ptr T
+    finalizer: proc (a0: ptr T): void
+    env: string
+    name: string
+
+  var ctx = createShared(Data)
+  ctx.callback = callback
+  ctx.data = data
+  ctx.finalizer = finalizer
+  ctx.env = env
+  ctx.name = name
+
+  proc fin(data: pointer) {.cdecl.} =
+    let data = cast[ptr Data](data)
+    if data.finalizer != nil:
+      data.finalizer(data.data)
+    deallocShared(data)
+
+  proc cb(data: pointer, caller: ptr CallerT, parameters: ptr ValRawT, paramsLen: csize_t): ptr WasmTrapT {.cdecl.} =
+    let ctx = caller.wasmtimeCallerContext()
+    let data = cast[ptr Data](data)
+    let parameters = cast[ptr UncheckedArray[ValRawT]](parameters)
+    try:
+      data[].callback(ctx, caller, data[].data, parameters.toOpenArray(0, paramsLen.int - 1))
+    except Exception as e:
+      let msg = &"Failed to run func '{data.env}.{data.name}': {e.msg}\n{e.getStackTrace()}"
+      newTrap(msg.cstring, msg.len.csize_t)
+
+  return linker.defineFuncUnchecked(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, ty, cb, ctx, fin).toResult(void)
+
+template defineFuncUnchecked*(linker: ptr LinkerT, env: string, name: string, ty: ptr WasmFunctypeT, body: untyped): WasmtimeResult[void] =
+  block:
+    proc cb(s: ptr ContextT, c: ptr CallerT, data: ptr int, p: openArray[ValRawT]): ptr WasmTrapT =
+      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: openArray[ValRawT]): WasmtimeResult[void] =
+        # echo "[host] " & name & &" <- {parameters.len}"
+        # defer:
+        #   echo "[host] " & name & &" -> {parameters.len}"
+        body
+
+      inner(s, c, p).okOr(e):
+        let msg = $e
+        return newTrap(msg.cstring, msg.len.csize_t)
+
+      nil
+
+    let funcName {.inject.} = name
+    let res = linker.funcNewUnchecked[:int](env, funcName, cb, ty)
+    res
 
 template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped): untyped =
   block:
@@ -1303,3 +1365,7 @@ proc iterateImports*(component: ptr ComponentT, cb: ComponentImportsCallback) =
 
   component.iterateImports(cbInner, data.addr)
 
+proc newFuncType*(parameters: openArray[WasmValkind], results: openArray[WasmValkind]): ptr WasmFunctypeT =
+  var parameters = parameters.mapIt(newValType(it.WasmValkindT)).toVec
+  var results = results.mapIt(newValType(it.WasmValkindT)).toVec
+  newFunctype(parameters.addr, results.addr)

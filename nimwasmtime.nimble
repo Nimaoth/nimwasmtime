@@ -84,5 +84,8 @@ task buildWasmComponent2, "":
   exec "wasm-tools component embed ./tests/wasm/wit --world plugin2 ./tests/wasm/plugin2.m.wasm -o ./tests/wasm/plugin2.me.wasm --features callbacks-impl"
   exec "wasm-tools component new ./tests/wasm/plugin2.me.wasm -o ./tests/wasm/plugin2.c.wasm --adapt ./tests/wasm/wasi_snapshot_preview1.reactor.wasm"
 
+task buildWasmModule, "":
+  exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} \"--passL:-o tests/wasm/plugin1.m.wasm\" ./tests/wasm/plugin1.nim"
+
 before install:
   nimgenTask()
