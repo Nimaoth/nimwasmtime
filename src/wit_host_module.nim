@@ -6,7 +6,6 @@ when not declared(buildOS):
 const windowsHost = buildOS == "windows"
 const cmdPrefix = when windowsHost: "cmd /E:ON /C " else: ""
 
-
 type
   Slot = object
     data: pointer
@@ -70,8 +69,6 @@ proc coreTypeToFieldName(t: CoreType): string =
   # of AnyRef: "anyref"
   # of ExternRef: "externref"
   # of FuncRef: "funcref"
-  else:
-    error("not implemented")
 
 proc coreTypeToWasmValkindName(t: CoreType): string =
   case t
@@ -84,8 +81,6 @@ proc coreTypeToWasmValkindName(t: CoreType): string =
   # of AnyRef: "anyref"
   # of ExternRef: "externref"
   # of FuncRef: "funcref"
-  else:
-    error("not implemented")
 
 macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap: static[Table[string, string]], worldName: static[string], dir: static[string], hostType: untyped): untyped =
   let path = if witPath.isAbsolute:
@@ -312,13 +307,11 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
           # todo: multi return values
           let field = ident(flatFuncType.results[0].toCoreType.coreTypeToFieldName)
           let t = ident(flatFuncType.results[0].toCoreType.nimTypeName)
-          echo flatFuncType
           let c = genAst(field, t, res):
             parameters[0].field = cast[t](res)
           body.add c
         else:
           let retArea = ident"retArea"
-          var needsRetArea = false
           block:
             let c = genAst(retArea):
               let retArea = parameters[^1].i32

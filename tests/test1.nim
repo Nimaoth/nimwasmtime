@@ -69,33 +69,33 @@ proc testInterfacePrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, r
 #   result = a.float32 - b
 
 proc envTestNoParams2(host: MyContext, store: ptr ContextT, b: Baz) =
-  echo "envTestNoParams2 ", b
+  echo "[host] envTestNoParams2 ", b
 
 proc testInterfaceTestNoParams(host: MyContext, store: ptr ContextT) =
-  echo "testInterfaceTestNoParams"
+  echo "[host] testInterfaceTestNoParams"
 
 proc testInterfaceTestSimpleParams(host: MyContext, store: ptr ContextT,
     a: int8, b: int16, c: int32, d: int64, e: uint8, f: uint16, g: uint32, h: uint64, i: float32,
     j: float64, k: bool, l: Rune) =
-  echo &"{a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}"
+  echo &"[host] {a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}"
 
 proc testInterfaceTestSimpleParamsPtr(host: MyContext, store: ptr ContextT,
     a: int8, b: int16, c: int32, d: int64, e: uint8, f: uint16, g: uint32, h: uint64, i: float32,
     j: float64, k: bool, l: Rune, m: int32, n: int32, o: int32, p: int32, q: int32) =
-  echo &"{a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}, {m}, {n}, {o}, {p}, {q}"
+  echo &"[host] {a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}, {m}, {n}, {o}, {p}, {q}"
 
 proc callbackTypesNewCallback(host: MyContext, store: ptr ContextT, data: uint32, key: uint32, drop: uint32): Callback =
   proc dropImpl() =
     host.callbacks.withValue(drop, fun):
-      echo "Call drop for ", data
+      echo "[host] Call drop for ", data
       var trap: ptr WasmTrapT = nil
       fun[].of_field.func_field.addr.call(store, [], [], trap.addr).toResult(void).okOr(err):
-        echo "Failed to call dealloc callback for key ", key, ": ", err.msg
+        echo "[host] Failed to call dealloc callback for key ", key, ": ", err.msg
 
       trap.okOr(err):
-        echo "Failed to call dealloc callback for key ", key, ": ", err.msg
+        echo "[host] Failed to call dealloc callback for key ", key, ": ", err.msg
     do:
-      echo "No dealloc callback registered for key ", key
+      echo "[host] No dealloc callback registered for key ", key
 
   Callback(data: data, key: key, drop: dropImpl)
 
@@ -141,16 +141,16 @@ proc main(): WasmtimeResult[void] =
   wasiConfig.inheritStderr()
   wasiConfig.inheritStdout()
   context.setWasi(wasiConfig).toResult(void).okOr(err):
-    echo "Failed to setup wasi: ", err.msg
+    echo "[host] Failed to setup wasi: ", err.msg
     return
 
   let wasmBytes = readFile("tests/wasm/plugin1.m.wasm")
   let module = engine.newModule(wasmBytes).okOr(err):
-    echo "Failed to load wasm module: ", err.msg
+    echo "[host] Failed to load wasm module: ", err.msg
     return
 
   linker.defineWasi().okOr(err):
-    echo "Failed to create linker: ", err.msg
+    echo "[host] Failed to create linker: ", err.msg
     return
 
   var ctx = MyContext(counter: 1)
@@ -160,7 +160,7 @@ proc main(): WasmtimeResult[void] =
 
   var trap: ptr WasmTrapT = nil
   let instance = linker.instantiate(context, module, trap.addr).okOr(err):
-    echo "Failed to instantiate wasm module: ", err.msg
+    echo "[host] Failed to instantiate wasm module: ", err.msg
     return
 
   trap.okOr(err):
@@ -169,7 +169,7 @@ proc main(): WasmtimeResult[void] =
 
   let mainExport = instance.getExport(context, "start")
   mainExport.get.of_field.func_field.addr.call(context, [], [], trap.addr).toResult(void).okOr(err):
-    echo "Failed to call hello: ", err.msg
+    echo "[host] Failed to call hello: ", err.msg
     return
 
   echo "[host] ------------ Finished main"
