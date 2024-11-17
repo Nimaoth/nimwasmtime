@@ -74,6 +74,12 @@ proc start() =
   # invokeOnLater(gcb, some(ws"jo"))
   echo "[plugin1] call later done"
 
+  echo "[plugin1] call testSimpleReturn"
+  echo "[plugin1] -> ", testSimpleReturn(123)
+
+  echo "[plugin1] call testSimpleReturn2"
+  echo "[plugin1] -> ", testSimpleReturn(69)
+
 proc foo() =
   echo "[plugin1] foo"
 

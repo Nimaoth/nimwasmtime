@@ -65,6 +65,10 @@ proc testInterfaceTestSimpleParamsPtr(host: MyContext; store: ptr ContextT;
                                       q: int32): void
 proc testInterfaceAddCallback(host: MyContext; store: ptr ContextT; env: string;
                               name: string): uint32
+proc testInterfaceTestSimpleReturn(host: MyContext; store: ptr ContextT;
+                                   x: int32): int32
+proc testInterfaceTestSimpleReturn2(host: MyContext; store: ptr ContextT;
+                                    x: int8): int8
 proc testInterfaceNewBlob(host: MyContext; store: ptr ContextT; init: seq[uint8]): MyBlob
 proc testInterfaceWrite(host: MyContext; store: ptr ContextT; self: var MyBlob;
                         bytes: seq[uint8]): void
@@ -293,6 +297,31 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           for i0 in 0 ..< name.len:
             name[i0] = p0[i0]
         let res = testInterfaceAddCallback(host, store, env, name)
+        parameters[0].i32 = cast[int32](res)
+    if e.isErr:
+      return e
+  block:
+    let e = block:
+      var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32],
+          [WasmValkind.I32])
+      linker.defineFuncUnchecked("my:host/test-interface", "test-simple-return",
+                                 ty):
+        var x: int32
+        x = cast[int32](parameters[0].i32)
+        let res = testInterfaceTestSimpleReturn(host, store, x)
+        parameters[0].i32 = cast[int32](res)
+    if e.isErr:
+      return e
+  block:
+    let e = block:
+      var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32],
+          [WasmValkind.I32])
+      linker.defineFuncUnchecked("my:host/test-interface",
+                                 "test-simple-return2", ty):
+        var x: int8
+        x = cast[int8](parameters[0].i32)
+        let res = testInterfaceTestSimpleReturn2(host, store, x)
+        parameters[0].i32 = cast[int32](res)
     if e.isErr:
       return e
   block:
@@ -407,6 +436,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         var self: ptr Callback
         self = ?host.resources.resourceHostData(parameters[0].i32, Callback)
         let res = callbackTypesData(host, store, self[])
+        parameters[0].i32 = cast[int32](res)
     if e.isErr:
       return e
   block:
@@ -418,5 +448,6 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         var self: ptr Callback
         self = ?host.resources.resourceHostData(parameters[0].i32, Callback)
         let res = callbackTypesKey(host, store, self[])
+        parameters[0].i32 = cast[int32](res)
     if e.isErr:
       return e

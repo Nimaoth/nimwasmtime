@@ -207,6 +207,22 @@ proc addCallback*(env: WitString; name: WitString): uint32 {.nodestroy.} =
   let res = testInterfaceAddCallbackImported(arg0, arg1, arg2, arg3)
   result = cast[uint32](res)
 
+proc testInterfaceTestSimpleReturnImported(a0: int32): int32 {.
+    wasmimport("test-simple-return", "my:host/test-interface").}
+proc testSimpleReturn*(x: int32): int32 {.nodestroy.} =
+  var arg0: int32
+  arg0 = cast[int32](x)
+  let res = testInterfaceTestSimpleReturnImported(arg0)
+  result = cast[int32](res)
+
+proc testInterfaceTestSimpleReturn2Imported(a0: int32): int8 {.
+    wasmimport("test-simple-return2", "my:host/test-interface").}
+proc testSimpleReturn2*(x: int8): int8 {.nodestroy.} =
+  var arg0: int32
+  arg0 = cast[int32](x)
+  let res = testInterfaceTestSimpleReturn2Imported(arg0)
+  result = cast[int8](res)
+
 proc testInterfaceNewBlobImported(a0: int32; a1: int32): int32 {.
     wasmimport("[constructor]blob", "my:host/test-interface").}
 proc newBlob*(init: WitList[uint8]): Blob {.nodestroy.} =

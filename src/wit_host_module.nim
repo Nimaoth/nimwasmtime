@@ -296,25 +296,34 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         # parameters[0] = res.toVal # todo
 
       let r = fun.results[0]
-      if r.builtin == "":
-        let userType = ctx.types[r.index]
-        if userType.kind == Handle and userType.owned:
-          callAndResult = genAst(host, res, call):
-            let res = call
-            parameters[0].i32 = ?host.resources.resourceNew(res)
+      if ctx.isOwnedHandle(r):
+        callAndResult = genAst(host, res, call):
+          let res = call
+          parameters[0].i32 = ?host.resources.resourceNew(res)
 
-      body.add callAndResult
+        body.add callAndResult
+
+      else:
+        body.add callAndResult
+
+        # todo
+        # lower results
+        if fun.results.len > 0:
+          if flatFuncType.resultsFlat:
+            # todo: multi return values
+            let field = ident(flatFuncType.results[0].coreTypeToFieldName)
+            let t = ident(flatFuncType.results[0].normalize.nimTypeName)
+            echo flatFuncType
+            let c = genAst(field, t, res):
+              parameters[0].field = cast[t](res)
+            body.add c
+          else:
+            # ctx.lower(loweredArgs, args, fun.results, body, Return)
+            discard
 
     else:
       body.add call
 
-    # todo
-    # # lower results
-    # if fun.results.len > 0:
-    #   if flatFuncType.resultsFlat:
-    #     discard
-    #   else:
-    #     ctx.lower(loweredArgs, args, fun.results, body, Return)
 
     var parameterTypes = nnkBracket.newTree()
     var resultTypes = nnkBracket.newTree()

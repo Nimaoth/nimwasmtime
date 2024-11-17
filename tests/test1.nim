@@ -108,6 +108,14 @@ proc callbackTypesKey(host: MyContext, store: ptr ContextT, self: var Callback):
 proc testInterfaceAddCallback(host: MyContext, store: ptr ContextT, env: string, name: string): uint32 =
   discard
 
+proc testInterfaceTestSimpleReturn(host: MyContext, store: ptr ContextT, x: int32): int32 =
+  echo "[host] testInterfaceTestSimpleReturn ", x
+  return x * 2
+
+proc testInterfaceTestSimpleReturn2(host: MyContext, store: ptr ContextT, x: int8): int8 =
+  echo "[host] testInterfaceTestSimpleReturn2 ", x
+  return x * 2
+
 proc main(): WasmtimeResult[void] =
   let config = newConfig()
   let engine = newEngine(config)

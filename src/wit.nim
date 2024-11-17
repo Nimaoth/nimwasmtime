@@ -156,6 +156,20 @@ proc getNimName*(ctx: WitContext, str: string, capitalizeFirst: bool): string =
     return name[].toCamelCase(capitalizeFirst)
   return str.toCamelCase(capitalizeFirst)
 
+proc isHandle*(ctx: WitContext, typ: WitType): bool =
+  if typ.builtin == "":
+    return ctx.types[typ.index].kind == Handle
+
+proc isOwnedHandle*(ctx: WitContext, typ: WitType): bool =
+  if typ.builtin == "":
+    let userType = ctx.types[typ.index]
+    return userType.kind == Handle and userType.owned
+
+proc isBorrowedHandle*(ctx: WitContext, typ: WitType): bool =
+  if typ.builtin == "":
+    let userType = ctx.types[typ.index]
+    return userType.kind == Handle and not userType.owned
+
 proc parseWitFunc(json: JsonNode, env: string, interfac: Option[int] = int.none): WitFunc =
   # echo &"parseWitFunc {env}, {json}"
   result.name = json["name"].getStr
