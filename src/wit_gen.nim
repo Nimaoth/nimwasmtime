@@ -10,7 +10,6 @@ proc getParamTypeKind*(ctx: WitContext, typ: WitType): WitParamTypeKind =
 
   case ctx.types[typ.index].kind:
   of Handle:
-    let targetType = ctx.types[typ.index].handleTarget
     if ctx.types[typ.index].owned:
       OwnedResource
     else:

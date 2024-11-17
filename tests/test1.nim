@@ -1,4 +1,4 @@
-import std/[strformat, options, macros, genasts, tables, unicode]
+import std/[strformat, options, macros, tables, unicode]
 import wasmtime, wit_host_module
 
 type MyContext = ref object
@@ -16,7 +16,7 @@ type MyBlob = object
 type Callback = object
   data: uint32
   key: uint32
-  drop: proc()
+  drop: proc() {.raises: [].}
 
 # proc `=copy`*(a: var Callback, b: Callback) {.error.}
 # proc `=copy`*(a: var MyBlob, b: MyBlob) {.error.}
@@ -65,8 +65,8 @@ proc testInterfaceMerge(host: MyContext, store: ptr ContextT, lhs: sink MyBlob, 
 proc testInterfacePrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, rhs: var MyBlob) =
   echo "[host] ================================== print ", lhs, ", ", rhs
 
-proc testInterfaceBarBaz(host: MyContext, store: ptr ContextT, a: int32, b: float32): float32 =
-  result = a.float32 - b
+# proc testInterfaceBarBaz(host: MyContext, store: ptr ContextT, a: int32, b: float32): float32 =
+#   result = a.float32 - b
 
 proc envTestNoParams2(host: MyContext, store: ptr ContextT, b: Baz) =
   echo "envTestNoParams2 ", b

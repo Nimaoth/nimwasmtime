@@ -1579,14 +1579,12 @@ from std / unicode import Rune, `$`
 
 proc `=destroy`*(self: StructWasmtimeComponentValT) {.nodestroy.}
 template vecType(T: untyped; unchecked: bool = true): untyped =
-  type
-    ItemType = typeof(T().data[])
   proc `=copy`*(self: var T; src: T) {.error.}
   proc `=destroy`*(self: T) =
     if self.data != nil:
       self.addr.delete()
 
-  
+
 vecType(WasmByteVecT)
 vecType(WasmExporttypeVecT)
 vecType(WasmExternVecT)

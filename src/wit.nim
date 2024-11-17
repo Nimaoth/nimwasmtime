@@ -184,8 +184,6 @@ proc parseWitFunc(json: JsonNode, env: string, interfac: Option[int] = int.none)
   result.interfac = interfac
 
 proc collectFuncs(ctx: WitContext, json: JsonNode, packageIdx: int): seq[WitFunc] =
-  let package = ctx.packages[packageIdx]
-
   for name, val in json:
     if val.hasKey("interface"):
       let index = val["interface"]["id"].getInt

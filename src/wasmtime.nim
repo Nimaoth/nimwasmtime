@@ -1,3 +1,4 @@
+{.push hint[DuplicateModuleImport]:off.}
 import std/[os, macros, strutils, json, sets, enumerate, tables, options, sequtils]
 import results as ress
 
@@ -420,6 +421,7 @@ else: # defined(useFuthark) or defined(useFutharkForWasmtime)
 
 from std/unicode import Rune, `$`
 import wit_types
+{.pop.}
 
 template vec(T: untyped, unchecked: bool = true): untyped =
   type ItemType = typeof(T().data[])
@@ -1302,8 +1304,6 @@ proc `$`*(a: ComponentValT): string =
     # of Uninstantiated: $a.payload.resource.ty.payload.uninstantiated
     # str.add ")"
     # str
-
-  else: "Unknown kind for $ComponentValT: " & $a.kind.ComponentValKind
 
 proc `$`*[S](a: array[S, ComponentValT]): string =
   result = "["

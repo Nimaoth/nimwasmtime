@@ -171,6 +171,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       ident(funcNimName.toCamelCase(false) & "")
 
     let memory = ident"memory"
+    var needsMemory = false
 
     var decl = funDeclTempl.copy()
     decl[0] = implName
@@ -255,6 +256,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
             parameters[i].field
 
       proc memoryAccess(a: NimNode): NimNode =
+        needsMemory = true
         genAst(memory, a):
           memory[a].addr
 
@@ -270,6 +272,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         for p in flatFuncTargetType.params:
           while i mod p.byteAlignment != 0:
             inc i
+          needsMemory = true
           let field = p.coreTypeToFieldName
           let c = genAst(i, memory, t = p.nimTypeName.ident, field = ident(field)):
             cast[ptr t](memory[parameters[0].i32 + i].addr)[]
@@ -277,6 +280,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
           c
 
       proc memoryAccess(a: NimNode): NimNode =
+        needsMemory = true
         genAst(memory, a):
           memory[a].addr
 
@@ -295,7 +299,6 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       if r.builtin == "":
         let userType = ctx.types[r.index]
         if userType.kind == Handle and userType.owned:
-          let typ = ctx.getTypeName(r, Field)
           callAndResult = genAst(host, res, call):
             let res = call
             parameters[0].i32 = ?host.resources.resourceNew(res)
@@ -327,13 +330,19 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       else:
         parameterTypes.add nnkDotExpr.newTree(ident"WasmValkind", ident(name))
 
-    let code = genAst(store, linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, res, memory, mainMemory = ident"mainMemory"):
+    var memoryDecl = if needsMemory:
+      genAst(store, memoryName = memory, mainMemory = ident"mainMemory"):
+        let mainMemory = caller.getExport("memory")
+        let memoryName = cast[ptr UncheckedArray[uint8]](store.data(mainMemory.get.of_field.memory.addr))
+    else:
+      nnkStmtList.newTree()
+
+    let code = genAst(linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, memoryDecl):
       block:
         let e = block:
           var ty: ptr WasmFunctypeT = newFunctype(parameterTypes, resultTypes)
           linker.defineFuncUnchecked(env, name, ty):
-            let mainMemory = caller.getExport("memory")
-            let memory = cast[ptr UncheckedArray[uint8]](store.data(mainMemory.get.of_field.memory.addr))
+            memoryDecl
             body
 
         if e.isErr:
@@ -345,7 +354,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     {.push hint[DuplicateModuleImport]:off.}
     import std/[options]
     from std/unicode import Rune
-    import results, wit_types, wasmtime
+    import results, wasmtime
     {.pop.}
 
     typeSection
