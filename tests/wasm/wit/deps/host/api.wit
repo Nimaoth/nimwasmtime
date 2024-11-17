@@ -17,7 +17,8 @@ interface test-types {
     h: props,
     // g: result<foo, descriptor-type>,
     i: result<foo>,
-    j: voodoo
+    j: voodoo,
+    k: list<bar>,
   }
 
   flags props {

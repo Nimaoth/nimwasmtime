@@ -116,8 +116,6 @@ proc toCamelCase*(str: string, capitalizeFirst: bool): string =
       result.add part.capitalizeAscii
 
 proc getWitTypeName*(ctx: WitContext, typ: WitType): string =
-  defer:
-    echo "getWitTypeName ", typ, " -> ", result
   if typ.builtin != "":
     return typ.builtin
   case ctx.types[typ.index].kind:
@@ -449,6 +447,13 @@ func paramsByteSize*(self: CoreFuncType): int =
 
 func resultsByteSize*(self: CoreFuncType): int =
   for p in self.results:
+    while result mod p.byteAlignment != 0:
+      inc result
+    result += p.byteSize
+
+proc byteSize*(ctx: WitContext, typ: WitType): int =
+  let flat = ctx.flattenType(typ)
+  for p in flat:
     while result mod p.byteAlignment != 0:
       inc result
     result += p.byteSize

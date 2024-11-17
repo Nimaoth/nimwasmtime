@@ -283,7 +283,6 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       var liftContext = WitLiftContext(memoryAccess: memoryAccess, resourceAccess: resourceAccess)
       ctx.lift(loweredArgs, args, fun.params, body, Parameter, liftContext)
 
-
     # call
     if fun.results.len > 0:
       var res = ident"res"

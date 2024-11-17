@@ -44,6 +44,7 @@ type
     h*: Props
     i*: Result[Foo, void]
     j*: Voodoo
+    k*: WitList[Bar]
   Blob* = object
     handle*: int32
   Callback* = object
@@ -65,7 +66,7 @@ proc `=destroy`*(a: Callback) =
 proc envTestNoParams2Imported(a0: int32): void {.
     wasmimport("test-no-params2", "env").}
 proc testNoParams2*(b: Baz): void {.nodestroy.} =
-  var retArea: array[76, uint8]
+  var retArea: array[84, uint8]
   if b.x.len > 0:
     cast[ptr int32](retArea[0].addr)[] = cast[int32](b.x[0].addr)
   else:
@@ -112,6 +113,11 @@ proc testNoParams2*(b: Baz): void {.nodestroy.} =
     else:
       cast[ptr int32](retArea[68].addr)[] = 0
     cast[ptr int32](retArea[72].addr)[] = b.j.possesed.len
+  if b.k.len > 0:
+    cast[ptr int32](retArea[76].addr)[] = cast[int32](b.k[0].addr)
+  else:
+    cast[ptr int32](retArea[76].addr)[] = 0
+  cast[ptr int32](retArea[80].addr)[] = b.k.len
   envTestNoParams2Imported(cast[int32](retArea[0].addr))
 
 proc testInterfaceTestNoParamsImported(): void {.

@@ -1,4 +1,4 @@
-import std/[strformat, options, macros, genasts, tables]
+import std/[strformat, options, macros, genasts, tables, unicode]
 import wasmtime, wit_host_module
 
 type MyContext = ref object

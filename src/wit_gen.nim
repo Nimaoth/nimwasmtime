@@ -352,10 +352,10 @@ proc lift*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, typ
         let elem = genAst(param, i):
           param[i]
 
-        let flatTypeSize = ctx.flatTypeSize(typ) * 4
+        let flatTypeSize = ctx.byteSize(userType.listTarget)
         var k = 0
         let elemPtrs = collect:
-          for param in ctx.flattenType(typ):
+          for param in ctx.flattenType(userType.listTarget):
             while k mod param.byteAlignment != 0:
               inc k
             let c = genAst(i, k, p, flatTypeSize):
