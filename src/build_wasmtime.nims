@@ -21,6 +21,7 @@ const nimWasmtimeFeatureGC* {.booldefine.} = true
 const nimWasmtimeFeatureAsync* {.booldefine.} = true
 const nimWasmtimeFeatureCranelift* {.booldefine.} = true
 const nimWasmtimeFeatureWinch* {.booldefine.} = true
+const nimWasmtimeFeatureComponentModel* {.booldefine.} = false
 
 const wasmtimeFeatures = [
   ("WASMTIME_FEATURE_PROFILING", "profiling", nimWasmtimeFeatureProfiling),
@@ -38,6 +39,7 @@ const wasmtimeFeatures = [
   ("WASMTIME_FEATURE_ASYNC", "async", nimWasmtimeFeatureAsync),
   ("WASMTIME_FEATURE_CRANELIFT", "cranelift", nimWasmtimeFeatureCranelift),
   ("WASMTIME_FEATURE_WINCH", "winch", nimWasmtimeFeatureWinch),
+  ("WASMTIME_FEATURE_COMPONENT_MODEL", "component-model", nimWasmtimeFeatureComponentModel),
 ]
 
 proc buildWasmtime() =
