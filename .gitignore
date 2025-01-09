@@ -30,3 +30,16 @@
 *.exe
 *.out
 *.app
+*.pdb
+*.dll.abilities
+
+.vs
+*.wat
+*.wit
+*.c
+*.h
+uiae.txt
+
+nimcache
+tests/wasm
+tests
