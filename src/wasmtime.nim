@@ -27,6 +27,9 @@ const nimWasmtimeFeatureGC* {.booldefine.} = true
 const nimWasmtimeFeatureAsync* {.booldefine.} = true
 const nimWasmtimeFeatureCranelift* {.booldefine.} = true
 const nimWasmtimeFeatureWinch* {.booldefine.} = true
+const nimWasmtimeFeatureComponentModel* {.booldefine.} = true
+const nimWasmtimeFeatureDebugBuiltins* {.booldefine.} = false
+const nimWasmtimeFeaturePoolingAllocator* {.booldefine.} = false
 
 when nimWasmtimeOverride.len > 0:
   const wasmDir* = nimWasmtimeOverride
@@ -54,6 +57,9 @@ when defined(nimWasmtimeBuild) or defined(nimWasmtimeBuildForce):
     "-d:nimWasmtimeFeatureAsync=" & $nimWasmtimeFeatureAsync,
     "-d:nimWasmtimeFeatureCranelift=" & $nimWasmtimeFeatureCranelift,
     "-d:nimWasmtimeFeatureWinch=" & $nimWasmtimeFeatureWinch,
+    "-d:nimWasmtimeFeatureComponentModel=" & $nimWasmtimeFeatureComponentModel,
+    "-d:nimWasmtimeFeatureDebugBuiltins=" & $nimWasmtimeFeatureDebugBuiltins,
+    "-d:nimWasmtimeFeaturePoolingAllocator=" & $nimWasmtimeFeaturePoolingAllocator,
     "-d:nimWasmtimeBuildDebug=" & $nimWasmtimeBuildDebug,
     "-d:nimWasmtimeBuildMusl=" & $nimWasmtimeBuildMusl,
     "-d:nimWasmtimeOverride=" & $nimWasmtimeOverride,
@@ -102,196 +108,211 @@ func camelName(str: string): string =
 
 var enums {.compiletime.} = initHashSet[string]()
 
-proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, partof = ""): string =
-  result = name
-
-  var nameMap = toTable {
-    "wasi_config_new": "new_wasi_config",
-
-    "wasm_config_new": "new_config",
-    "wasm_engine_new": "new_engine",
-    "wasm_engine_new_with_config": "new_engine",
-    "wasm_exporttype_new": "new_exporttype",
-    "wasm_foreign_new": "new_foreign",
-    "wasm_func_new": "new_func",
-    "wasm_functype_new": "new_functype",
-    "wasm_global_new": "new_global",
-    "wasm_globaltype_new": "new_globaltype",
-    "wasm_importtype_new": "new_importtype",
-    "wasm_instance_new": "new_instance",
-    "wasm_memory_new": "new_memory",
-    "wasm_memorytype_new": "new_memorytype",
-    "wasm_module_new": "new_module",
-    "wasm_store_new": "new_store",
-    "wasm_table_new": "new_table",
-    "wasm_tabletype_new": "new_tabletype",
-    "wasm_trap_new": "new_trap",
-    "wasm_valtype_new": "new_valtype",
-
-    "wasmtime_error_new": "new_error",
-    "wasmtime_externref_new": "new_externref",
-    "wasmtime_func_new": "new_func",
-    "wasmtime_global_new": "new_global",
-    "wasmtime_guestprofiler_new": "new_guestprofiler",
-    "wasmtime_instance_new": "new_instance",
-    "wasmtime_linker_new": "new_linker",
-    "wasmtime_memory_new": "new_memory",
-    "wasmtime_memorytype_new": "new_memorytype",
-    "wasmtime_module_new": "new_module",
-    "wasmtime_sharedmemory_new": "new_sharedmemory",
-    "wasmtime_store_new": "new_store",
-    "wasmtime_table_new": "new_table",
-    "wasmtime_trap_new": "new_trap",
-
-    "wasmtime_component_linker_new": "new_component_linker",
-    "wasmtime_component_store_new": "new_component_store",
-    "wasmtime_component_store_new": "new_component_store",
-  }
-
-  nameMap.withValue(name, n):
-    result = n[]
-
-  case kind
-  of "enumval":
-    result.removePrefix("WASM_")
-    if not result.endsWith("_NONE"):
-      result.removePrefix("WASMTIME_TRAP_CODE_")
-      result.removePrefix("WASMTIME_OPT_LEVEL_")
-      result.removePrefix("WASMTIME_PROFILING_STRATEGY_")
-      result.removePrefix("WASMTIME_STRATEGY_")
-    result.removePrefix("WASMTIME_")
-    result = processName(result)
-
-  of "enum":
-    result.removePrefix("enum_")
-    result.removeSuffix("_enum")
-    result.removePrefix("wasmtime_")
-    result = processName(result)
-    enums.incl result
-
-  of "union":
-    result.removePrefix("union_")
-    result.removeSuffix("_union")
-    result.removePrefix("wasmtime_")
-    result = processName(result)
-    enums.incl result
-
-  of "struct", "anon":
-    result = processName(result)
-
-  of "typedef":
-    result.removePrefix("wasmtime_")
-    result = processName(result)
-
-  of "proc":
-    makeUnique = false
-    result.removePrefix("wasi_config_")
-
-    result.removePrefix("wasm_byte_vec_")
-    result.removePrefix("wasm_exporttype_vec_")
-    result.removePrefix("wasm_extern_vec_")
-    result.removePrefix("wasm_externtype_vec_")
-    result.removePrefix("wasm_frame_vec_")
-    result.removePrefix("wasm_functype_vec_")
-    result.removePrefix("wasm_globaltype_vec_")
-    result.removePrefix("wasm_importtype_vec_")
-    result.removePrefix("wasm_memorytype_vec_")
-    result.removePrefix("wasm_tabletype_vec_")
-    result.removePrefix("wasm_val_vec_")
-    result.removePrefix("wasm_valtype_vec_")
-
-    result.removePrefix("wasm_config_")
-    result.removePrefix("wasm_engine_")
-    result.removePrefix("wasm_exporttype_")
-    result.removePrefix("wasm_extern_")
-    result.removePrefix("wasm_externtype_")
-    result.removePrefix("wasm_foreign_")
-    result.removePrefix("wasm_frame_")
-    result.removePrefix("wasm_func_")
-    result.removePrefix("wasm_functype_")
-    result.removePrefix("wasm_global_")
-    result.removePrefix("wasm_globaltype_")
-    result.removePrefix("wasm_importtype_")
-    result.removePrefix("wasm_instance_")
-    result.removePrefix("wasm_memory_")
-    result.removePrefix("wasm_memorytype_")
-    result.removePrefix("wasm_module_")
-    result.removePrefix("wasm_ref_")
-    result.removePrefix("wasm_shared_")
-    result.removePrefix("wasm_store_")
-    result.removePrefix("wasm_table_")
-    result.removePrefix("wasm_tabletype_")
-    result.removePrefix("wasm_trap_")
-    result.removePrefix("wasm_val_")
-    result.removePrefix("wasm_valtype_")
-
-    result.removePrefix("wasmtime_component_val_record_field_vec_")
-    result.removePrefix("wasmtime_component_val_record_vec_")
-    result.removePrefix("wasmtime_component_val_vec_")
-    result.removePrefix("wasmtime_component_val_flags_vec_")
-
-    result.removePrefix("wasmtime_component_linker_")
-    result.removePrefix("wasmtime_component_store_")
-    result.removePrefix("wasmtime_component_val_flags_")
-
-    result.removePrefix("wasmtime_anyref_")
-    result.removePrefix("wasmtime_call_")
-    result.removePrefix("wasmtime_component_")
-    result.removePrefix("wasmtime_config_")
-    result.removePrefix("wasmtime_context_")
-    result.removePrefix("wasmtime_engine_")
-    result.removePrefix("wasmtime_error_")
-    result.removePrefix("wasmtime_extern_")
-    result.removePrefix("wasmtime_externref_")
-    result.removePrefix("wasmtime_func_")
-    result.removePrefix("wasmtime_global_")
-    result.removePrefix("wasmtime_guestprofiler_")
-    result.removePrefix("wasmtime_instance_")
-    result.removePrefix("wasmtime_linker_")
-    result.removePrefix("wasmtime_memory_")
-    result.removePrefix("wasmtime_memorytype_")
-    result.removePrefix("wasmtime_module_")
-    result.removePrefix("wasmtime_sharedmemory_")
-    result.removePrefix("wasmtime_store_")
-    result.removePrefix("wasmtime_table_")
-    result.removePrefix("wasmtime_trap_")
-    result.removePrefix("wasmtime_val_")
-
-    result = camelName(result)
-
-  else:
-    discard
-
-proc opirCallback*(data: JsonNode): JsonNode =
-  result = newJArray()
-  for v in data:
-    if v["kind"].getStr == "const" and v["name"].getStr == "wasm_name":
-      echo "REMOVING ", v.pretty
-      continue
-    result.add v
-
 when defined(useFuthark) or defined(useFutharkForWasmtime):
   import futhark
 
-  const outputPath = currentSourcePath().splitPath.head / "wrapper.nim"
+  proc wrapperRenameCallback*(name: string, kind: SymbolKind, partof: string, overloading: var bool): string =
+    result = name
+
+    var nameMap = toTable {
+      "wasi_config_new": "new_wasi_config",
+
+      "wasm_config_new": "new_config",
+      "wasm_engine_new": "new_engine",
+      "wasm_engine_new_with_config": "new_engine",
+      "wasm_exporttype_new": "new_exporttype",
+      "wasm_foreign_new": "new_foreign",
+      "wasm_func_new": "new_func",
+      "wasm_functype_new": "new_functype",
+      "wasm_global_new": "new_global",
+      "wasm_globaltype_new": "new_globaltype",
+      "wasm_importtype_new": "new_importtype",
+      "wasm_instance_new": "new_instance",
+      "wasm_memory_new": "new_memory",
+      "wasm_memorytype_new": "new_memorytype",
+      "wasm_module_new": "new_module",
+      "wasm_store_new": "new_store",
+      "wasm_table_new": "new_table",
+      "wasm_tabletype_new": "new_tabletype",
+      "wasm_trap_new": "new_trap",
+      "wasm_valtype_new": "new_valtype",
+
+      "wasmtime_error_new": "new_error",
+      "wasmtime_externref_new": "new_externref",
+      "wasmtime_func_new": "new_func",
+      "wasmtime_global_new": "new_global",
+      "wasmtime_guestprofiler_new": "new_guestprofiler",
+      "wasmtime_instance_new": "new_instance",
+      "wasmtime_linker_new": "new_linker",
+      "wasmtime_memory_new": "new_memory",
+      "wasmtime_memorytype_new": "new_memorytype",
+      "wasmtime_module_new": "new_module",
+      "wasmtime_sharedmemory_new": "new_sharedmemory",
+      "wasmtime_store_new": "new_store",
+      "wasmtime_table_new": "new_table",
+      "wasmtime_trap_new": "new_trap",
+
+      "wasmtime_component_linker_new": "new_component_linker",
+      "wasmtime_component_store_new": "new_component_store",
+      "wasmtime_component_store_new": "new_component_store",
+    }
+
+    nameMap.withValue(name, n):
+      result = n[]
+
+    case kind
+    of EnumVal:
+      result.removePrefix("WASM_")
+      if not result.endsWith("_NONE"):
+        result.removePrefix("WASMTIME_TRAP_CODE_")
+        result.removePrefix("WASMTIME_OPT_LEVEL_")
+        result.removePrefix("WASMTIME_PROFILING_STRATEGY_")
+        result.removePrefix("WASMTIME_STRATEGY_")
+      result.removePrefix("WASMTIME_")
+      result = processName(result)
+
+    of Enum:
+      result.removePrefix("enum_")
+      result.removeSuffix("_enum")
+      result.removePrefix("wasmtime_")
+      result = processName(result)
+      enums.incl result
+
+    of Union:
+      result.removePrefix("union_")
+      # result.removeSuffix("_union")
+      result.removePrefix("wasmtime_")
+      result = processName(result)
+      enums.incl result
+
+    of Struct, Anon:
+      # if result == "struct_wasm_config_t":
+      #   result = "wasm_config_type"
+      result.removePrefix("wasmtime_")
+      result = processName(result)
+
+    of Typedef:
+      result.removePrefix("wasmtime_")
+      result = processName(result)
+
+    of Proc:
+      overloading = true
+      result.removePrefix("wasi_config_")
+
+      result.removePrefix("wasm_byte_vec_")
+      result.removePrefix("wasm_exporttype_vec_")
+      result.removePrefix("wasm_extern_vec_")
+      result.removePrefix("wasm_externtype_vec_")
+      result.removePrefix("wasm_frame_vec_")
+      result.removePrefix("wasm_functype_vec_")
+      result.removePrefix("wasm_globaltype_vec_")
+      result.removePrefix("wasm_importtype_vec_")
+      result.removePrefix("wasm_memorytype_vec_")
+      result.removePrefix("wasm_tabletype_vec_")
+      result.removePrefix("wasm_val_vec_")
+      result.removePrefix("wasm_valtype_vec_")
+
+      result.removePrefix("wasm_config_")
+      result.removePrefix("wasm_engine_")
+      result.removePrefix("wasm_exporttype_")
+      result.removePrefix("wasm_extern_")
+      result.removePrefix("wasm_externtype_")
+      result.removePrefix("wasm_foreign_")
+      result.removePrefix("wasm_frame_")
+      result.removePrefix("wasm_func_")
+      result.removePrefix("wasm_functype_")
+      result.removePrefix("wasm_global_")
+      result.removePrefix("wasm_globaltype_")
+      result.removePrefix("wasm_importtype_")
+      result.removePrefix("wasm_instance_")
+      result.removePrefix("wasm_memory_")
+      result.removePrefix("wasm_memorytype_")
+      result.removePrefix("wasm_module_")
+      result.removePrefix("wasm_ref_")
+      result.removePrefix("wasm_shared_")
+      result.removePrefix("wasm_store_")
+      result.removePrefix("wasm_table_")
+      result.removePrefix("wasm_tabletype_")
+      result.removePrefix("wasm_trap_")
+      result.removePrefix("wasm_val_")
+      result.removePrefix("wasm_valtype_")
+
+      result.removePrefix("wasmtime_component_val_record_field_vec_")
+      result.removePrefix("wasmtime_component_val_record_vec_")
+      result.removePrefix("wasmtime_component_val_vec_")
+      result.removePrefix("wasmtime_component_val_flags_vec_")
+
+      result.removePrefix("wasmtime_component_linker_")
+      result.removePrefix("wasmtime_component_store_")
+      result.removePrefix("wasmtime_component_val_flags_")
+
+      result.removePrefix("wasmtime_anyref_")
+      result.removePrefix("wasmtime_call_")
+      result.removePrefix("wasmtime_component_")
+      result.removePrefix("wasmtime_config_")
+      result.removePrefix("wasmtime_context_")
+      result.removePrefix("wasmtime_engine_")
+      result.removePrefix("wasmtime_error_")
+      result.removePrefix("wasmtime_extern_")
+      result.removePrefix("wasmtime_externref_")
+      result.removePrefix("wasmtime_func_")
+      result.removePrefix("wasmtime_global_")
+      result.removePrefix("wasmtime_guestprofiler_")
+      result.removePrefix("wasmtime_instance_")
+      result.removePrefix("wasmtime_linker_")
+      result.removePrefix("wasmtime_memory_")
+      result.removePrefix("wasmtime_memorytype_")
+      result.removePrefix("wasmtime_module_")
+      result.removePrefix("wasmtime_sharedmemory_")
+      result.removePrefix("wasmtime_store_")
+      result.removePrefix("wasmtime_table_")
+      result.removePrefix("wasmtime_trap_")
+      result.removePrefix("wasmtime_val_")
+
+      result = camelName(result)
+
+    else:
+      discard
+
+  const outputPath = currentSourcePath().splitPath.head / "bindings/wrapper.nim"
   const llvmIncludePath = staticExec("clang -print-resource-dir").strip() / "../../../include"
   static:
     echo "Using LLVM from ", llvmIncludePath
 
+  static:
+    createDir(currentSourcePath().splitPath.head / "bindings")
   importc:
     sysPath llvmIncludePath
     path wasmDir / "crates/c-api/include"
     path wasmDir / "crates/c-api/include/wasmtime"
     outputPath outputPath
+    # outputPath currentSourcePath().splitPath.head / "bindings"
     renameCallback wrapperRenameCallback
-    addOpirCallback opirCallback
+
+    # proc opirCallback*(data: JsonNode): JsonNode {.gcsafe, raises: [], closure.} =
+    #   result = newJArray()
+    #   for v in data:
+    #     try:
+    #       if v["kind"].getStr == "const" and v["name"].getStr == "wasm_name":
+    #         echo "REMOVING ", v.pretty
+    #         # continue
+    #     except:
+    #       echo getCurrentExceptionMsg()
+    #     result.add v
+
+    # addOpirCallback opirCallback
 
     "wasm.h"
     "error.h"
     "config.h"
     "store.h"
     "async.h"
-    # "component.h" # todo
+    # "component.h"
+    "component/component.h"
+    "component/func.h"
+    "component/instance.h"
+    "component/linker.h"
+    "component/val.h"
     "engine.h"
     "extern.h"
     "func.h"
@@ -398,7 +419,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       postProcess()
 
 else: # defined(useFuthark) or defined(useFutharkForWasmtime)
-  include wrapper
+  include bindings/wrapper
 
 from std/unicode import Rune, `$`
 {.pop.}
