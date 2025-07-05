@@ -18,8 +18,9 @@ type Callback = object
   key: uint32
   drop: proc() {.raises: [].}
 
-# proc `=copy`*(a: var Callback, b: Callback) {.error.}
-# proc `=copy`*(a: var MyBlob, b: MyBlob) {.error.}
+proc `=copy`*(a: var Callback, b: Callback) {.error.}
+var blobCounter = 0
+proc `=copy`*(a: var MyBlob, b: MyBlob) {.error.}
 
 proc `=destroy`*(b: Callback) =
   if b.data != 0:
@@ -28,6 +29,7 @@ proc `=destroy`*(b: Callback) =
 
 proc `=destroy`*(b: MyBlob) =
   if b.i != 0:
+    dec blobCounter
     echo "[host] --------------------------------- delete MyBlob ", b
 
 # todo: auto generate unique type id for each resource
@@ -45,10 +47,13 @@ else:
   include host_module
 
 proc testInterfaceNewBlob(host: MyContext, store: ptr ContextT, init: seq[uint8]): MyBlob =
-  result = MyBlob(blobName: "constr" & $host.counter, arr: init)
+  inc blobCounter
+  echo &"[host] testInterfaceNewBlob {init}"
+  result = MyBlob(blobName: "constr" & $host.counter, i: host.counter, arr: init)
   host.counter.inc
 
 proc testInterfaceWrite(host: MyContext, store: ptr ContextT, self: var MyBlob, bytes: seq[uint8]) =
+  echo &"[host] testInterfaceWrite {self} {bytes}"
   self.arr.add bytes
 
 proc testInterfaceRead(host: MyContext, store: ptr ContextT, self: var MyBlob, n: int32): seq[uint8] =
@@ -58,8 +63,9 @@ proc testInterfaceRead(host: MyContext, store: ptr ContextT, self: var MyBlob, n
   return self.arr[0..<l]
 
 proc testInterfaceMerge(host: MyContext, store: ptr ContextT, lhs: sink MyBlob, rhs: sink MyBlob): MyBlob =
+  inc blobCounter
   echo "[host] ================================== merge ", lhs, ", ", rhs
-  result = MyBlob(blobName: "merge" & $host.counter, arr: lhs.arr & rhs.arr)
+  result = MyBlob(i: host.counter, blobName: "merge" & $host.counter, arr: lhs.arr & rhs.arr)
   host.counter.inc
 
 proc testInterfacePrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, rhs: var MyBlob) =
@@ -176,3 +182,4 @@ proc main(): WasmtimeResult[void] =
 
 echo main()
 echo "no crash"
+assert blobCounter == 0

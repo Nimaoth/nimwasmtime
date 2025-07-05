@@ -22,6 +22,8 @@ const nimWasmtimeFeatureAsync* {.booldefine.} = true
 const nimWasmtimeFeatureCranelift* {.booldefine.} = true
 const nimWasmtimeFeatureWinch* {.booldefine.} = true
 const nimWasmtimeFeatureComponentModel* {.booldefine.} = true
+const nimWasmtimeFeatureDebugBuiltins* {.booldefine.} = false
+const nimWasmtimeFeaturePoolingAllocator* {.booldefine.} = false
 
 const wasmtimeFeatures = [
   ("WASMTIME_FEATURE_PROFILING", "profiling", nimWasmtimeFeatureProfiling),
@@ -40,6 +42,8 @@ const wasmtimeFeatures = [
   ("WASMTIME_FEATURE_CRANELIFT", "cranelift", nimWasmtimeFeatureCranelift),
   ("WASMTIME_FEATURE_WINCH", "winch", nimWasmtimeFeatureWinch),
   ("WASMTIME_FEATURE_COMPONENT_MODEL", "component-model", nimWasmtimeFeatureComponentModel),
+  ("WASMTIME_FEATURE_DEBUG_BUILTINS", "debug-builtins", nimWasmtimeFeatureDebugBuiltins),
+  ("WASMTIME_FEATURE_POOLING_ALLOCATOR", "pooling-allocator", nimWasmtimeFeaturePoolingAllocator),
 ]
 
 proc buildWasmtime() =

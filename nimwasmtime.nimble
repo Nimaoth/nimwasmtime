@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.9"
+version       = "0.2.1"
 author        = "Nimaoth"
 description   = "Nim wrapper for wasmtime"
 license       = "MIT"

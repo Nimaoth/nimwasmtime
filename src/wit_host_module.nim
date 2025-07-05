@@ -232,7 +232,10 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         return genAst(host, arg, param, ptrName = ident("resPtr"), typ):
           block:
             let ptrName = ?host.resources.resourceHostData(arg, typ)
-            param = ptrName[]
+            # Would be nicer to do:
+            #   param = ptrName[].ensureMove
+            # but that doesn't compile, so to avoid the `=copy` hook use raw memory copy
+            copyMem(param.addr, ptrName, sizeof(typeof(param)))
             ?host.resources.resourceDrop(arg, callDestroy=false)
 
       else:

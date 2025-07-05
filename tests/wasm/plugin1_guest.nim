@@ -342,7 +342,3 @@ proc print*(lhs: Blob; rhs: Blob): void {.nodestroy.} =
 proc start(): void
 proc startExported(): void {.wasmexport("start", "").} =
   start()
-
-proc foo(): void
-proc fooExported(): void {.wasmexport("foo", "my:plugin1/api").} =
-  foo()

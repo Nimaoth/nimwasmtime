@@ -10,7 +10,7 @@ package my:plugin1;
 interface api {
   // use my:host/callback-types.{callback};
 
-  foo: func();
+  // foo: func();
 
   // @callback cb invoke-callback
   // @callback cb2 invoke-callback2

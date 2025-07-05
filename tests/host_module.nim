@@ -660,12 +660,12 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         block:
           let resPtr = ?host.resources.resourceHostData(parameters[0].i32,
               MyBlob)
-          lhs = resPtr[]
+          copyMem(lhs.addr, resPtr, sizeof(typeof(lhs)))
           ?host.resources.resourceDrop(parameters[0].i32, callDestroy = false)
         block:
           let resPtr = ?host.resources.resourceHostData(parameters[1].i32,
               MyBlob)
-          rhs = resPtr[]
+          copyMem(rhs.addr, resPtr, sizeof(typeof(rhs)))
           ?host.resources.resourceDrop(parameters[1].i32, callDestroy = false)
         let res = testInterfaceMerge(host, store, lhs, rhs)
         parameters[0].i32 = ?host.resources.resourceNew(res)
