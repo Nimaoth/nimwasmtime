@@ -106,9 +106,18 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
     let e = block:
       var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32], [])
       linker.defineFuncUnchecked("env", "test-no-params2", ty):
-        let mainMemory = caller.getExport("memory")
-        let memory = cast[ptr UncheckedArray[uint8]](store.data(
-            mainMemory.get.of_field.memory.addr))
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memory: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](data(
+              mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](store.data(
+              mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
         var b: Baz
         block:
           let p1 = cast[ptr UncheckedArray[char]](memory[
@@ -236,9 +245,18 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
       var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "test-simple-params-ptr", ty):
-        let mainMemory = caller.getExport("memory")
-        let memory = cast[ptr UncheckedArray[uint8]](store.data(
-            mainMemory.get.of_field.memory.addr))
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memory: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](data(
+              mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](store.data(
+              mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
         var a: int8
         var b: int16
         var c: int32
@@ -283,9 +301,18 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32],
           [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/test-interface", "add-callback", ty):
-        let mainMemory = caller.getExport("memory")
-        let memory = cast[ptr UncheckedArray[uint8]](store.data(
-            mainMemory.get.of_field.memory.addr))
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memory: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](data(
+              mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](store.data(
+              mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
         var env: string
         var name: string
         block:
@@ -332,9 +359,18 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "test-simple-return-ptr", ty):
-        let mainMemory = caller.getExport("memory")
-        let memory = cast[ptr UncheckedArray[uint8]](store.data(
-            mainMemory.get.of_field.memory.addr))
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memory: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](data(
+              mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](store.data(
+              mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
         var x: int8
         x = cast[int8](parameters[0].i32)
         let res = testInterfaceTestSimpleReturnPtr(host, store, x)
@@ -350,9 +386,18 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
       var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "test-simple-return-ptr2", ty):
-        let mainMemory = caller.getExport("memory")
-        let memory = cast[ptr UncheckedArray[uint8]](store.data(
-            mainMemory.get.of_field.memory.addr))
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memory: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](data(
+              mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](store.data(
+              mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
         let reallocImpl = caller.getExport("cabi_realloc").get.of_field.func_field
         let res = testInterfaceTestSimpleReturnPtr2(host, store)
         let retArea = parameters[^1].i32
@@ -575,9 +620,18 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32], [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/test-interface", "[constructor]blob",
                                  ty):
-        let mainMemory = caller.getExport("memory")
-        let memory = cast[ptr UncheckedArray[uint8]](store.data(
-            mainMemory.get.of_field.memory.addr))
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memory: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](data(
+              mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](store.data(
+              mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
         var init: seq[uint8]
         block:
           let p0 = cast[ptr UncheckedArray[uint8]](memory[parameters[0].i32].addr)
@@ -594,9 +648,18 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface", "[method]blob.write",
                                  ty):
-        let mainMemory = caller.getExport("memory")
-        let memory = cast[ptr UncheckedArray[uint8]](store.data(
-            mainMemory.get.of_field.memory.addr))
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memory: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](data(
+              mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](store.data(
+              mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
         var self: ptr MyBlob
         var bytes: seq[uint8]
         self = ?host.resources.resourceHostData(parameters[0].i32, MyBlob)
@@ -614,9 +677,18 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface", "[method]blob.read",
                                  ty):
-        let mainMemory = caller.getExport("memory")
-        let memory = cast[ptr UncheckedArray[uint8]](store.data(
-            mainMemory.get.of_field.memory.addr))
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memory: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](data(
+              mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memory = cast[ptr UncheckedArray[uint8]](store.data(
+              mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
         let reallocImpl = caller.getExport("cabi_realloc").get.of_field.func_field
         var self: ptr MyBlob
         var n: int32

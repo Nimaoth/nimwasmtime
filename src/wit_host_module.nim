@@ -394,9 +394,17 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         parameterTypes.add nnkDotExpr.newTree(ident"WasmValkind", ident(name))
 
     var memoryDecl = if needsMemory:
-      genAst(store, memoryName = memory, mainMemory = ident"mainMemory"):
-        let mainMemory = caller.getExport("memory")
-        let memoryName = cast[ptr UncheckedArray[uint8]](store.data(mainMemory.get.of_field.memory.addr))
+      genAst(host, store, memoryName = memory, mainMemory = ident"mainMemory"):
+        var mainMemory = caller.getExport("memory")
+        if mainMemory.isNone:
+          mainMemory = host.getMemoryFor(caller)
+        var memoryName: ptr UncheckedArray[uint8] = nil
+        if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+          memoryName = cast[ptr UncheckedArray[uint8]](data(mainMemory.get.of_field.sharedmemory))
+        elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+          memoryName = cast[ptr UncheckedArray[uint8]](store.data(mainMemory.get.of_field.memory.addr))
+        else:
+          assert false
     else:
       nnkStmtList.newTree()
 

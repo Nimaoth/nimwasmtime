@@ -1389,6 +1389,37 @@ template defineFuncUnchecked*(linker: ptr LinkerT, env: string, name: string, ty
     let res = linker.defineFuncUnchecked[:int](env, funcName, cb, ty)
     res
 
+proc defineMemory*(linker: ptr LinkerT, store: ptr ContextT, engine: ptr WasmEngineT, env: string, name: string, ty: ptr WasmMemorytypeT): WasmtimeResult[void] =
+  var mem: MemoryT
+  ?newMemory(store, ty, mem.addr).toResult(void)
+
+  var item: ExternT
+  item.kind = WASMTIME_EXTERN_MEMORY
+  item.of_field.memory = mem
+
+  let res = define(linker, store, env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, item.addr)
+  res.toResult(void)
+
+proc defineSharedMemory*(linker: ptr LinkerT, store: ptr ContextT, env: string, name: string, mem: ptr SharedmemoryT): WasmtimeResult[void] =
+  var item: ExternT
+  item.kind = WASMTIME_EXTERN_SHAREDMEMORY
+  item.of_field.sharedmemory = mem
+
+  let res = define(linker, store, env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, item.addr)
+  res.toResult(void)
+
+proc createSharedMemory*(engine: ptr WasmEngineT, ty: ptr WasmMemorytypeT): WasmtimeResult[ptr SharedmemoryT] =
+  var sharedMem: ptr SharedmemoryT = nil
+  let err = engine.newSharedmemory(ty, sharedMem.addr)
+  if err != nil:
+    return err.toResult(ptr SharedmemoryT)
+  return ok(sharedMem)
+
+proc defineSharedMemory*(linker: ptr LinkerT, store: ptr ContextT, engine: ptr WasmEngineT, env: string, name: string, ty: ptr WasmMemorytypeT): WasmtimeResult[void] =
+  var sharedMem: ptr SharedmemoryT = nil
+  ?engine.newSharedmemory(ty, sharedMem.addr).toResult(void)
+  linker.defineSharedMemory(store, env, name, sharedMem)
+
 template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped): untyped =
   block:
     proc cb(s: ptr ContextT, data: ptr int, p: openArray[ComponentValT], r: var openArray[ComponentValT]): ptr WasmTrapT =
@@ -1572,3 +1603,45 @@ proc newFuncType*(parameters: openArray[WasmValkind], results: openArray[WasmVal
   var parameters = parameters.mapIt(newValType(it.WasmValkindT)).toVec
   var results = results.mapIt(newValType(it.WasmValkindT)).toVec
   newFunctype(parameters.addr, results.addr)
+
+type WasmMemory* = object
+  data: ptr UncheckedArray[uint8]
+  len: int = int.high
+
+type WasmPtr* = distinct int32
+
+proc initWasmMemory*(mem: ptr SharedmemoryT): WasmMemory =
+  let data = data(mem)
+  let dataSize = dataSize(mem)
+  return WasmMemory(data: cast[ptr UncheckedArray[uint8]](data), len: dataSize.int)
+
+proc initWasmMemory*(store: ptr ContextT, mem: ptr MemoryT): WasmMemory =
+  let data = cast[ptr UncheckedArray[uint8]](store.data(mem))
+  let dataSize = store.dataSize(mem)
+  return WasmMemory(data: cast[ptr UncheckedArray[uint8]](data), len: dataSize.int)
+
+proc write*[T](mem: WasmMemory, p: WasmPtr, data: T) =
+  let p = p.int
+  assert p >= 0 and p + sizeof(T) <= mem.len
+  cast[ptr T](mem.data[p].addr)[] = data
+
+proc read*[T](mem: WasmMemory, p: WasmPtr): T =
+  let p = p.int
+  assert p >= 0 and p + sizeof(T) <= mem.len
+  return cast[ptr T](mem.data[p].addr)[]
+
+proc getRawPtr*(mem: WasmMemory, p: WasmPtr): ptr UncheckedArray[uint8] =
+  let p = p.int
+  assert p >= 0 and p < mem.len
+  return cast[ptr UncheckedArray[uint8]](mem.data[p].addr)
+
+proc getTypedPtr*[T](mem: WasmMemory, p: WasmPtr): ptr T =
+  let p = p.int
+  assert p >= 0 and p + sizeof(T) <= mem.len
+  return cast[ptr T](mem.data[p].addr)
+
+template getOpenArray*[T](mem: WasmMemory, address: WasmPtr, length: int): openArray[T] =
+  block:
+    let p = address.int
+    assert p >= 0 and p + sizeof(T) <= mem.len
+    cast[ptr UncheckedArray[T]](mem.data[p].addr).toOpenArray(0, length - 1)
