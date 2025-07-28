@@ -1,5 +1,5 @@
-import std/[strformat, options, macros, tables, unicode]
-import wasmtime, wit_host_module
+import std/[strformat, options, macros, tables, unicode, parseopt, strutils]
+import wasmtime, wit_host_module, wasm_builder
 
 type MyContext = ref object
   resources: WasmModuleResources
@@ -7,6 +7,7 @@ type MyContext = ref object
   callbacks: Table[uint32, ptr ExternT]
   # instanceToComponent: Table[ptr ComponentInstanceT, ptr ComponentT]
   # currentInstance: ptr ComponentInstanceT = nil
+  sharedMemory: ptr SharedmemoryT
 
 type MyBlob = object
   i: int = 1
@@ -32,9 +33,16 @@ proc `=destroy`*(b: MyBlob) =
     dec blobCounter
     echo "[host] --------------------------------- delete MyBlob ", b
 
+proc getMemoryFor(host: MyContext, caller: ptr CallerT): Option[ExternT] =
+  # echo &"[host] getMemoryFor"
+  var item: ExternT
+  item.kind = WASMTIME_EXTERN_SHAREDMEMORY
+  item.of_field.sharedmemory = host.sharedMemory
+  item.some
+
 # todo: auto generate unique type id for each resource
-template typeId*(_: typedesc[MyBlob]): int = 69
-template typeId*(_: typedesc[Callback]): int = 420
+template typeId*(_: typedesc[MyBlob]): int = 1
+template typeId*(_: typedesc[Callback]): int = 2
 
 when defined(witRebuild):
   static: hint("Rebuilding test.wit")
@@ -129,7 +137,22 @@ proc testInterfaceTestSimpleReturnPtr(host: MyContext, store: ptr ContextT, x: i
 proc testInterfaceTestSimpleReturnPtr2(host: MyContext; store: ptr ContextT): Baz =
   return Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])
 
+const useBuiltinWasi = false
+
+proc getMemory(caller: ptr CallerT, store: ptr ContextT, host: MyContext): WasmMemory =
+  var mainMemory = caller.getExport("memory")
+  if mainMemory.isNone:
+    mainMemory = host.getMemoryFor(caller)
+  if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+    return initWasmMemory(mainMemory.get.of_field.sharedmemory)
+  elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+    return initWasmMemory(store, mainMemory.get.of_field.memory.addr)
+  else:
+    assert false
+
 proc main(): WasmtimeResult[void] =
+  var ctx = MyContext(counter: 1)
+
   let config = newConfig()
   let engine = newEngine(config)
 
@@ -141,27 +164,98 @@ proc main(): WasmtimeResult[void] =
 
   let context = store.context()
 
-  let wasiConfig = newWasiConfig()
+  if useBuiltinWasi:
+    let wasiConfig = newWasiConfig()
+    wasiConfig.inheritStdin()
+    wasiConfig.inheritStderr()
+    wasiConfig.inheritStdout()
+    context.setWasi(wasiConfig).toResult(void).okOr(err):
+      echo "[host] Failed to setup wasi: ", err.msg
+      return
 
-  wasiConfig.inheritStdin()
-  wasiConfig.inheritStderr()
-  wasiConfig.inheritStdout()
-  context.setWasi(wasiConfig).toResult(void).okOr(err):
-    echo "[host] Failed to setup wasi: ", err.msg
-    return
+  var path = "tests/wasm/plugin1.m.wasm"
+  var optParser = initOptParser("")
+  for kind, key, val in optParser.getopt():
+    case kind
+    of cmdArgument:
+      path = key
 
-  let wasmBytes = readFile("tests/wasm/plugin1.m.wasm")
+    of cmdLongOption, cmdShortOption:
+      discard
+
+    of cmdEnd: assert(false) # cannot happen
+
+  echo "[host] load wasm file ", path
+  let wasmBytes = readFile(path)
   let module = engine.newModule(wasmBytes).okOr(err):
     echo "[host] Failed to load wasm module: ", err.msg
     return
 
-  linker.defineWasi().okOr(err):
-    echo "[host] Failed to create linker: ", err.msg
-    return
+  if useBuiltinWasi:
+    linker.defineWasi().okOr(err):
+      echo "[host] Failed to create linker: ", err.msg
+      return
 
-  var ctx = MyContext(counter: 1)
+  else:
+    discard linker.defineFuncUnchecked("wasi_snapshot_preview1", "proc_exit", newFunctype([WasmValkind.I32], [])):
+      echo "[host] proc_exit"
+      assert false
+    discard linker.defineFuncUnchecked("wasi_snapshot_preview1", "fd_close", newFunctype([WasmValkind.I32], [WasmValkind.I32])):
+      echo "[host] fd_close"
+      assert false
+    discard linker.defineFuncUnchecked("wasi_snapshot_preview1", "fd_write", newFunctype([WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [WasmValkind.I32])):
+      type Iovec = object
+        data: WasmPtr
+        len: uint32
+
+      let mem = getMemory(caller, store, ctx)
+
+      let fd = parameters[0].i32
+      let iovecsPtr = parameters[1].i32.WasmPtr
+      let numIovecs = parameters[2].i32
+      let pNumWritten = parameters[3].i32.WasmPtr
+
+      let file = case fd
+      of 1: stdout
+      of 2: stderr
+      else:
+        echo &"[host] invalid fd {fd}"
+        return
+
+      var bytesWritten: uint32 = 0
+      for vec in mem.getOpenArray[:Iovec](iovecsPtr, numIovecs):
+        let data = mem.getRawPtr(vec.data)
+        bytesWritten += file.writeBytes(data.toOpenArray(0, vec.len.int - 1), 0, vec.len).uint32
+
+      mem.write[:uint32](pNumWritten, bytesWritten)
+
+    discard linker.defineFuncUnchecked("wasi_snapshot_preview1", "fd_seek", newFunctype([WasmValkind.I32, WasmValkind.I64, WasmValkind.I32, WasmValkind.I32], [WasmValkind.I32])):
+      echo "[host] fd_seek"
+      assert false
+    discard linker.defineFuncUnchecked("wasi_snapshot_preview1", "clock_time_get", newFunctype([WasmValkind.I32, WasmValkind.I64, WasmValkind.I32], [WasmValkind.I32])):
+      echo "[host] clock_time_get"
+      assert false
+
+  var callbacks: seq[int32] = @[]
+
+  discard linker.defineFuncUnchecked("env", "addCallback", newFunctype([WasmValkind.I32], [])):
+    let mem = getMemory(caller, store, ctx)
+    let funcIdxPtr = parameters[0].i32.WasmPtr
+    let funcIdx = mem.read[:int32](funcIdxPtr)
+    echo &"[host] addCallback {funcIdxPtr.int} -> {funcIdx}"
+    callbacks.add(funcIdx)
+
   linker.defineComponent(ctx).okOr(err):
     echo "[host] Failed to define component: ", err.msg
+    return
+
+  var memType: ptr WasmMemorytypeT = newMemorytype(256, true, 65536, false, true)
+  ctx.sharedMemory = engine.createSharedMemory(memType).okOr(err):
+    echo "[host] Failed to create shared memory: ", err.msg
+    return
+
+  linker.defineSharedMemory(context, "env", "memory", ctx.sharedMemory).okOr(err):
+    echo "[host] Failed to define shared memory: ", err.msg
     return
 
   var trap: ptr WasmTrapT = nil
@@ -173,13 +267,41 @@ proc main(): WasmtimeResult[void] =
     echo "[trap] Failed to instantiate wasm module: ", err.msg
     return
 
+  let functionTableExport = instance.getExport(context, "__indirect_function_table")
+  var functionTable = functionTableExport.get.of_field.table
+  echo &"function table {context.size(functionTable.addr)}"
+
+  echo "[host] ============== call start"
   let mainExport = instance.getExport(context, "start")
   mainExport.get.of_field.func_field.addr.call(context, [], [], trap.addr).toResult(void).okOr(err):
-    echo "[host] Failed to call hello: ", err.msg
+    echo "[host] Failed to call start: ", err.msg
     return
+
+  for cb in callbacks:
+    echo &"[host] ============== call callback {cb}"
+    let fun = functionTable.get(context, cb)
+    if fun.isNone:
+      echo &"[host] Failed to find callback {cb}"
+      continue
+
+    var results: array[1, ValT]
+    fun.get.of_field.funcref.addr.call(context, [38.int32.toWasmVal], results, trap.addr).toResult(void).okOr(err):
+      echo &"[host] Failed to call callback {cb}: ", err.msg
+      continue
+
+    echo &"[host] callback {cb} -> {results[0].of_field.i32}"
 
   echo "[host] ------------ Finished main"
 
 echo main()
 echo "no crash"
-assert blobCounter == 0
+
+when defined(windows):
+  import std/[compilesettings, os]
+
+  static:
+    const dllIn = wasmDir / "target/release/wasmtime.dll"
+    const dllOut = querySetting(SingleValueSetting.outDir) / "wasmtime.dll"
+    echo "[desktop_main.nim] run tools/copy_wasmtime_dll.nims"
+    echo staticExec &"powershell -Command cp \"{dllIn}\" \"{dllOut}\""
+

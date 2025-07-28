@@ -42,9 +42,20 @@ proc emscripten_stack_init() {.importc.}
 
 # var gcb: Callback
 
+proc addCallback(a: proc(x: int): int) {.importc.}
+
 proc start() =
   emscripten_stack_init()
   NimMain()
+
+  echo "[plugin1] addCallback"
+  addCallback proc(x: int): int =
+    echo "[plugin1] inside callback 1"
+    return x + 1
+
+  addCallback proc(x: int): int =
+    echo "[plugin1] inside callback 2"
+    return x + 2
 
   echo "[plugin1] call testNoParams"
   testNoParams()
