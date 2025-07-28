@@ -932,6 +932,22 @@ proc toVal*[T](a: T): ComponentValT =
   else:
     {.error: "Can't convert type " & $T & " to ComponentValT".}
 
+proc toWasmVal*(a: int32): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = a
+
+proc toWasmVal*(a: int64): ValT =
+  result.kind = WASMTIME_I64
+  result.of_field.i64 = a
+
+proc toWasmVal*(a: float32): ValT =
+  result.kind = WASMTIME_F32
+  result.of_field.f32 = a
+
+proc toWasmVal*(a: float64): ValT =
+  result.kind = WASMTIME_F64
+  result.of_field.f64 = a
+
 macro getSetTargetType(t: typed): untyped =
   ## Given set[T], return T
   return t.getTypeInst[1].getTypeImpl[1]
@@ -1269,6 +1285,12 @@ proc getExport*(caller: ptr CallerT; name: string): Option[ExternT] =
   var res: ExternT
   if caller.wasmtimeCallerExportGet(name.cstring, name.len.csize_t, res.addr):
     return res.some
+
+proc get*(table: TableT, store: ptr ContextT, index: int): Option[ValT] =
+  var res: ValT
+  if not get(store, table.addr, index.uint64, res.addr):
+    return ValT.none
+  return res.some
 
 proc data*[T](arr: openArray[T]): ptr T =
   if arr.len == 0:
