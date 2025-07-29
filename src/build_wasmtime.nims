@@ -63,6 +63,9 @@ proc buildWasmtime() =
       else:
         conf = conf.replace("#cmakedefine " & name, "/* #undef " & name & " */")
 
+    # todo: make this configurable
+    features.add "gc-null"
+
     writeFile("crates/c-api/include/wasmtime/conf.h", conf)
 
     var cargoArgs = @["cargo", "build", "-p", "wasmtime-c-api", "--no-default-features"]
