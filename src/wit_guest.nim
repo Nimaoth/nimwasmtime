@@ -18,11 +18,11 @@ macro wasmexport*(name: static[string], env: static[string], t: typed): untyped 
     error("Can only export procedures", t)
 
   let module = env
-
+  let exportName = name.replace("-", "_")
   let attrib = if module != "":
-    &"""__attribute__((__export_name__("{module}#{name}")))"""
+    &"""__attribute__((__export_name__("{module}#{exportName}")))"""
   else:
-    &"""__attribute__((__export_name__("{name}")))"""
+    &"""__attribute__((__export_name__("{exportName}")))"""
 
   # let attrib = &"""__attribute__((__export_name__("{name}"))) EMSCRIPTEN_KEEPALIVE"""
 

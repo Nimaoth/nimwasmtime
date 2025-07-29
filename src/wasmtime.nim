@@ -29,7 +29,7 @@ const nimWasmtimeFeatureGC* {.booldefine.} = true
 const nimWasmtimeFeatureAsync* {.booldefine.} = true
 const nimWasmtimeFeatureCranelift* {.booldefine.} = true
 const nimWasmtimeFeatureWinch* {.booldefine.} = true
-const nimWasmtimeFeatureComponentModel* {.booldefine.} = true
+const nimWasmtimeFeatureComponentModel* {.booldefine.} = false
 const nimWasmtimeFeatureDebugBuiltins* {.booldefine.} = false
 const nimWasmtimeFeaturePoolingAllocator* {.booldefine.} = false
 
@@ -476,11 +476,12 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
     "config.h"
     "store.h"
     "async.h"
-    "component/component.h"
-    "component/func.h"
-    "component/instance.h"
-    "component/linker.h"
-    "component/val.h"
+    # if nimWasmtimeFeatureComponentModel:
+    #   "component/component.h"
+    #   "component/func.h"
+    #   "component/instance.h"
+    #   "component/linker.h"
+    #   "component/val.h"
     "engine.h"
     "extern.h"
     "func.h"
@@ -514,7 +515,7 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       import std/[options]
       from std/unicode import Rune, `$`
 
-      proc `=destroy`*(self: StructWasmtimeComponentVal) {.nodestroy.}
+      # proc `=destroy`*(self: StructWasmtimeComponentVal) {.nodestroy.}
 
       # todo
       # template owned(T: typed): untyped =
@@ -589,29 +590,29 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       # owned(ComponentStoreT)
       # owned(ComponentT)
 
-      proc `=destroy`*(self: StructWasmtimeComponentVallist) {.nodestroy.} =
-        self.addr.delete()
-      proc `=destroy`*(self: StructWasmtimeComponentValrecord) {.nodestroy.} =
-        self.addr.delete()
-      proc `=destroy`*(self: StructWasmtimeComponentValtuple) {.nodestroy.} =
-        self.addr.delete()
-      proc `=destroy`*(self: StructWasmtimeComponentValflags) {.nodestroy.} =
-        self.addr.delete()
+      # proc `=destroy`*(self: StructWasmtimeComponentVallist) {.nodestroy.} =
+      #   self.addr.delete()
+      # proc `=destroy`*(self: StructWasmtimeComponentValrecord) {.nodestroy.} =
+      #   self.addr.delete()
+      # proc `=destroy`*(self: StructWasmtimeComponentValtuple) {.nodestroy.} =
+      #   self.addr.delete()
+      # proc `=destroy`*(self: StructWasmtimeComponentValflags) {.nodestroy.} =
+      #   self.addr.delete()
 
-      proc `=destroy`*(self: StructWasmtimeComponentVal) {.nodestroy.} =
-        case self.kind
-        of WASMTIME_COMPONENT_STRING:
-          `=destroy`(self.of_field.string)
-        of WASMTIME_COMPONENT_LIST:
-          `=destroy`(self.of_field.list)
-        of WASMTIME_COMPONENT_RECORD:
-          `=destroy`(self.of_field.record)
-        of WASMTIME_COMPONENT_TUPLE:
-          `=destroy`(self.of_field.tuple_field)
-        of WASMTIME_COMPONENT_FLAGS:
-          `=destroy`(self.of_field.flags)
-        else:
-          discard
+      # proc `=destroy`*(self: StructWasmtimeComponentVal) {.nodestroy.} =
+      #   case self.kind
+      #   of WASMTIME_COMPONENT_STRING:
+      #     `=destroy`(self.of_field.string)
+      #   of WASMTIME_COMPONENT_LIST:
+      #     `=destroy`(self.of_field.list)
+      #   of WASMTIME_COMPONENT_RECORD:
+      #     `=destroy`(self.of_field.record)
+      #   of WASMTIME_COMPONENT_TUPLE:
+      #     `=destroy`(self.of_field.tuple_field)
+      #   of WASMTIME_COMPONENT_FLAGS:
+      #     `=destroy`(self.of_field.flags)
+      #   else:
+      #     discard
 
     static:
       postProcess()
@@ -698,10 +699,11 @@ vec(WasmTabletypeVecT)
 vec(WasmValVecT)
 vec(WasmValtypeVecT)
 
-vec(ComponentValflagsT, unchecked = false)
-vec(ComponentVallistT, unchecked = false)
-vec(ComponentValrecordT, unchecked = false)
-vec(ComponentValtupleT, unchecked = false)
+when nimWasmtimeFeatureComponentModel:
+  vec(ComponentValflagsT, unchecked = false)
+  vec(ComponentVallistT, unchecked = false)
+  vec(ComponentValrecordT, unchecked = false)
+  vec(ComponentValtupleT, unchecked = false)
 
 proc strVal*(name: WasmNameT): string =
   result = newStringOfCap(name.size.int)
@@ -781,156 +783,157 @@ proc toCamelCase(str: string, capitalizeFirst: bool): string =
     else:
       result.add part.capitalizeAscii
 
-proc toVal*[T](a: T): ComponentValT =
-  # echo &"toVal {a}"
-  when T is bool:
-    result.kind = ComponentValKind.Bool.ComponentValKindT
-    result.of_field.boolean = a
+when nimWasmtimeFeatureComponentModel:
+  proc toVal*[T](a: T): ComponentValT =
+    # echo &"toVal {a}"
+    when T is bool:
+      result.kind = ComponentValKind.Bool.ComponentValKindT
+      result.of_field.boolean = a
 
-  elif T is int8:
-    result.kind = ComponentValKind.S8.ComponentValKindT
-    result.of_field.s8 = a
+    elif T is int8:
+      result.kind = ComponentValKind.S8.ComponentValKindT
+      result.of_field.s8 = a
 
-  elif T is int16:
-    result.kind = ComponentValKind.S16.ComponentValKindT
-    result.of_field.s16 = a
+    elif T is int16:
+      result.kind = ComponentValKind.S16.ComponentValKindT
+      result.of_field.s16 = a
 
-  elif T is int32:
-    result.kind = ComponentValKind.S32.ComponentValKindT
-    result.of_field.s32 = a
+    elif T is int32:
+      result.kind = ComponentValKind.S32.ComponentValKindT
+      result.of_field.s32 = a
 
-  elif T is int64:
-    result.kind = ComponentValKind.S64.ComponentValKindT
-    result.of_field.s64 = a
+    elif T is int64:
+      result.kind = ComponentValKind.S64.ComponentValKindT
+      result.of_field.s64 = a
 
-  elif T is uint8:
-    result.kind = ComponentValKind.U8.ComponentValKindT
-    result.of_field.u8 = a
+    elif T is uint8:
+      result.kind = ComponentValKind.U8.ComponentValKindT
+      result.of_field.u8 = a
 
-  elif T is uint16:
-    result.kind = ComponentValKind.U16.ComponentValKindT
-    result.of_field.u16 = a
+    elif T is uint16:
+      result.kind = ComponentValKind.U16.ComponentValKindT
+      result.of_field.u16 = a
 
-  elif T is uint32:
-    result.kind = ComponentValKind.U32.ComponentValKindT
-    result.of_field.u32 = a
+    elif T is uint32:
+      result.kind = ComponentValKind.U32.ComponentValKindT
+      result.of_field.u32 = a
 
-  elif T is uint64:
-    result.kind = ComponentValKind.U64.ComponentValKindT
-    result.of_field.u64 = a
+    elif T is uint64:
+      result.kind = ComponentValKind.U64.ComponentValKindT
+      result.of_field.u64 = a
 
-  elif T is float32:
-    result.kind = ComponentValKind.Float32.ComponentValKindT
-    result.of_field.f32 = a
+    elif T is float32:
+      result.kind = ComponentValKind.Float32.ComponentValKindT
+      result.of_field.f32 = a
 
-  elif T is float64:
-    result.kind = ComponentValKind.Float64.ComponentValKindT
-    result.of_field.f64 = a
+    elif T is float64:
+      result.kind = ComponentValKind.Float64.ComponentValKindT
+      result.of_field.f64 = a
 
-  elif T is Rune:
-    result.kind = ComponentValKind.Char.ComponentValKindT
-    result.of_field.character = a.uint32
+    elif T is Rune:
+      result.kind = ComponentValKind.Char.ComponentValKindT
+      result.of_field.character = a.uint32
 
-  elif T is string:
-    result.kind = ComponentValKind.String.ComponentValKindT
-    let name = a.toName
-    result.of_field.string = name
+    elif T is string:
+      result.kind = ComponentValKind.String.ComponentValKindT
+      let name = a.toName
+      result.of_field.string = name
 
-  elif T is seq:
-    result.kind = ComponentValKind.List.ComponentValKindT
-    result.of_field.list.addr.newUninitialized(a.len.csize_t)
-    for i, v in a:
-      result.of_field.list[i] = v.toVal
+    elif T is seq:
+      result.kind = ComponentValKind.List.ComponentValKindT
+      result.of_field.list.addr.newUninitialized(a.len.csize_t)
+      for i, v in a:
+        result.of_field.list[i] = v.toVal
 
-  elif T is system.set:
-    result.kind = ComponentValKind.Flags.ComponentValKindT
-    result.of_field.flags.addr.newUninitialized(a.len.csize_t)
-    for i, v in enumerate(a.items):
-      let name = ($v).toName
-      result.of_field.flags[i] = name
+    elif T is system.set:
+      result.kind = ComponentValKind.Flags.ComponentValKindT
+      result.of_field.flags.addr.newUninitialized(a.len.csize_t)
+      for i, v in enumerate(a.items):
+        let name = ($v).toName
+        result.of_field.flags[i] = name
 
-  elif T is options.Option:
-    result.kind = ComponentValKind.Option.ComponentValKindT
-    if a.isSome:
-      result.of_field.option = valNew()
-      result.of_field.option[] = a.get.toVal
-    else:
-      result.of_field.option = nil
+    elif T is options.Option:
+      result.kind = ComponentValKind.Option.ComponentValKindT
+      if a.isSome:
+        result.of_field.option = valNew()
+        result.of_field.option[] = a.get.toVal
+      else:
+        result.of_field.option = nil
 
-  elif T is ress.Result:
-    result.kind = ComponentValKind.Result.ComponentValKindT
-    type OkType = typeof(a.value)
-    type ErrType = typeof(a.error)
-    result.of_field.result.val = nil
-    if a.isErr:
-      result.of_field.result.error = true
-      when ErrType isnot void:
-        result.of_field.result.val = valNew()
-        result.of_field.result.val[] = a.error.toVal
-    else:
-      result.of_field.result.error = false
-      when OkType isnot void:
-        result.of_field.result.val = valNew()
-        result.of_field.result.val[] = a.value.toVal
+    elif T is ress.Result:
+      result.kind = ComponentValKind.Result.ComponentValKindT
+      type OkType = typeof(a.value)
+      type ErrType = typeof(a.error)
+      result.of_field.result.val = nil
+      if a.isErr:
+        result.of_field.result.error = true
+        when ErrType isnot void:
+          result.of_field.result.val = valNew()
+          result.of_field.result.val[] = a.error.toVal
+      else:
+        result.of_field.result.error = false
+        when OkType isnot void:
+          result.of_field.result.val = valNew()
+          result.of_field.result.val[] = a.value.toVal
 
-  elif T is enum:
-    result.kind = ComponentValKind.Enum.ComponentValKindT
-    let name = ($a).toName
-    result.of_field.enumeration = name
+    elif T is enum:
+      result.kind = ComponentValKind.Enum.ComponentValKindT
+      let name = ($a).toName
+      result.of_field.enumeration = name
 
-  elif T is tuple:
-    result.kind = ComponentValKind.Tuple.ComponentValKindT
-    var numFields = 0
-    for k, v in a.fieldPairs:
-      numFields.inc
-
-    result.of_field.tuple_field.addr.newUninitialized(numFields.csize_t)
-
-    var i = 0
-    for k, v in a.fieldPairs:
-      result.of_field.tuple_field[i] = v.toVal
-      inc i
-
-  elif T is object:
-    when not compiles(T().kind):
-      result.kind = ComponentValKind.Record.ComponentValKindT
+    elif T is tuple:
+      result.kind = ComponentValKind.Tuple.ComponentValKindT
       var numFields = 0
       for k, v in a.fieldPairs:
         numFields.inc
 
-      result.of_field.record.addr.newUninitialized(numFields.csize_t)
+      result.of_field.tuple_field.addr.newUninitialized(numFields.csize_t)
 
       var i = 0
       for k, v in a.fieldPairs:
-        result.of_field.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
+        result.of_field.tuple_field[i] = v.toVal
         inc i
 
+    elif T is object:
+      when not compiles(T().kind):
+        result.kind = ComponentValKind.Record.ComponentValKindT
+        var numFields = 0
+        for k, v in a.fieldPairs:
+          numFields.inc
+
+        result.of_field.record.addr.newUninitialized(numFields.csize_t)
+
+        var i = 0
+        for k, v in a.fieldPairs:
+          result.of_field.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
+          inc i
+
+      else:
+        result.kind = ComponentValKind.Variant.ComponentValKindT
+
+        type Kind = typeof(a.kind)
+        let name = ($a.kind).toName
+        result.of_field.variant.name = name
+
+        macro convertField(res: untyped, val: typed): untyped =
+          var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(val, ident"kind"))
+          var addElse = false
+          for v in Kind:
+            let kindName = ident(toCamelCase($v, true))
+            let fieldName = ident(toCamelCase($v, false))
+            var caseCode = genAst(res, val, fieldName):
+              # todo: check this `when` in the macro instead of in the returned code
+              when compiles(val.fieldName):
+                res = valNew()
+                res[] = val.fieldName.toVal
+            cases.add nnkOfBranch.newTree(kindName, caseCode)
+
+          return nnkStmtList.newTree(cases)
+
+        result.of_field.variant.val.convertField(a)
+
     else:
-      result.kind = ComponentValKind.Variant.ComponentValKindT
-
-      type Kind = typeof(a.kind)
-      let name = ($a.kind).toName
-      result.of_field.variant.name = name
-
-      macro convertField(res: untyped, val: typed): untyped =
-        var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(val, ident"kind"))
-        var addElse = false
-        for v in Kind:
-          let kindName = ident(toCamelCase($v, true))
-          let fieldName = ident(toCamelCase($v, false))
-          var caseCode = genAst(res, val, fieldName):
-            # todo: check this `when` in the macro instead of in the returned code
-            when compiles(val.fieldName):
-              res = valNew()
-              res[] = val.fieldName.toVal
-          cases.add nnkOfBranch.newTree(kindName, caseCode)
-
-        return nnkStmtList.newTree(cases)
-
-      result.of_field.variant.val.convertField(a)
-
-  else:
-    {.error: "Can't convert type " & $T & " to ComponentValT".}
+      {.error: "Can't convert type " & $T & " to ComponentValT".}
 
 proc toWasmVal*(a: int32): ValT =
   result.kind = WASMTIME_I32
@@ -948,158 +951,185 @@ proc toWasmVal*(a: float64): ValT =
   result.kind = WASMTIME_F64
   result.of_field.f64 = a
 
+proc to*(a: ValT, T: typedesc): T =
+  # echo a, ", ", a.kind.ComponentValKind, " to ", T
+  when T is int8:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.int8
+
+  elif T is int16:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.int16
+
+  elif T is int32:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32
+
+  elif T is int64:
+    assert a.kind == WASMTIME_I64
+    result = a.of_field.i64
+
+  elif T is float32:
+    assert a.kind == WASMTIME_F32
+    result = a.of_field.f32
+
+  elif T is float64:
+    assert a.kind == WASMTIME_F64
+    result = a.of_field.f64
+
 macro getSetTargetType(t: typed): untyped =
   ## Given set[T], return T
   return t.getTypeInst[1].getTypeImpl[1]
 
-proc to*(a: ComponentValT, T: typedesc): T =
-  # echo a, ", ", a.kind.ComponentValKind, " to ", T
-  when T is int8:
-    assert a.kind == ComponentValKind.S8.ComponentValKindT
-    result = a.of_field.s8
+when nimWasmtimeFeatureComponentModel:
+  proc to*(a: ComponentValT, T: typedesc): T =
+    # echo a, ", ", a.kind.ComponentValKind, " to ", T
+    when T is int8:
+      assert a.kind == ComponentValKind.S8.ComponentValKindT
+      result = a.of_field.s8
 
-  elif T is int16:
-    assert a.kind == ComponentValKind.S16.ComponentValKindT
-    result = a.of_field.s16
+    elif T is int16:
+      assert a.kind == ComponentValKind.S16.ComponentValKindT
+      result = a.of_field.s16
 
-  elif T is int32:
-    assert a.kind == ComponentValKind.S32.ComponentValKindT
-    result = a.of_field.s32
+    elif T is int32:
+      assert a.kind == ComponentValKind.S32.ComponentValKindT
+      result = a.of_field.s32
 
-  elif T is int64:
-    assert a.kind == ComponentValKind.S64.ComponentValKindT
-    result = a.of_field.s64
+    elif T is int64:
+      assert a.kind == ComponentValKind.S64.ComponentValKindT
+      result = a.of_field.s64
 
-  elif T is uint8:
-    assert a.kind == ComponentValKind.U8.ComponentValKindT
-    result = a.of_field.u8
+    elif T is uint8:
+      assert a.kind == ComponentValKind.U8.ComponentValKindT
+      result = a.of_field.u8
 
-  elif T is uint16:
-    assert a.kind == ComponentValKind.U16.ComponentValKindT
-    result = a.of_field.u16
+    elif T is uint16:
+      assert a.kind == ComponentValKind.U16.ComponentValKindT
+      result = a.of_field.u16
 
-  elif T is uint32:
-    assert a.kind == ComponentValKind.U32.ComponentValKindT
-    result = a.of_field.u32
+    elif T is uint32:
+      assert a.kind == ComponentValKind.U32.ComponentValKindT
+      result = a.of_field.u32
 
-  elif T is uint64:
-    assert a.kind == ComponentValKind.U64.ComponentValKindT
-    result = a.of_field.u64
+    elif T is uint64:
+      assert a.kind == ComponentValKind.U64.ComponentValKindT
+      result = a.of_field.u64
 
-  elif T is float32:
-    assert a.kind == ComponentValKind.Float32.ComponentValKindT
-    result = a.of_field.f32
+    elif T is float32:
+      assert a.kind == ComponentValKind.Float32.ComponentValKindT
+      result = a.of_field.f32
 
-  elif T is float64:
-    assert a.kind == ComponentValKind.Float64.ComponentValKindT
-    result = a.of_field.f64
+    elif T is float64:
+      assert a.kind == ComponentValKind.Float64.ComponentValKindT
+      result = a.of_field.f64
 
-  elif T is Rune:
-    assert a.kind == ComponentValKind.Char.ComponentValKindT
-    result = a.of_field.character.Rune
+    elif T is Rune:
+      assert a.kind == ComponentValKind.Char.ComponentValKindT
+      result = a.of_field.character.Rune
 
-  elif T is string:
-    assert a.kind == ComponentValKind.String.ComponentValKindT
-    result = a.of_field.string.strVal
+    elif T is string:
+      assert a.kind == ComponentValKind.String.ComponentValKindT
+      result = a.of_field.string.strVal
 
-  # elif T is WitString:
-  #   assert a.kind == ComponentValKind.String.ComponentValKindT
-  #   result = ws(cast[ptr char](a.of_field.string.data), a.of_field.string.len)
+    # elif T is WitString:
+    #   assert a.kind == ComponentValKind.String.ComponentValKindT
+    #   result = ws(cast[ptr char](a.of_field.string.data), a.of_field.string.len)
 
-  elif T is bool:
-    assert a.kind == ComponentValKind.Bool.ComponentValKindT
-    result = a.of_field.boolean
+    elif T is bool:
+      assert a.kind == ComponentValKind.Bool.ComponentValKindT
+      result = a.of_field.boolean
 
-  elif T is seq:
-    assert a.kind == ComponentValKind.List.ComponentValKindT
-    type Item = typeof(result[0])
-    for v in a.of_field.list:
-      result.add v.to(Item)
+    elif T is seq:
+      assert a.kind == ComponentValKind.List.ComponentValKindT
+      type Item = typeof(result[0])
+      for v in a.of_field.list:
+        result.add v.to(Item)
 
-  # elif T is WitList:
-  #   assert a.kind == ComponentValKind.List.ComponentValKindT
-  #   type Item = typeof(result[0])
-  #   for v in a.of_field.list:
-  #     result.add v.to(Item)
-  #   # var res: seq[Item]
-  #   # for v in a.of_field.list:
-  #   #   res.add v.to(Item)
+    # elif T is WitList:
+    #   assert a.kind == ComponentValKind.List.ComponentValKindT
+    #   type Item = typeof(result[0])
+    #   for v in a.of_field.list:
+    #     result.add v.to(Item)
+    #   # var res: seq[Item]
+    #   # for v in a.of_field.list:
+    #   #   res.add v.to(Item)
 
-  elif T is system.set:
-    assert a.kind == ComponentValKind.Flags.ComponentValKindT
-    type Item = T.getSetTargetType()
-    for v in a.of_field.flags:
-      let name = v.strVal
-      result.incl parseEnum[Item](name)
+    elif T is system.set:
+      assert a.kind == ComponentValKind.Flags.ComponentValKindT
+      type Item = T.getSetTargetType()
+      for v in a.of_field.flags:
+        let name = v.strVal
+        result.incl parseEnum[Item](name)
 
-  elif T is WitFlags:
-    assert a.kind == ComponentValKind.Flags.ComponentValKindT
-    type Item = T.getFlagsTargetType()
-    for v in a.of_field.flags:
-      let name = v.strVal
-      result.incl parseEnum[Item](name)
+    elif T is WitFlags:
+      assert a.kind == ComponentValKind.Flags.ComponentValKindT
+      type Item = T.getFlagsTargetType()
+      for v in a.of_field.flags:
+        let name = v.strVal
+        result.incl parseEnum[Item](name)
 
-  elif T is options.Option:
-    assert a.kind == ComponentValKind.Option.ComponentValKindT
-    if a.of_field.option != nil:
-      result = a.of_field.option[].to(typeof(result.get)).some
+    elif T is options.Option:
+      assert a.kind == ComponentValKind.Option.ComponentValKindT
+      if a.of_field.option != nil:
+        result = a.of_field.option[].to(typeof(result.get)).some
 
-  elif T is ress.Result:
-    assert a.kind == ComponentValKind.Result.ComponentValKindT
-    type OkType = typeof(result.value)
-    type ErrType = typeof(result.error)
-    if a.of_field.result.error:
-      when ErrType is void:
-        result = ress.Result[OkType, ErrType].err()
+    elif T is ress.Result:
+      assert a.kind == ComponentValKind.Result.ComponentValKindT
+      type OkType = typeof(result.value)
+      type ErrType = typeof(result.error)
+      if a.of_field.result.error:
+        when ErrType is void:
+          result = ress.Result[OkType, ErrType].err()
+        else:
+          result = ress.err(a.of_field.result.val[].to(ErrType))
       else:
-        result = ress.err(a.of_field.result.val[].to(ErrType))
+        when OkType is void:
+          result = ress.Result[OkType, ErrType].ok()
+        else:
+          result = ress.ok(a.of_field.result.val[].to(OkType))
+
+    elif T is tuple:
+      if a.kind == ComponentValKind.Tuple.ComponentValKindT:
+        var i = 0
+        for k, v in result.fieldPairs:
+          v = a.of_field.tuple_field[i].to(typeof(v))
+          inc i
+
+    elif T is object:
+      if a.kind == ComponentValKind.Record.ComponentValKindT:
+        var i = 0
+        for k, v in result.fieldPairs:
+          v = a.of_field.record[i].val.to(typeof(v))
+          inc i
+
+      elif a.kind == ComponentValKind.Variant.ComponentValKindT:
+        when compiles(result.kind):
+          type Kind = typeof(result.kind)
+          let tag = parseEnum[Kind](a.of_field.variant.name.strVal)
+          result = T(kind: tag)
+
+          macro convertField(res: typed, val: untyped): untyped =
+            var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(res, ident"kind"))
+            var addElse = false
+
+            for v in Kind:
+              var caseCode = genAst(res, val, field = ident($v)):
+                # todo: check this `when` in the macro instead of in the returned code
+                when compiles(res.field):
+                  res.field = val.to(typeof(res.field))
+              cases.add nnkOfBranch.newTree(ident(toCamelCase($v, true)), caseCode)
+
+            return nnkStmtList.newTree(cases)
+
+          result.convertField(a.of_field.variant.val[])
+
+    elif T is enum:
+      assert a.kind == ComponentValKind.Enum.ComponentValKindT
+      parseEnum[T](a.of_field.enumeration.strVal)
+
     else:
-      when OkType is void:
-        result = ress.Result[OkType, ErrType].ok()
-      else:
-        result = ress.ok(a.of_field.result.val[].to(OkType))
-
-  elif T is tuple:
-    if a.kind == ComponentValKind.Tuple.ComponentValKindT:
-      var i = 0
-      for k, v in result.fieldPairs:
-        v = a.of_field.tuple_field[i].to(typeof(v))
-        inc i
-
-  elif T is object:
-    if a.kind == ComponentValKind.Record.ComponentValKindT:
-      var i = 0
-      for k, v in result.fieldPairs:
-        v = a.of_field.record[i].val.to(typeof(v))
-        inc i
-
-    elif a.kind == ComponentValKind.Variant.ComponentValKindT:
-      when compiles(result.kind):
-        type Kind = typeof(result.kind)
-        let tag = parseEnum[Kind](a.of_field.variant.name.strVal)
-        result = T(kind: tag)
-
-        macro convertField(res: typed, val: untyped): untyped =
-          var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(res, ident"kind"))
-          var addElse = false
-
-          for v in Kind:
-            var caseCode = genAst(res, val, field = ident($v)):
-              # todo: check this `when` in the macro instead of in the returned code
-              when compiles(res.field):
-                res.field = val.to(typeof(res.field))
-            cases.add nnkOfBranch.newTree(ident(toCamelCase($v, true)), caseCode)
-
-          return nnkStmtList.newTree(cases)
-
-        result.convertField(a.of_field.variant.val[])
-
-  elif T is enum:
-    assert a.kind == ComponentValKind.Enum.ComponentValKindT
-    parseEnum[T](a.of_field.enumeration.strVal)
-
-  else:
-    {.error: "Can't convert ComponentValT to " & $T.}
+      {.error: "Can't convert ComponentValT to " & $T.}
 
 type
   WasmtimeResultKind* = enum Ok, Err
@@ -1250,16 +1280,17 @@ proc imports*(module: ptr ModuleT): WasmImporttypeVecT =
 proc exports*(module: ptr ModuleT): WasmExporttypeVecT =
   module.exports(result.addr)
 
-proc newComponent*(engine: ptr WasmEngineT, buf: openArray[char]): WasmtimeResult[ptr ComponentT] =
-  var c: ptr ComponentT = nil
-  let err = engine.new(cast[ptr uint8](buf[0].addr), buf.len.csize_t, c.addr)
-  if err != nil:
-    return err.toResult(ptr ComponentT)
-  return ok(c)
+when nimWasmtimeFeatureComponentModel:
+  proc newComponent*(engine: ptr WasmEngineT, buf: openArray[char]): WasmtimeResult[ptr ComponentT] =
+    var c: ptr ComponentT = nil
+    let err = engine.new(cast[ptr uint8](buf[0].addr), buf.len.csize_t, c.addr)
+    if err != nil:
+      return err.toResult(ptr ComponentT)
+    return ok(c)
 
 proc instantiate*(linker: ptr LinkerT, store: ptr ContextT, module: ptr ModuleT, trap: ptr ptr WasmTrapT): WasmtimeResult[InstanceT] =
   var instance: InstanceT
-  let err = linker.instantiate(store, module, instance.addr, trap)
+  let err = linker.instantiate(store, module, cast[ptr cint](instance.addr), trap)
   if err != nil:
     return err.toResult(InstanceT)
   return instance.ok
@@ -1302,57 +1333,58 @@ proc call*(f: ptr FuncT, store: ptr ContextT, args: openArray[ValT],
     results: openArray[ValT], trap: ptr ptr WasmTrapT): ptr ErrorT =
   store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t, trap)
 
-proc call*(f: ptr ComponentFuncT, context: ptr ContextT, args: openArray[ComponentValT],
-    results: openArray[ComponentValT]): WasmtimeResult[void] =
-  let argsPtr = if args.len > 0:
-    args[0].addr
-  else:
-    nil
+when nimWasmtimeFeatureComponentModel:
+  proc call*(f: ptr ComponentFuncT, context: ptr ContextT, args: openArray[ComponentValT],
+      results: openArray[ComponentValT]): WasmtimeResult[void] =
+    let argsPtr = if args.len > 0:
+      args[0].addr
+    else:
+      nil
 
-  let resultsPtr = if results.len > 0:
-    results[0].addr
-  else:
-    nil
+    let resultsPtr = if results.len > 0:
+      results[0].addr
+    else:
+      nil
 
-  result = f.funcCall(context, argsPtr, args.len.csize_t, resultsPtr, results.len.csize_t).toResult(void)
+    result = f.funcCall(context, argsPtr, args.len.csize_t, resultsPtr, results.len.csize_t).toResult(void)
 
-type ComponentFuncCallback*[T] = proc(ctx: ptr ContextT, data: ptr T, params: openArray[ComponentValT], results: var openArray[ComponentValT]): ptr WasmTrapT
+  type ComponentFuncCallback*[T] = proc(ctx: ptr ContextT, data: ptr T, params: openArray[ComponentValT], results: var openArray[ComponentValT]): ptr WasmTrapT
 
-proc funcNew*[T](linker: ptr ComponentLinkerT, env: string, name: string,
-    callback: ComponentFuncCallback[T], data: ptr T = nil,
-    finalizer: proc (a0: ptr T): void = nil): WasmtimeResult[void] =
+  proc funcNew*[T](linker: ptr ComponentLinkerT, env: string, name: string,
+      callback: ComponentFuncCallback[T], data: ptr T = nil,
+      finalizer: proc (a0: ptr T): void = nil): WasmtimeResult[void] =
 
-  type Data = object
-    callback: ComponentFuncCallback[T]
-    data: ptr T
-    finalizer: proc (a0: ptr T): void
-    env: string
-    name: string
+    type Data = object
+      callback: ComponentFuncCallback[T]
+      data: ptr T
+      finalizer: proc (a0: ptr T): void
+      env: string
+      name: string
 
-  var ctx = createShared(Data)
-  ctx.callback = callback
-  ctx.data = data
-  ctx.finalizer = finalizer
-  ctx.env = env
-  ctx.name = name
+    var ctx = createShared(Data)
+    ctx.callback = callback
+    ctx.data = data
+    ctx.finalizer = finalizer
+    ctx.env = env
+    ctx.name = name
 
-  proc fin(data: pointer) {.cdecl.} =
-    let data = cast[ptr Data](data)
-    if data.finalizer != nil:
-      data.finalizer(data.data)
-    deallocShared(data)
+    proc fin(data: pointer) {.cdecl.} =
+      let data = cast[ptr Data](data)
+      if data.finalizer != nil:
+        data.finalizer(data.data)
+      deallocShared(data)
 
-  proc cb(ctx: ptr ContextT, data: pointer, parameters: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
-    let data = cast[ptr Data](data)
-    let parameters = cast[ptr UncheckedArray[ComponentValT]](parameters)
-    let results = cast[ptr UncheckedArray[ComponentValT]](results)
-    try:
-      data[].callback(ctx, data[].data, parameters.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
-    except Exception as e:
-      let msg = &"Failed to run func '{data.env}.{data.name}': {e.msg}\n{e.getStackTrace()}"
-      newTrap(msg.cstring, msg.len.csize_t)
+    proc cb(ctx: ptr ContextT, data: pointer, parameters: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
+      let data = cast[ptr Data](data)
+      let parameters = cast[ptr UncheckedArray[ComponentValT]](parameters)
+      let results = cast[ptr UncheckedArray[ComponentValT]](results)
+      try:
+        data[].callback(ctx, data[].data, parameters.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
+      except Exception as e:
+        let msg = &"Failed to run func '{data.env}.{data.name}': {e.msg}\n{e.getStackTrace()}"
+        newTrap(msg.cstring, msg.len.csize_t)
 
-  return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
+    return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
 
 type FuncCallback*[T] = proc(ctx: ptr ContextT, caller: ptr CallerT, data: ptr T, params: var openArray[ValRawT]): ptr WasmTrapT
 
@@ -1442,184 +1474,185 @@ proc defineSharedMemory*(linker: ptr LinkerT, store: ptr ContextT, engine: ptr W
   ?engine.newSharedmemory(ty, sharedMem.addr).toResult(void)
   linker.defineSharedMemory(store, env, name, sharedMem)
 
-template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped): untyped =
-  block:
-    proc cb(s: ptr ContextT, data: ptr int, p: openArray[ComponentValT], r: var openArray[ComponentValT]): ptr WasmTrapT =
-      proc inner(store {.inject.}: ptr ContextT, parameters {.inject.}: openArray[ComponentValT], results {.inject.}: var openArray[ComponentValT]): WasmtimeResult[void] =
-        # echo "[host] " & name & &" <- {parameters}"
-        # defer:
-        #   echo "[host] " & name & &" -> {results}"
-        body
+when nimWasmtimeFeatureComponentModel:
+  template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped): untyped =
+    block:
+      proc cb(s: ptr ContextT, data: ptr int, p: openArray[ComponentValT], r: var openArray[ComponentValT]): ptr WasmTrapT =
+        proc inner(store {.inject.}: ptr ContextT, parameters {.inject.}: openArray[ComponentValT], results {.inject.}: var openArray[ComponentValT]): WasmtimeResult[void] =
+          # echo "[host] " & name & &" <- {parameters}"
+          # defer:
+          #   echo "[host] " & name & &" -> {results}"
+          body
 
-      inner(s, p, r).okOr(e):
-        let msg = $e
-        return newTrap(msg.cstring, msg.len.csize_t)
+        inner(s, p, r).okOr(e):
+          let msg = $e
+          return newTrap(msg.cstring, msg.len.csize_t)
 
-      nil
+        nil
 
-    let funcName {.inject.} = name
-    let res = linker.funcNew[:int](env, funcName, cb)
-    res
+      let funcName {.inject.} = name
+      let res = linker.funcNew[:int](env, funcName, cb)
+      res
 
-proc resourceHostData*(ctx: ptr ContextT; val: ptr ComponentValT;
-                       T: typedesc): WasmtimeResult[ptr T] =
-  let data: pointer = nil
-  let err = ctx.resourceHostData(val, data.addr)
-  if err != nil:
-    return err.toResult(ptr T)
-  assert data != nil
-  return wasmtime.ok(cast[ptr T](data))
+  proc resourceHostData*(ctx: ptr ContextT; val: ptr ComponentValT;
+                         T: typedesc): WasmtimeResult[ptr T] =
+    let data: pointer = nil
+    let err = ctx.resourceHostData(val, data.addr)
+    if err != nil:
+      return err.toResult(ptr T)
+    assert data != nil
+    return wasmtime.ok(cast[ptr T](data))
 
-proc `$`*(a: ComponentValT): string =
-  case a.kind
-  of WASMTIME_COMPONENT_BOOL: $a.of_field.boolean
-  of WASMTIME_COMPONENT_S8: $a.of_field.s8
-  of WASMTIME_COMPONENT_U8: $a.of_field.u8
-  of WASMTIME_COMPONENT_S16: $a.of_field.s16
-  of WASMTIME_COMPONENT_U16: $a.of_field.u16
-  of WASMTIME_COMPONENT_S32: $a.of_field.s32
-  of WASMTIME_COMPONENT_U32: $a.of_field.u32
-  of WASMTIME_COMPONENT_S64: $a.of_field.s64
-  of WASMTIME_COMPONENT_U64: $a.of_field.u64
-  of WASMTIME_COMPONENT_F32: $a.of_field.f32
-  of WASMTIME_COMPONENT_F64: $a.of_field.f64
-  of WASMTIME_COMPONENT_CHAR: $a.of_field.character.Rune
-  of WASMTIME_COMPONENT_STRING: "\"" & $a.of_field.string.strVal & "\""
+  proc `$`*(a: ComponentValT): string =
+    case a.kind
+    of WASMTIME_COMPONENT_BOOL: $a.of_field.boolean
+    of WASMTIME_COMPONENT_S8: $a.of_field.s8
+    of WASMTIME_COMPONENT_U8: $a.of_field.u8
+    of WASMTIME_COMPONENT_S16: $a.of_field.s16
+    of WASMTIME_COMPONENT_U16: $a.of_field.u16
+    of WASMTIME_COMPONENT_S32: $a.of_field.s32
+    of WASMTIME_COMPONENT_U32: $a.of_field.u32
+    of WASMTIME_COMPONENT_S64: $a.of_field.s64
+    of WASMTIME_COMPONENT_U64: $a.of_field.u64
+    of WASMTIME_COMPONENT_F32: $a.of_field.f32
+    of WASMTIME_COMPONENT_F64: $a.of_field.f64
+    of WASMTIME_COMPONENT_CHAR: $a.of_field.character.Rune
+    of WASMTIME_COMPONENT_STRING: "\"" & $a.of_field.string.strVal & "\""
 
-  of WASMTIME_COMPONENT_LIST:
-    var str = "["
-    for i, v in a.of_field.list:
-      if i > 0: str.add ", "
-      str.add $v
-    str.add "]"
-    str
+    of WASMTIME_COMPONENT_LIST:
+      var str = "["
+      for i, v in a.of_field.list:
+        if i > 0: str.add ", "
+        str.add $v
+      str.add "]"
+      str
 
-  of WASMTIME_COMPONENT_RECORD:
-    var str = "{"
-    for i, v in a.of_field.record:
-      if i > 0: str.add ", "
-      str.add v.name.strVal
-      str.add ": "
-      str.add $v.val
-    str.add "}"
-    str
+    of WASMTIME_COMPONENT_RECORD:
+      var str = "{"
+      for i, v in a.of_field.record:
+        if i > 0: str.add ", "
+        str.add v.name.strVal
+        str.add ": "
+        str.add $v.val
+      str.add "}"
+      str
 
-  of WASMTIME_COMPONENT_TUPLE:
-    var str = "("
-    for i, v in a.of_field.tuple_field:
-      if i > 0: str.add ", "
-      str.add $v
-    str.add ")"
-    str
+    of WASMTIME_COMPONENT_TUPLE:
+      var str = "("
+      for i, v in a.of_field.tuple_field:
+        if i > 0: str.add ", "
+        str.add $v
+      str.add ")"
+      str
 
-  of WASMTIME_COMPONENT_VARIANT:
-    if a.of_field.variant.val != nil:
-      a.of_field.variant.discriminant.strVal & "(" & $a.of_field.variant.val[] & ")"
-    else:
-      a.of_field.variant.discriminant.strVal
-
-  of WASMTIME_COMPONENT_ENUM: a.of_field.enumeration.strVal
-
-  of WASMTIME_COMPONENT_OPTION:
-    if a.of_field.option != nil:
-      "Some(" & $(a.of_field.option[]) & ")"
-    else:
-      "none"
-
-  of WASMTIME_COMPONENT_RESULT:
-    if not a.of_field.result.is_ok:
-      if a.of_field.result.val == nil:
-        "Err()"
+    of WASMTIME_COMPONENT_VARIANT:
+      if a.of_field.variant.val != nil:
+        a.of_field.variant.discriminant.strVal & "(" & $a.of_field.variant.val[] & ")"
       else:
-        "Err(" & $(a.of_field.result.val[]) & ")"
-    else:
-      if a.of_field.result.val == nil:
-        "Ok()"
+        a.of_field.variant.discriminant.strVal
+
+    of WASMTIME_COMPONENT_ENUM: a.of_field.enumeration.strVal
+
+    of WASMTIME_COMPONENT_OPTION:
+      if a.of_field.option != nil:
+        "Some(" & $(a.of_field.option[]) & ")"
       else:
-        "Ok(" & $(a.of_field.result.val[]) & ")"
+        "none"
 
-  of WASMTIME_COMPONENT_FLAGS:
-    var str = "{"
-    for i, v in a.of_field.flags:
-      if i > 0: str.add ", "
-      str.add v.strVal
-    str.add "}"
-    str
+    of WASMTIME_COMPONENT_RESULT:
+      if not a.of_field.result.is_ok:
+        if a.of_field.result.val == nil:
+          "Err()"
+        else:
+          "Err(" & $(a.of_field.result.val[]) & ")"
+      else:
+        if a.of_field.result.val == nil:
+          "Ok()"
+        else:
+          "Ok(" & $(a.of_field.result.val[]) & ")"
 
-  else:
-    &"<unknown component val {a.kind.ComponentValkindT}>"
+    of WASMTIME_COMPONENT_FLAGS:
+      var str = "{"
+      for i, v in a.of_field.flags:
+        if i > 0: str.add ", "
+        str.add v.strVal
+      str.add "}"
+      str
 
-  # of WASMTIME_COMPONENT_RESOURCE:
-  #   let name = a.addr.resourceDump()
-  #   name.strVal
-    # var str = "Resource(idx: " & $a.of_field.resource.idx & ", owned: " & $a.of_field.resource.owned_field & ", ty: "
-    # str.add case a.of_field.resource.ty.kind
-    # of Host: $a.of_field.resource.ty.of_field.host
-    # of Guest: $a.of_field.resource.ty.of_field.guest
-    # of Uninstantiated: $a.of_field.resource.ty.of_field.uninstantiated
-    # str.add ")"
-    # str
+    else:
+      &"<unknown component val {a.kind.ComponentValkindT}>"
 
-proc `$`*[S](a: array[S, ComponentValT]): string =
-  result = "["
-  for i in 0..a.high:
-    if i > 0:
-      result.add ", "
-    result.add $a[i]
-  result.add "]"
+    # of WASMTIME_COMPONENT_RESOURCE:
+    #   let name = a.addr.resourceDump()
+    #   name.strVal
+      # var str = "Resource(idx: " & $a.of_field.resource.idx & ", owned: " & $a.of_field.resource.owned_field & ", ty: "
+      # str.add case a.of_field.resource.ty.kind
+      # of Host: $a.of_field.resource.ty.of_field.host
+      # of Guest: $a.of_field.resource.ty.of_field.guest
+      # of Uninstantiated: $a.of_field.resource.ty.of_field.uninstantiated
+      # str.add ")"
+      # str
 
-proc `$`*(a: openArray[ComponentValT]): string =
-  result = "["
-  for i in 0..a.high:
-    if i > 0:
-      result.add ", "
-    result.add $a[i]
-  result.add "]"
+  proc `$`*[S](a: array[S, ComponentValT]): string =
+    result = "["
+    for i in 0..a.high:
+      if i > 0:
+        result.add ", "
+      result.add $a[i]
+    result.add "]"
 
-# proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, userId: int, drop: proc(p: pointer) {.cdecl.}): WasmtimeResult[void] =
-#   return linker.defineResource(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
+  proc `$`*(a: openArray[ComponentValT]): string =
+    result = "["
+    for i in 0..a.high:
+      if i > 0:
+        result.add ", "
+      result.add $a[i]
+    result.add "]"
 
-# proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, T: typedesc): WasmtimeResult[void] =
-#   proc deleteImpl(b: pointer) {.cdecl.} =
-#     let b = cast[ptr T](b)
-#     `=destroy`(b[])
-#     deallocShared(b)
-#   linker.defineResource(env, name, T.typeId, deleteImpl)
+  # proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, userId: int, drop: proc(p: pointer) {.cdecl.}): WasmtimeResult[void] =
+  #   return linker.defineResource(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
 
-# proc resourceNew*[T](context: ptr ContextT, data: sink T): WasmtimeResult[ComponentValT] =
-#   var res: ComponentValT
-#   var r = createShared(T)
-#   r[] = data.ensureMove
-#   let err = context.resourceNew(T.typeId, res.addr, r)
-#   if err != nil:
-#     return err.toResult(ComponentValT)
+  # proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, T: typedesc): WasmtimeResult[void] =
+  #   proc deleteImpl(b: pointer) {.cdecl.} =
+  #     let b = cast[ptr T](b)
+  #     `=destroy`(b[])
+  #     deallocShared(b)
+  #   linker.defineResource(env, name, T.typeId, deleteImpl)
 
-#   return wasmtime.ok(res.ensureMove)
+  # proc resourceNew*[T](context: ptr ContextT, data: sink T): WasmtimeResult[ComponentValT] =
+  #   var res: ComponentValT
+  #   var r = createShared(T)
+  #   r[] = data.ensureMove
+  #   let err = context.resourceNew(T.typeId, res.addr, r)
+  #   if err != nil:
+  #     return err.toResult(ComponentValT)
 
-proc getExport*(component: ptr ComponentT, name: string, parentIndex = ComponentExportIndexT.none): Option[ComponentExportIndexT] =
-  var index: ComponentExportIndexT
-  let parentIndex = parentIndex
-  let parentIndexPtr = if parentIndex.isSome: parentIndex.get.addr else: nil
-  let ex = component.getExportIndex(parentIndexPtr, name.cstring, name.len.csize_t)
-  if ex != nil:
-    return ex[].some
+  #   return wasmtime.ok(res.ensureMove)
 
-# type
-#   ComponentImportsCallback* = proc (path: string, name: string, typ: ComponentItemType)
+  proc getExport*(component: ptr ComponentT, name: string, parentIndex = ComponentExportIndexT.none): Option[ComponentExportIndexT] =
+    var index: ComponentExportIndexT
+    let parentIndex = parentIndex
+    let parentIndexPtr = if parentIndex.isSome: parentIndex.get.addr else: nil
+    let ex = component.getExportIndex(parentIndexPtr, name.cstring, name.len.csize_t)
+    if ex != nil:
+      return ex[].some
 
-# proc toString(s: cstring, l: csize_t): string =
-#   result = newStringOfCap(l.int)
-#   for i in 0..<l.int:
-#     result.add s[i]
+  # type
+  #   ComponentImportsCallback* = proc (path: string, name: string, typ: ComponentItemType)
 
-# proc iterateImports*(component: ptr ComponentT, cb: ComponentImportsCallback) =
-#   var data = cb
+  # proc toString(s: cstring, l: csize_t): string =
+  #   result = newStringOfCap(l.int)
+  #   for i in 0..<l.int:
+  #     result.add s[i]
 
-#   proc cbInner(data: pointer, path: cstring, pathLen: csize_t, name: cstring, nameLen: csize_t, typ: ComponentItemTypeT) {.cdecl.} =
-#     let cb = cast[ptr ComponentImportsCallback](data)[]
-#     cb(toString(path, pathLen), toString(name, nameLen), typ.ComponentItemType)
+  # proc iterateImports*(component: ptr ComponentT, cb: ComponentImportsCallback) =
+  #   var data = cb
 
-#   component.iterateImports(cbInner, data.addr)
+  #   proc cbInner(data: pointer, path: cstring, pathLen: csize_t, name: cstring, nameLen: csize_t, typ: ComponentItemTypeT) {.cdecl.} =
+  #     let cb = cast[ptr ComponentImportsCallback](data)[]
+  #     cb(toString(path, pathLen), toString(name, nameLen), typ.ComponentItemType)
+
+  #   component.iterateImports(cbInner, data.addr)
 
 proc newFuncType*(parameters: openArray[WasmValkind], results: openArray[WasmValkind]): ptr WasmFunctypeT =
   var parameters = parameters.mapIt(newValType(it.WasmValkindT)).toVec

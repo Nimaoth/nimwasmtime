@@ -43,3 +43,5 @@ uiae.txt
 nimcache
 tests/wasm
 tests
+nimble.develop
+nimble.paths
