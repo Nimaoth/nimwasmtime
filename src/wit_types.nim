@@ -19,9 +19,8 @@ type
 #   if self.data != nil:
 #     self.addr.delete()
 
-template `@@`*[T, S](arr: array[S, T]): WitList[T] =
-  let a = arr
-  WitList[T](data: cast[ptr UncheckedArray[T]](a[0].addr), len: a.len)
+template `@@`*[T, S](arr: var array[S, T]): WitList[T] =
+  WitList[T](data: cast[ptr UncheckedArray[T]](arr[0].addr), len: arr.len)
 
 func `@@`*[T](arr: openArray[T]): WitList[T] =
   if arr.len > 0:
@@ -31,6 +30,9 @@ func `@@`*[T](arr: openArray[T]): WitList[T] =
 
 func wl*[T](data: ptr T, len: int): WitList[T] =
   WitList[T](data: cast[ptr UncheckedArray[T]](data), len: len)
+
+func wl*[T](data: ptr UncheckedArray[T], len: int): WitList[T] =
+  WitList[T](data: data, len: len)
 
 # func `@@`*[TS](arr: seq[T]): WitList[T] =
 #   let a = arr
@@ -93,6 +95,9 @@ template `ws`*(str: string): WitString =
 
 func ws*(data: ptr char, len: int): WitString =
   WitString(data: cast[ptr UncheckedArray[char]](data), len: len)
+
+func ws*(data: ptr UncheckedArray[char], len: int): WitString =
+  WitString(data: data, len: len)
 
 func low*(self: WitString): int = 0
 func high*(self: WitString): int = self.len - 1

@@ -82,6 +82,309 @@ proc coreTypeToWasmValkindName(t: CoreType): string =
   # of ExternRef: "externref"
   # of FuncRef: "funcref"
 
+proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode, fun: WitFunc) =
+  echo &"genExport {fun}"
+
+  let (flatFuncType, flatFuncTargetType) = ctx.flattenFuncType(fun, Lift)
+  echo flatFuncType
+  echo flatFuncTargetType
+
+  let name = fun.name.toCamelCase(false)
+
+  let memory = ident"memory"
+  let reallocImpl = ident"reallocImpl"
+  let linker = ident"linker"
+  let host = ident"host"
+  let store = genAst(funcs = ident"funcs", store = ident"mContext", funcs.store)
+
+  let getExportCode = genAst(name = ident(name),
+      nameStr = fun.name.replace('-', '_'),
+      instance = ident"instance",
+      context = ident"context",
+      f = genSym(nskLet, "f"),
+      funcs = ident"funcs",
+      ):
+
+    let f = instance.getExport(context, nameStr)
+    if f.isSome:
+      assert f.get.kind == WASMTIME_EXTERN_FUNC
+      funcs.name = f.get.of_field.func_field
+    else:
+      echo "Failed to find exported function '", nameStr, "'"
+
+  collectExportsBody.add getExportCode
+
+  var lowerCode = nnkStmtList.newTree()
+  var liftCode = nnkStmtList.newTree()
+
+  let args = collect:
+    for p in fun.params:
+      ident(p.name.toCamelCase(false))
+
+  var dataPtrs = nnkStmtList.newTree()
+  var frees = nnkStmtList.newTree()
+
+  proc addDataPtr(): NimNode =
+    result = ident("dataPtrWasm" & $dataPtrs.len)
+    let c = genAst(name = result):
+      var name: WasmPtr
+    dataPtrs.add(c)
+
+  var needsMemory = false
+  if flatFuncType.paramsFlat:
+    let loweredArgs = collect:
+      for i in 0..flatFuncTargetType.params.high:
+        genAst(args = ident("args"), index = i):
+          args[index]
+
+    proc storeArg(arg: NimNode, param: NimNode): NimNode =
+      return genAst(arg, param):
+        arg = toWasmVal(param)
+
+    proc memoryAccess(a: NimNode): NimNode =
+      needsMemory = true
+      genAst(memory, a):
+        memory[a].addr
+
+    proc memoryAlloc(param: NimNode, typ: WitType, depth: int): tuple[code: NimNode, dataPtr: NimNode] =
+      # needsRealloc = true
+      needsMemory = true
+      result.dataPtr = addDataPtr() # ident("dataPtrWasm" & $depth)
+
+      let byteSize = if typ.builtin == "string":
+        1
+      else:
+        let userType = ctx.types[typ.index]
+        ctx.byteSize(userType.listTarget)
+
+      result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results"):
+        dataPtr = block:
+          # todo: this memory needs to be freed
+          # let temp = realloc(funcs.mRealloc.get.of_field.func_field, funcs.mContext, 0.WasmPtr, 0, 4, (param.len * byteSize).int32)
+          let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field, funcs.mContext, (param.len * byteSize).int32, 4)
+          if temp.isErr:
+            return temp.toResult(void)
+          temp.val
+        # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr.int
+
+      let c = genAst(dataPtr = result.dataPtr, param, byteSize):
+        ?dealloc(funcs.mDealloc.get.of_field.func_field, funcs.mContext, dataPtr, (param.len * byteSize).int32, 4)
+
+      discard frees.add(c)
+
+    let lowerContext = WitLowerContext(
+      storeArg: storeArg,
+      memoryAccess: memoryAccess,
+      memoryAlloc: memoryAlloc,
+      convertToCoreTypes: false,
+      copyMemory: true,
+    )
+    ctx.lower(loweredArgs, args, fun.params, lowerCode, Parameter, lowerContext)
+
+  else: # flatFuncType.paramsFlat
+    let paramsMem = ident("paramsMem")
+
+    let needsRetArea = not flatFuncType.paramsFlat or not flatFuncType.resultsFlat
+    let paramsMemSize = max(flatFuncTargetType.toCoreType.paramsByteSize, flatFuncTargetType.toCoreType.resultsByteSize)
+    if needsRetArea or true:
+      let c = genAst(paramsMem, byteSize = paramsMemSize, temp = ident"temp", args = ident("args")):
+        let paramsMem: WasmPtr = block:
+          # let temp = realloc(funcs.mRealloc.get.of_field.func_field, funcs.mContext, 0.WasmPtr, 0, 4, byteSize.int32)
+          let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field, funcs.mContext, byteSize.int32, 4)
+          if temp.isErr:
+            return temp.toResult(void)
+          temp.val
+        args[0] = paramsMem.int32.toWasmVal
+        # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr.int
+
+      lowerCode.add c
+
+    let loweredArgs = collect:
+      for i in 0..flatFuncTargetType.params.high:
+        genAst(args = ident("args"), index = i):
+          args[index]
+
+    var loweredPtrArgs: seq[NimNode]
+    var i = 0
+    for p in flatFuncTargetType.params:
+      while i mod p.byteAlignment != 0:
+        inc i
+      let code = genAst(memory, paramsMem, nimType = p.nimTypeName.ident, index = newLit(i)):
+        cast[ptr nimType](memory[paramsMem + index].addr)[]
+      loweredPtrArgs.add code
+      i += p.byteSize
+
+    proc storeArg(arg: NimNode, param: NimNode): NimNode =
+      return genAst(arg, param):
+        arg = toWasmVal(param)
+
+    proc memoryAccess(a: NimNode): NimNode =
+      needsMemory = true
+      genAst(memory, a):
+        memory[a].addr
+
+    proc memoryAlloc(param: NimNode, typ: WitType, depth: int): tuple[code: NimNode, dataPtr: NimNode] =
+      # needsRealloc = true
+      needsMemory = true
+      # result.dataPtr = ident("dataPtrWasm" & $depth)
+      result.dataPtr = addDataPtr() # ident("dataPtrWasm" & $depth)
+
+      let byteSize = if typ.builtin == "string":
+        1
+      else:
+        let userType = ctx.types[typ.index]
+        ctx.byteSize(userType.listTarget)
+
+      result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results"):
+        dataPtr = block:
+          # let temp = realloc(funcs.mRealloc.get.of_field.func_field, funcs.mContext, 0.WasmPtr, 0, 4, (param.len * byteSize).int32)
+          let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field, funcs.mContext, byteSize.int32, 4)
+          if temp.isErr:
+            return temp.toResult(void)
+          temp.val
+        # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr.int
+
+      let c = genAst(dataPtr = result.dataPtr, param, byteSize):
+        ?dealloc(funcs.mDealloc.get.of_field.func_field, funcs.mContext, dataPtr, (param.len * byteSize).int32, 4)
+
+      discard frees.add(c)
+
+    let lowerContext = WitLowerContext(
+      memoryAccess: memoryAccess,
+      memoryAlloc: memoryAlloc,
+      convertToCoreTypes: false,
+      copyMemory: true,
+    )
+    ctx.lower(loweredPtrArgs, args, fun.params, lowerCode, Parameter, lowerContext)
+
+  let results = if fun.results.len == 1:
+    @[ident"retVal"]
+  else:
+    collect:
+      for i in 0..fun.results.high:
+        nnkBracketExpr.newTree(ident"retVal", newLit(i))
+        # ident"retVal"
+
+  let returnType = if fun.results.len == 0:
+    ident"void"
+  elif fun.results.len == 1:
+    ctx.getTypeName(fun.results[0], Return)
+  else:
+    var t = nnkTupleTy.newTree()
+    for r in fun.results:
+      t.add(ctx.getTypeName(fun.results[0], Return))
+    t
+
+  # let (flatFuncTypeLift, flatFuncTargetTypeLift) = ctx.flattenFuncType(fun, Lift)
+  # echo flatFuncTypeLift
+  # echo flatFuncTargetTypeLift
+  if flatFuncType.resultsFlat:
+    if fun.results.len > 0:
+      liftCode.add block:
+        genAst(retVal = ident"retVal"):
+          var retVal: int32
+      let resultName = genAst(results = ident"results"):
+        results[0]
+      proc memoryAccess(a: NimNode): NimNode =
+        genAst(a):
+          memoryAccess(a)
+      var liftContext = WitLiftContext(memoryAccess: memoryAccess)
+      ctx.lift(@[resultName], results, fun.results, liftCode, Return, liftContext)
+
+      liftCode.add block:
+        genAst(retVal = ident"retVal", wasmtime = ident"wasmtime", ok = ident"ok"):
+          return wasmtime.ok(retVal)
+
+  else:
+    let retArea = ident"retArea"
+    # call.add retAreaPtr
+    if fun.results.len == 1:
+      let t = ctx.getTypeName(fun.results[0], Return)
+      liftCode.add block:
+        genAst(retVal = ident"retVal", returnType, results = ident"results", retArea, memory):
+          var retVal: returnType
+          let retArea: ptr UncheckedArray[uint8] = memory.getRawPtr(results[0].to(WasmPtr))
+    else:
+      liftCode.add block:
+        genAst(retVal = ident"retVal", returnType, results = ident"results", retArea, memory):
+          var retVal: returnType
+          let retArea: ptr UncheckedArray[uint8] = memory.getRawPtr(results[0].to(WasmPtr))
+
+    var loweredPtrArgs: seq[NimNode]
+    var i = 0
+    for r in flatFuncTargetType.results:
+      while i mod r.byteAlignment != 0:
+        inc i
+      let code = genAst(retArea, nimType = r.nimTypeName.ident, index = newLit(i)):
+        cast[ptr nimType](retArea[index].addr)[]
+      loweredPtrArgs.add code
+      i += r.byteSize
+
+    proc memoryAccess(a: NimNode): NimNode =
+      needsMemory = true
+      genAst(memory, a):
+        # memory[a].addr
+        memory.getRawPtr(a.WasmPtr)
+
+    var liftContext = WitLiftContext(memoryAccess: memoryAccess)
+    ctx.lift(loweredPtrArgs, results, fun.results, liftCode, Return, liftContext)
+
+    liftCode.add block:
+      genAst(retVal = ident"retVal", wasmtime = ident"wasmtime", ok = ident"ok"):
+        return wasmtime.ok(retVal)
+
+  let f = genAst(name = ident(name),
+      instance = ident"instance",
+      context = ident"mContext",
+      f = ident"f",
+      args = ident"args",
+      results = ident"results",
+      trap = ident"trap",
+      funcsType = ident"ExportedFuncs",
+      funcs = ident"funcs",
+      err = ident"err",
+      res = ident"res",
+      savePoint = ident"savePoint",
+      numArgs = flatFuncType.params.len,
+      numResults = flatFuncType.results.len,
+      memory,
+      lowerCode,
+      liftCode,
+      dataPtrs,
+      frees,
+      returnType
+      ):
+
+    proc name(funcs: funcsType): WasmtimeResult[returnType] =
+      var args: array[max(1, numArgs), ValT]
+      var results: array[max(1, numResults), ValT]
+      var trap: ptr WasmTrapT = nil
+      # todo: don't add if not needed
+      var memory = funcs.mem
+      let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field, funcs.mContext)
+      defer:
+        # if savePoint.isOk:
+        discard stackRestore(funcs.mStackRestore.get.of_field.func_field, funcs.mContext, savePoint.val)
+      dataPtrs
+      lowerCode
+      let res = funcs.name.addr.call(funcs.context,
+          args.toOpenArray(0, numArgs - 1), results.toOpenArray(0, numResults - 1), trap.addr).toResult(void)
+
+      # frees
+
+      if res.isErr:
+        return res.toResult(returnType)
+
+      liftCode
+
+      # todo: results
+
+  for p in fun.params:
+    let t = ctx.getTypeName(p.typ, Parameter)
+    f[3].add(nnkIdentDefs.newTree(ident(p.name.toCamelCase(false)), t, newEmptyNode()))
+
+  funcList.add f
+
 macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap: static[Table[string, string]], worldName: static[string], dir: static[string], hostType: untyped): untyped =
   let path = if witPath.isAbsolute:
     witPath
@@ -141,6 +444,73 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
 
     else:
       discard
+
+  var exportedFuncsType = genAst(name = ident"ExportedFuncs"):
+    type name* = object
+      mContext*: ptr ContextT
+      mMemory*: Option[ExternT]
+      mRealloc*: Option[ExternT]
+      mDealloc*: Option[ExternT]
+      mStackAlloc*: Option[ExternT]
+      mStackSave*: Option[ExternT]
+      mStackRestore*: Option[ExternT]
+
+  let collectExports = genAst(name = ident"collectExports",
+      instance = ident"instance",
+      context = ident"context",
+      mContext = ident"mContext",
+      mMemory = ident"mMemory",
+      mRealloc = ident"mRealloc",
+      mDealloc = ident"mDealloc",
+      mStackAlloc = ident"mStackAlloc",
+      mStackSave = ident"mStackSave",
+      mStackRestore = ident"mStackRestore",
+      f = ident"f",
+      numArgs = ident"numArgs",
+      numResults = ident"numResults",
+      args = ident"args",
+      results = ident"results",
+      trap = ident"trap",
+      funcsType = ident"ExportedFuncs",
+      funcs = ident"funcs",
+      err = ident"err"):
+
+    proc name(funcs: var funcsType, instance: InstanceT, context: ptr ContextT) =
+      funcs.mContext = context
+      funcs.mMemory = instance.getExport(context, "memory")
+      funcs.mRealloc = instance.getExport(context, "cabi_realloc")
+      funcs.mDealloc = instance.getExport(context, "cabi_dealloc")
+      funcs.mStackAlloc = instance.getExport(context, "mem_stack_alloc")
+      funcs.mStackSave = instance.getExport(context, "mem_stack_save")
+      funcs.mStackRestore = instance.getExport(context, "mem_stack_restore")
+      # if mainMemory.isNone:
+      #   mainMemory = host.getMemoryFor(caller)
+
+  let getMem = genAst(name = ident"mem",
+      instance = ident"instance",
+      context = ident"context",
+      mContext = ident"mContext",
+      mMemory = ident"mMemory",
+      f = ident"f",
+      numArgs = ident"numArgs",
+      numResults = ident"numResults",
+      args = ident"args",
+      results = ident"results",
+      trap = ident"trap",
+      funcsType = ident"ExportedFuncs",
+      funcs = ident"funcs",
+      err = ident"err"):
+    proc mem(funcs: funcsType): WasmMemory =
+      if funcs.mMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+        return initWasmMemory(funcs.mMemory.get.of_field.sharedmemory)
+      elif funcs.mMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+        return initWasmMemory(funcs.mContext, funcs.mMemory.get.of_field.memory.addr)
+
+  for f in world.exports:
+    exportedFuncsType[0][2][2].add nnkIdentDefs.newTree(
+      nnkPostfix.newTree(ident"*", ident(f.name.toCamelCase(false))),
+      ident"FuncT", newEmptyNode())
+    ctx.genExport(collectExports[6], funDeclarations, f)
 
   for fun in world.funcs:
     var body = nnkStmtList.newTree()
@@ -428,7 +798,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
 
     defines.add code
 
-  let code = genAst(typeSection, funDeclarations, defineComponentFun):
+  let code = genAst(typeSection, funDeclarations, defineComponentFun, exportedFuncsType, collectExports, getMem):
     {.push hint[DuplicateModuleImport]:off.}
     import std/[options]
     from std/unicode import Rune
@@ -436,6 +806,11 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     {.pop.}
 
     typeSection
+
+    exportedFuncsType
+
+    getMem
+    collectExports
 
     funDeclarations
 

@@ -38,19 +38,425 @@ type
     c*: Foo
     d*: (int32, float32)
     e*: Option[int32]
-    f*: seq[Foo]
     gbruh*: seq[Props]
     g*: DescriptorType
     h*: Props
     i*: Result[Foo, void]
-    j*: Voodoo
-    k*: seq[Bar]
 when not declared(MyBlob):
   {.error: "Missing resource type definition for " & "MyBlob" &
       ". Define the type before the importWit statement.".}
 when not declared(Callback):
   {.error: "Missing resource type definition for " & "Callback" &
       ". Define the type before the importWit statement.".}
+type
+  ExportedFuncs* = object
+    mContext*: ptr ContextT
+    mMemory*: Option[ExternT]
+    mRealloc*: Option[ExternT]
+    mDealloc*: Option[ExternT]
+    mStackAlloc*: Option[ExternT]
+    mStackSave*: Option[ExternT]
+    mStackRestore*: Option[ExternT]
+    start*: FuncT
+    callCallback*: FuncT
+    callCallback2*: FuncT
+    callCallback3*: FuncT
+    callCallback4*: FuncT
+    callCallback5*: FuncT
+    callCallback6*: FuncT
+proc mem(funcs: ExportedFuncs): WasmMemory =
+  if funcs.mMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
+    return initWasmMemory(funcs.mMemory.get.of_field.sharedmemory)
+  elif funcs.mMemory.get.kind == WASMTIME_EXTERN_MEMORY:
+    return initWasmMemory(funcs.mContext, funcs.mMemory.get.of_field.memory.addr)
+
+proc collectExports(funcs: var ExportedFuncs; instance: InstanceT;
+                    context: ptr ContextT) =
+  funcs.mContext = context
+  funcs.mMemory = instance.getExport(context, "memory")
+  funcs.mRealloc = instance.getExport(context, "cabi_realloc")
+  funcs.mDealloc = instance.getExport(context, "cabi_dealloc")
+  funcs.mStackAlloc = instance.getExport(context, "mem_stack_alloc")
+  funcs.mStackSave = instance.getExport(context, "mem_stack_save")
+  funcs.mStackRestore = instance.getExport(context, "mem_stack_restore")
+  let f_570427281 = instance.getExport(context, "start")
+  if f_570427281.isSome:
+    assert f_570427281.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.start = f_570427281.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "start", "\'"
+  let f_570427326 = instance.getExport(context, "call_callback")
+  if f_570427326.isSome:
+    assert f_570427326.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback = f_570427326.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback", "\'"
+  let f_570427357 = instance.getExport(context, "call_callback2")
+  if f_570427357.isSome:
+    assert f_570427357.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback2 = f_570427357.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback2", "\'"
+  let f_570427376 = instance.getExport(context, "call_callback3")
+  if f_570427376.isSome:
+    assert f_570427376.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback3 = f_570427376.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback3", "\'"
+  let f_570427377 = instance.getExport(context, "call_callback4")
+  if f_570427377.isSome:
+    assert f_570427377.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback4 = f_570427377.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback4", "\'"
+  let f_570427403 = instance.getExport(context, "call_callback5")
+  if f_570427403.isSome:
+    assert f_570427403.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback5 = f_570427403.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback5", "\'"
+  let f_570427404 = instance.getExport(context, "call_callback6")
+  if f_570427404.isSome:
+    assert f_570427404.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback6 = f_570427404.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback6", "\'"
+
+proc start(funcs: ExportedFuncs): WasmtimeResult[void] =
+  var args: array[max(1, 0), ValT]
+  var results: array[max(1, 0), ValT]
+  var trap: ptr WasmTrapT = nil
+  var memory = funcs.mem
+  let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field,
+                            funcs.mContext)
+  defer:
+    discard stackRestore(funcs.mStackRestore.get.of_field.func_field,
+                         funcs.mContext, savePoint.val)
+  let res = funcs.start.addr.call(funcs.mContext, args.toOpenArray(0, 0 - 1),
+                                  results.toOpenArray(0, 0 - 1), trap.addr).toResult(
+      void)
+  if res.isErr:
+    return res.toResult(void)
+  
+proc callCallback(funcs: ExportedFuncs; fun: uint32; param: Baz): WasmtimeResult[
+    void] =
+  var args: array[max(1, 16), ValT]
+  var results: array[max(1, 0), ValT]
+  var trap: ptr WasmTrapT = nil
+  var memory = funcs.mem
+  let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field,
+                            funcs.mContext)
+  defer:
+    discard stackRestore(funcs.mStackRestore.get.of_field.func_field,
+                         funcs.mContext, savePoint.val)
+  var dataPtrWasm0: WasmPtr
+  var dataPtrWasm1: WasmPtr
+  var dataPtrWasm2: WasmPtr
+  var dataPtrWasm3: WasmPtr
+  args[0] = toWasmVal(fun)
+  if param.x.len > 0:
+    dataPtrWasm0 = block:
+      let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                            funcs.mContext, (param.x.len * 1).int32, 4)
+      if temp.isErr:
+        return temp.toResult(void)
+      temp.val
+    args[1] = toWasmVal(cast[int32](dataPtrWasm0))
+    block:
+      for i1 in 0 ..< param.x.len:
+        memory[dataPtrWasm0 + i1] = cast[uint8](param.x[i1])
+  else:
+    args[1] = toWasmVal(0.int32)
+  args[2] = toWasmVal(cast[int32](param.x.len))
+  if param.c.x.len > 0:
+    dataPtrWasm1 = block:
+      let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                            funcs.mContext, (param.c.x.len * 1).int32, 4)
+      if temp.isErr:
+        return temp.toResult(void)
+      temp.val
+    args[3] = toWasmVal(cast[int32](dataPtrWasm1))
+    block:
+      for i2 in 0 ..< param.c.x.len:
+        memory[dataPtrWasm1 + i2] = cast[uint8](param.c.x[i2])
+  else:
+    args[3] = toWasmVal(0.int32)
+  args[4] = toWasmVal(cast[int32](param.c.x.len))
+  args[5] = toWasmVal(param.d[0])
+  args[6] = toWasmVal(param.d[1])
+  args[7] = toWasmVal(param.e.isSome.int32)
+  if param.e.isSome:
+    args[8] = toWasmVal(param.e.get)
+  if param.gbruh.len > 0:
+    dataPtrWasm2 = block:
+      let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                            funcs.mContext, (param.gbruh.len * 1).int32, 4)
+      if temp.isErr:
+        return temp.toResult(void)
+      temp.val
+    args[9] = toWasmVal(cast[int32](dataPtrWasm2))
+    block:
+      for i1 in 0 ..< param.gbruh.len:
+        cast[ptr uint8](memory[dataPtrWasm2 + i1 * 1 + 0].addr)[] = cast[uint8](param.gbruh[
+            i1])
+  else:
+    args[9] = toWasmVal(0.int32)
+  args[10] = toWasmVal(cast[int32](param.gbruh.len))
+  args[11] = toWasmVal(cast[int8](param.g))
+  args[12] = toWasmVal(cast[uint8](param.h))
+  args[13] = toWasmVal(param.i.isErr.int32)
+  if param.i.isOk:
+    if param.i.value.x.len > 0:
+      dataPtrWasm3 = block:
+        let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                              funcs.mContext, (param.i.value.x.len * 1).int32, 4)
+        if temp.isErr:
+          return temp.toResult(void)
+        temp.val
+      args[14] = toWasmVal(cast[int32](dataPtrWasm3))
+      block:
+        for i3 in 0 ..< param.i.value.x.len:
+          memory[dataPtrWasm3 + i3] = cast[uint8](param.i.value.x[i3])
+    else:
+      args[14] = toWasmVal(0.int32)
+    args[15] = toWasmVal(cast[int32](param.i.value.x.len))
+  else:
+    discard
+  let res = funcs.callCallback.addr.call(funcs.mContext,
+      args.toOpenArray(0, 16 - 1), results.toOpenArray(0, 0 - 1), trap.addr).toResult(
+      void)
+  if res.isErr:
+    return res.toResult(void)
+  
+proc callCallback2(funcs: ExportedFuncs; fun: uint32; param: Baz; param2: Bar): WasmtimeResult[
+    void] =
+  var args: array[max(1, 1), ValT]
+  var results: array[max(1, 0), ValT]
+  var trap: ptr WasmTrapT = nil
+  var memory = funcs.mem
+  let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field,
+                            funcs.mContext)
+  defer:
+    discard stackRestore(funcs.mStackRestore.get.of_field.func_field,
+                         funcs.mContext, savePoint.val)
+  var dataPtrWasm0: WasmPtr
+  var dataPtrWasm1: WasmPtr
+  var dataPtrWasm2: WasmPtr
+  var dataPtrWasm3: WasmPtr
+  let paramsMem: WasmPtr = block:
+    let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                          funcs.mContext, 80.int32, 4)
+    if temp.isErr:
+      return temp.toResult(void)
+    temp.val
+  args[0] = paramsMem.int32.toWasmVal
+  cast[ptr uint32](memory[paramsMem + 0].addr)[] = fun
+  if param.x.len > 0:
+    dataPtrWasm0 = block:
+      let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                            funcs.mContext, 1.int32, 4)
+      if temp.isErr:
+        return temp.toResult(void)
+      temp.val
+    cast[ptr int32](memory[paramsMem + 4].addr)[] = cast[int32](dataPtrWasm0)
+    block:
+      for i1 in 0 ..< param.x.len:
+        memory[dataPtrWasm0 + i1] = cast[uint8](param.x[i1])
+  else:
+    cast[ptr int32](memory[paramsMem + 4].addr)[] = 0.int32
+  cast[ptr int32](memory[paramsMem + 8].addr)[] = cast[int32](param.x.len)
+  if param.c.x.len > 0:
+    dataPtrWasm1 = block:
+      let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                            funcs.mContext, 1.int32, 4)
+      if temp.isErr:
+        return temp.toResult(void)
+      temp.val
+    cast[ptr int32](memory[paramsMem + 12].addr)[] = cast[int32](dataPtrWasm1)
+    block:
+      for i2 in 0 ..< param.c.x.len:
+        memory[dataPtrWasm1 + i2] = cast[uint8](param.c.x[i2])
+  else:
+    cast[ptr int32](memory[paramsMem + 12].addr)[] = 0.int32
+  cast[ptr int32](memory[paramsMem + 16].addr)[] = cast[int32](param.c.x.len)
+  cast[ptr int32](memory[paramsMem + 20].addr)[] = param.d[0]
+  cast[ptr float32](memory[paramsMem + 24].addr)[] = param.d[1]
+  cast[ptr int32](memory[paramsMem + 28].addr)[] = param.e.isSome.int32
+  if param.e.isSome:
+    cast[ptr int32](memory[paramsMem + 32].addr)[] = param.e.get
+  if param.gbruh.len > 0:
+    dataPtrWasm2 = block:
+      let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                            funcs.mContext, 1.int32, 4)
+      if temp.isErr:
+        return temp.toResult(void)
+      temp.val
+    cast[ptr int32](memory[paramsMem + 36].addr)[] = cast[int32](dataPtrWasm2)
+    block:
+      for i1 in 0 ..< param.gbruh.len:
+        cast[ptr uint8](memory[dataPtrWasm2 + i1 * 1 + 0].addr)[] = cast[uint8](param.gbruh[
+            i1])
+  else:
+    cast[ptr int32](memory[paramsMem + 36].addr)[] = 0.int32
+  cast[ptr int32](memory[paramsMem + 40].addr)[] = cast[int32](param.gbruh.len)
+  cast[ptr int8](memory[paramsMem + 44].addr)[] = cast[int8](param.g)
+  cast[ptr uint8](memory[paramsMem + 45].addr)[] = cast[uint8](param.h)
+  cast[ptr int32](memory[paramsMem + 48].addr)[] = param.i.isErr.int32
+  if param.i.isOk:
+    if param.i.value.x.len > 0:
+      dataPtrWasm3 = block:
+        let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                              funcs.mContext, 1.int32, 4)
+        if temp.isErr:
+          return temp.toResult(void)
+        temp.val
+      cast[ptr int32](memory[paramsMem + 52].addr)[] = cast[int32](dataPtrWasm3)
+      block:
+        for i3 in 0 ..< param.i.value.x.len:
+          memory[dataPtrWasm3 + i3] = cast[uint8](param.i.value.x[i3])
+    else:
+      cast[ptr int32](memory[paramsMem + 52].addr)[] = 0.int32
+    cast[ptr int32](memory[paramsMem + 56].addr)[] = cast[int32](param.i.value.x.len)
+  else:
+    discard
+  cast[ptr int32](memory[paramsMem + 60].addr)[] = param2.a
+  cast[ptr float32](memory[paramsMem + 64].addr)[] = param2.b
+  cast[ptr Rune](memory[paramsMem + 68].addr)[] = param2.c
+  cast[ptr bool](memory[paramsMem + 72].addr)[] = param2.d
+  let res = funcs.callCallback2.addr.call(funcs.mContext,
+      args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 0 - 1), trap.addr).toResult(
+      void)
+  if res.isErr:
+    return res.toResult(void)
+  
+proc callCallback3(funcs: ExportedFuncs; fun: uint32; p: seq[string]): WasmtimeResult[
+    void] =
+  var args: array[max(1, 3), ValT]
+  var results: array[max(1, 0), ValT]
+  var trap: ptr WasmTrapT = nil
+  var memory = funcs.mem
+  let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field,
+                            funcs.mContext)
+  defer:
+    discard stackRestore(funcs.mStackRestore.get.of_field.func_field,
+                         funcs.mContext, savePoint.val)
+  var dataPtrWasm0: WasmPtr
+  var dataPtrWasm1: WasmPtr
+  args[0] = toWasmVal(fun)
+  if p.len > 0:
+    dataPtrWasm0 = block:
+      let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                            funcs.mContext, (p.len * 8).int32, 4)
+      if temp.isErr:
+        return temp.toResult(void)
+      temp.val
+    args[1] = toWasmVal(cast[int32](dataPtrWasm0))
+    block:
+      for i0 in 0 ..< p.len:
+        if p[i0].len > 0:
+          dataPtrWasm1 = block:
+            let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field,
+                                  funcs.mContext, (p[i0].len * 1).int32, 4)
+            if temp.isErr:
+              return temp.toResult(void)
+            temp.val
+          cast[ptr int32](memory[dataPtrWasm0 + i0 * 8 + 0].addr)[] = cast[int32](dataPtrWasm1)
+          block:
+            for i1 in 0 ..< p[i0].len:
+              memory[dataPtrWasm1 + i1] = cast[uint8](p[i0][i1])
+        else:
+          cast[ptr int32](memory[dataPtrWasm0 + i0 * 8 + 0].addr)[] = 0.int32
+        cast[ptr int32](memory[dataPtrWasm0 + i0 * 8 + 4].addr)[] = cast[int32](p[
+            i0].len)
+  else:
+    args[1] = toWasmVal(0.int32)
+  args[2] = toWasmVal(cast[int32](p.len))
+  let res = funcs.callCallback3.addr.call(funcs.mContext,
+      args.toOpenArray(0, 3 - 1), results.toOpenArray(0, 0 - 1), trap.addr).toResult(
+      void)
+  if res.isErr:
+    return res.toResult(void)
+  
+proc callCallback4(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[int32] =
+  var args: array[max(1, 1), ValT]
+  var results: array[max(1, 1), ValT]
+  var trap: ptr WasmTrapT = nil
+  var memory = funcs.mem
+  let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field,
+                            funcs.mContext)
+  defer:
+    discard stackRestore(funcs.mStackRestore.get.of_field.func_field,
+                         funcs.mContext, savePoint.val)
+  args[0] = toWasmVal(fun)
+  let res = funcs.callCallback4.addr.call(funcs.mContext,
+      args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
+      void)
+  if res.isErr:
+    return res.toResult(int32)
+  var retVal: int32
+  retVal = convert(results[0], int32)
+  return wasmtime.ok(retVal)
+
+proc callCallback5(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[string] =
+  var args: array[max(1, 1), ValT]
+  var results: array[max(1, 1), ValT]
+  var trap: ptr WasmTrapT = nil
+  var memory = funcs.mem
+  let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field,
+                            funcs.mContext)
+  defer:
+    discard stackRestore(funcs.mStackRestore.get.of_field.func_field,
+                         funcs.mContext, savePoint.val)
+  args[0] = toWasmVal(fun)
+  let res = funcs.callCallback5.addr.call(funcs.mContext,
+      args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
+      void)
+  if res.isErr:
+    return res.toResult(string)
+  var retVal: string
+  let retArea: ptr UncheckedArray[uint8] = memory.getRawPtr(
+      results[0].to(WasmPtr))
+  block:
+    let p0 = cast[ptr UncheckedArray[char]](memory.getRawPtr(
+        cast[ptr int32](retArea[0].addr)[].WasmPtr))
+    retVal = newString(cast[ptr int32](retArea[4].addr)[])
+    for i0 in 0 ..< retVal.len:
+      retVal[i0] = p0[i0]
+  return wasmtime.ok(retVal)
+
+proc callCallback6(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[
+    seq[string]] =
+  var args: array[max(1, 1), ValT]
+  var results: array[max(1, 1), ValT]
+  var trap: ptr WasmTrapT = nil
+  var memory = funcs.mem
+  let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field,
+                            funcs.mContext)
+  defer:
+    discard stackRestore(funcs.mStackRestore.get.of_field.func_field,
+                         funcs.mContext, savePoint.val)
+  args[0] = toWasmVal(fun)
+  let res = funcs.callCallback6.addr.call(funcs.mContext,
+      args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
+      void)
+  if res.isErr:
+    return res.toResult(seq[string])
+  var retVal: seq[string]
+  let retArea: ptr UncheckedArray[uint8] = memory.getRawPtr(
+      results[0].to(WasmPtr))
+  block:
+    let p0 = cast[ptr UncheckedArray[uint8]](memory.getRawPtr(
+        cast[ptr int32](retArea[0].addr)[].WasmPtr))
+    retVal = newSeq[typeof(retVal[0])](cast[ptr int32](retArea[4].addr)[])
+    for i0 in 0 ..< retVal.len:
+      block:
+        let p1 = cast[ptr UncheckedArray[char]](memory.getRawPtr(
+            cast[ptr int32](p0[i0 * 8 + 0].addr)[].WasmPtr))
+        retVal[i0] = newString(cast[ptr int32](p0[i0 * 8 + 4].addr)[])
+        for i1 in 0 ..< retVal[i0].len:
+          retVal[i0][i1] = p1[i1]
+  return wasmtime.ok(retVal)
+
 proc envTestNoParams2(host: MyContext; store: ptr ContextT; b: Baz): void
 proc testInterfaceTestNoParams(host: MyContext; store: ptr ContextT): void
 proc testInterfaceTestSimpleParams(host: MyContext; store: ptr ContextT;
@@ -104,7 +510,11 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
       return e
   block:
     let e = block:
-      var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32], [])
+      var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32, WasmValkind.I32,
+          WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.F32,
+          WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32,
+          WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32,
+          WasmValkind.I32], [])
       linker.defineFuncUnchecked("env", "test-no-params2", ty):
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
@@ -120,80 +530,39 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           assert false
         var b: Baz
         block:
-          let p1 = cast[ptr UncheckedArray[char]](memory[
-              cast[ptr int32](memory[parameters[0].i32 + 0].addr)[]].addr)
-          b.x = newString(cast[ptr int32](memory[parameters[0].i32 + 4].addr)[])
+          let p1 = cast[ptr UncheckedArray[char]](memory[parameters[0].i32].addr)
+          b.x = newString(parameters[1].i32)
           for i1 in 0 ..< b.x.len:
             b.x[i1] = p1[i1]
         block:
-          let p2 = cast[ptr UncheckedArray[char]](memory[
-              cast[ptr int32](memory[parameters[0].i32 + 8].addr)[]].addr)
-          b.c.x = newString(cast[ptr int32](memory[parameters[0].i32 + 12].addr)[])
+          let p2 = cast[ptr UncheckedArray[char]](memory[parameters[2].i32].addr)
+          b.c.x = newString(parameters[3].i32)
           for i2 in 0 ..< b.c.x.len:
             b.c.x[i2] = p2[i2]
-        b.d[0] = cast[int32](cast[ptr int32](memory[parameters[0].i32 + 16].addr)[])
-        b.d[1] = cast[float32](cast[ptr float32](memory[
-            parameters[0].i32 + 20].addr)[])
-        if cast[ptr int32](memory[parameters[0].i32 + 24].addr)[] != 0:
+        b.d[0] = convert(parameters[4].i32, int32)
+        b.d[1] = convert(parameters[5].f32, float32)
+        if parameters[6].i32 != 0:
           var temp: int32
-          temp = cast[int32](cast[ptr int32](memory[parameters[0].i32 + 28].addr)[])
+          temp = convert(parameters[7].i32, int32)
           b.e = temp.some
         block:
-          let p1 = cast[ptr UncheckedArray[uint8]](memory[
-              cast[ptr int32](memory[parameters[0].i32 + 32].addr)[]].addr)
-          b.f = newSeq[typeof(b.f[0])](cast[ptr int32](memory[
-              parameters[0].i32 + 36].addr)[])
-          for i1 in 0 ..< b.f.len:
-            block:
-              let p3 = cast[ptr UncheckedArray[char]](memory[
-                  cast[ptr int32](p1[i1 * 8 + 0].addr)[]].addr)
-              b.f[i1].x = newString(cast[ptr int32](p1[i1 * 8 + 4].addr)[])
-              for i3 in 0 ..< b.f[i1].x.len:
-                b.f[i1].x[i3] = p3[i3]
-        block:
-          let p1 = cast[ptr UncheckedArray[uint8]](memory[
-              cast[ptr int32](memory[parameters[0].i32 + 40].addr)[]].addr)
-          b.gbruh = newSeq[typeof(b.gbruh[0])](
-              cast[ptr int32](memory[parameters[0].i32 + 44].addr)[])
+          let p1 = cast[ptr UncheckedArray[uint8]](memory[parameters[8].i32].addr)
+          b.gbruh = newSeq[typeof(b.gbruh[0])](parameters[9].i32)
           for i1 in 0 ..< b.gbruh.len:
             b.gbruh[i1] = cast[Props](cast[ptr uint8](p1[i1 * 1 + 0].addr)[])
-        b.g = cast[DescriptorType](cast[ptr int8](memory[
-            parameters[0].i32 + 48].addr)[])
-        b.h = cast[Props](cast[ptr uint8](memory[parameters[0].i32 + 49].addr)[])
-        if cast[ptr int32](memory[parameters[0].i32 + 52].addr)[] == 0:
+        b.g = cast[DescriptorType](parameters[10].i32)
+        b.h = cast[Props](parameters[11].i32)
+        if parameters[12].i32 == 0:
           var tempOk: Foo
           block:
-            let p3 = cast[ptr UncheckedArray[char]](memory[cast[ptr int32](memory[
-                parameters[0].i32 + 56].addr)[]].addr)
-            tempOk.x = newString(cast[ptr int32](memory[
-                parameters[0].i32 + 60].addr)[])
+            let p3 = cast[ptr UncheckedArray[char]](memory[
+                parameters[13].i32].addr)
+            tempOk.x = newString(parameters[14].i32)
             for i3 in 0 ..< tempOk.x.len:
               tempOk.x[i3] = p3[i3]
           b.i = results.Result[Foo, void].ok(tempOk)
         else:
           b.i = results.Result[Foo, void].err()
-        case cast[VoodooKind](cast[ptr int32](memory[parameters[0].i32 + 64].addr)[])
-        of UnPossesed:
-          b.j = Voodoo(kind: UnPossesed)
-        of Possesed:
-          var temp: string
-          block:
-            let p2 = cast[ptr UncheckedArray[char]](memory[cast[ptr int32](memory[
-                parameters[0].i32 + 68].addr)[]].addr)
-            temp = newString(cast[ptr int32](memory[parameters[0].i32 + 72].addr)[])
-            for i2 in 0 ..< temp.len:
-              temp[i2] = p2[i2]
-          b.j = Voodoo(kind: Possesed, possesed: temp)
-        block:
-          let p1 = cast[ptr UncheckedArray[uint8]](memory[
-              cast[ptr int32](memory[parameters[0].i32 + 76].addr)[]].addr)
-          b.k = newSeq[typeof(b.k[0])](cast[ptr int32](memory[
-              parameters[0].i32 + 80].addr)[])
-          for i1 in 0 ..< b.k.len:
-            b.k[i1].a = cast[int32](cast[ptr int32](p1[i1 * 16 + 0].addr)[])
-            b.k[i1].b = cast[float32](cast[ptr float32](p1[i1 * 16 + 4].addr)[])
-            b.k[i1].c = cast[ptr Rune](p1[i1 * 16 + 8].addr)[].Rune
-            b.k[i1].d = cast[ptr bool](p1[i1 * 16 + 12].addr)[].bool
         envTestNoParams2(host, store, b)
     if e.isErr:
       return e
@@ -224,16 +593,16 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         var j: float64
         var k: bool
         var l: Rune
-        a = cast[int8](parameters[0].i32)
-        b = cast[int16](parameters[1].i32)
-        c = cast[int32](parameters[2].i32)
-        d = cast[int64](parameters[3].i64)
-        e = cast[uint8](parameters[4].i32)
-        f = cast[uint16](parameters[5].i32)
-        g = cast[uint32](parameters[6].i32)
-        h = cast[uint64](parameters[7].i64)
-        i = cast[float32](parameters[8].f32)
-        j = cast[float64](parameters[9].f64)
+        a = convert(parameters[0].i32, int8)
+        b = convert(parameters[1].i32, int16)
+        c = convert(parameters[2].i32, int32)
+        d = convert(parameters[3].i64, int64)
+        e = convert(parameters[4].i32, uint8)
+        f = convert(parameters[5].i32, uint16)
+        g = convert(parameters[6].i32, uint32)
+        h = convert(parameters[7].i64, uint64)
+        i = convert(parameters[8].f32, float32)
+        j = convert(parameters[9].f64, float64)
         k = parameters[10].i32.bool
         l = parameters[11].i32.Rune
         testInterfaceTestSimpleParams(host, store, a, b, c, d, e, f, g, h, i, j,
@@ -274,23 +643,34 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         var o: int32
         var p: int32
         var q: int32
-        a = cast[int8](cast[ptr int8](memory[parameters[0].i32 + 0].addr)[])
-        b = cast[int16](cast[ptr int16](memory[parameters[0].i32 + 2].addr)[])
-        c = cast[int32](cast[ptr int32](memory[parameters[0].i32 + 4].addr)[])
-        d = cast[int64](cast[ptr int64](memory[parameters[0].i32 + 8].addr)[])
-        e = cast[uint8](cast[ptr uint8](memory[parameters[0].i32 + 16].addr)[])
-        f = cast[uint16](cast[ptr uint16](memory[parameters[0].i32 + 18].addr)[])
-        g = cast[uint32](cast[ptr uint32](memory[parameters[0].i32 + 20].addr)[])
-        h = cast[uint64](cast[ptr uint64](memory[parameters[0].i32 + 24].addr)[])
-        i = cast[float32](cast[ptr float32](memory[parameters[0].i32 + 32].addr)[])
-        j = cast[float64](cast[ptr float64](memory[parameters[0].i32 + 40].addr)[])
+        a = convert(cast[ptr int8](memory[parameters[0].i32 + 0].addr)[], int8)
+        b = convert(cast[ptr int16](memory[parameters[0].i32 + 2].addr)[], int16)
+        c = convert(cast[ptr int32](memory[parameters[0].i32 + 4].addr)[], int32)
+        d = convert(cast[ptr int64](memory[parameters[0].i32 + 8].addr)[], int64)
+        e = convert(cast[ptr uint8](memory[parameters[0].i32 + 16].addr)[],
+                    uint8)
+        f = convert(cast[ptr uint16](memory[parameters[0].i32 + 18].addr)[],
+                    uint16)
+        g = convert(cast[ptr uint32](memory[parameters[0].i32 + 20].addr)[],
+                    uint32)
+        h = convert(cast[ptr uint64](memory[parameters[0].i32 + 24].addr)[],
+                    uint64)
+        i = convert(cast[ptr float32](memory[parameters[0].i32 + 32].addr)[],
+                    float32)
+        j = convert(cast[ptr float64](memory[parameters[0].i32 + 40].addr)[],
+                    float64)
         k = cast[ptr bool](memory[parameters[0].i32 + 48].addr)[].bool
         l = cast[ptr Rune](memory[parameters[0].i32 + 52].addr)[].Rune
-        m = cast[int32](cast[ptr int32](memory[parameters[0].i32 + 56].addr)[])
-        n = cast[int32](cast[ptr int32](memory[parameters[0].i32 + 60].addr)[])
-        o = cast[int32](cast[ptr int32](memory[parameters[0].i32 + 64].addr)[])
-        p = cast[int32](cast[ptr int32](memory[parameters[0].i32 + 68].addr)[])
-        q = cast[int32](cast[ptr int32](memory[parameters[0].i32 + 72].addr)[])
+        m = convert(cast[ptr int32](memory[parameters[0].i32 + 56].addr)[],
+                    int32)
+        n = convert(cast[ptr int32](memory[parameters[0].i32 + 60].addr)[],
+                    int32)
+        o = convert(cast[ptr int32](memory[parameters[0].i32 + 64].addr)[],
+                    int32)
+        p = convert(cast[ptr int32](memory[parameters[0].i32 + 68].addr)[],
+                    int32)
+        q = convert(cast[ptr int32](memory[parameters[0].i32 + 72].addr)[],
+                    int32)
         testInterfaceTestSimpleParamsPtr(host, store, a, b, c, d, e, f, g, h, i,
             j, k, l, m, n, o, p, q)
     if e.isErr:
@@ -336,7 +716,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
       linker.defineFuncUnchecked("my:host/test-interface", "test-simple-return",
                                  ty):
         var x: int32
-        x = cast[int32](parameters[0].i32)
+        x = convert(parameters[0].i32, int32)
         let res = testInterfaceTestSimpleReturn(host, store, x)
         parameters[0].i32 = cast[int32](res)
     if e.isErr:
@@ -348,7 +728,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "test-simple-return2", ty):
         var x: int8
-        x = cast[int8](parameters[0].i32)
+        x = convert(parameters[0].i32, int8)
         let res = testInterfaceTestSimpleReturn2(host, store, x)
         parameters[0].i32 = cast[int32](res)
     if e.isErr:
@@ -372,7 +752,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         else:
           assert false
         var x: int8
-        x = cast[int8](parameters[0].i32)
+        x = convert(parameters[0].i32, int8)
         let res = testInterfaceTestSimpleReturnPtr(host, store, x)
         let retArea = parameters[^1].i32
         cast[ptr int32](memory[retArea + 0].addr)[] = res.a
@@ -420,9 +800,9 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           cast[ptr int32](memory[retArea + 0].addr)[] = cast[int32](dataPtrWasm1)
           block:
             for i1 in 0 ..< res.x.len:
-              cast[ptr char](memory[dataPtrWasm1 + i1].addr)[] = res.x[i1]
+              memory[dataPtrWasm1 + i1] = cast[uint8](res.x[i1])
         else:
-          cast[ptr int32](memory[retArea + 0].addr)[] = 0
+          cast[ptr int32](memory[retArea + 0].addr)[] = 0.int32
         cast[ptr int32](memory[retArea + 4].addr)[] = cast[int32](res.x.len)
         if res.c.x.len > 0:
           let dataPtrWasm2 = block:
@@ -443,62 +823,15 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           cast[ptr int32](memory[retArea + 8].addr)[] = cast[int32](dataPtrWasm2)
           block:
             for i2 in 0 ..< res.c.x.len:
-              cast[ptr char](memory[dataPtrWasm2 + i2].addr)[] = res.c.x[i2]
+              memory[dataPtrWasm2 + i2] = cast[uint8](res.c.x[i2])
         else:
-          cast[ptr int32](memory[retArea + 8].addr)[] = 0
+          cast[ptr int32](memory[retArea + 8].addr)[] = 0.int32
         cast[ptr int32](memory[retArea + 12].addr)[] = cast[int32](res.c.x.len)
         cast[ptr int32](memory[retArea + 16].addr)[] = res.d[0]
         cast[ptr float32](memory[retArea + 20].addr)[] = res.d[1]
         cast[ptr int32](memory[retArea + 24].addr)[] = res.e.isSome.int32
         if res.e.isSome:
           cast[ptr int32](memory[retArea + 28].addr)[] = res.e.get
-        if res.f.len > 0:
-          let dataPtrWasm1 = block:
-            var t: ptr WasmTrapT = nil
-            var args: array[4, ValT]
-            args[0].kind = WasmValkind.I32.ValkindT
-            args[0].of_field.i32 = 0
-            args[1].kind = WasmValkind.I32.ValkindT
-            args[1].of_field.i32 = 0
-            args[2].kind = WasmValkind.I32.ValkindT
-            args[2].of_field.i32 = 4
-            args[3].kind = WasmValkind.I32.ValkindT
-            args[3].of_field.i32 = (res.f.len * 8).int32
-            var results: array[1, ValT]
-            ?reallocImpl.addr.call(store, args, results, t.addr)
-            assert results[0].kind == WasmValkind.I32.ValkindT
-            results[0].of_field.i32
-          cast[ptr int32](memory[retArea + 32].addr)[] = cast[int32](dataPtrWasm1)
-          block:
-            for i1 in 0 ..< res.f.len:
-              if res.f[i1].x.len > 0:
-                let dataPtrWasm3 = block:
-                  var t: ptr WasmTrapT = nil
-                  var args: array[4, ValT]
-                  args[0].kind = WasmValkind.I32.ValkindT
-                  args[0].of_field.i32 = 0
-                  args[1].kind = WasmValkind.I32.ValkindT
-                  args[1].of_field.i32 = 0
-                  args[2].kind = WasmValkind.I32.ValkindT
-                  args[2].of_field.i32 = 4
-                  args[3].kind = WasmValkind.I32.ValkindT
-                  args[3].of_field.i32 = (res.f[i1].x.len * 1).int32
-                  var results: array[1, ValT]
-                  ?reallocImpl.addr.call(store, args, results, t.addr)
-                  assert results[0].kind == WasmValkind.I32.ValkindT
-                  results[0].of_field.i32
-                cast[ptr int32](memory[dataPtrWasm1 + i1 * 8 + 0].addr)[] = cast[int32](dataPtrWasm3)
-                block:
-                  for i3 in 0 ..< res.f[i1].x.len:
-                    cast[ptr char](memory[dataPtrWasm3 + i3].addr)[] = res.f[i1].x[
-                        i3]
-              else:
-                cast[ptr int32](memory[dataPtrWasm1 + i1 * 8 + 0].addr)[] = 0
-              cast[ptr int32](memory[dataPtrWasm1 + i1 * 8 + 4].addr)[] = cast[int32](res.f[
-                  i1].x.len)
-        else:
-          cast[ptr int32](memory[retArea + 32].addr)[] = 0
-        cast[ptr int32](memory[retArea + 36].addr)[] = cast[int32](res.f.len)
         if res.gbruh.len > 0:
           let dataPtrWasm1 = block:
             var t: ptr WasmTrapT = nil
@@ -515,17 +848,17 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
             ?reallocImpl.addr.call(store, args, results, t.addr)
             assert results[0].kind == WasmValkind.I32.ValkindT
             results[0].of_field.i32
-          cast[ptr int32](memory[retArea + 40].addr)[] = cast[int32](dataPtrWasm1)
+          cast[ptr int32](memory[retArea + 32].addr)[] = cast[int32](dataPtrWasm1)
           block:
             for i1 in 0 ..< res.gbruh.len:
               cast[ptr uint8](memory[dataPtrWasm1 + i1 * 1 + 0].addr)[] = cast[uint8](res.gbruh[
                   i1])
         else:
-          cast[ptr int32](memory[retArea + 40].addr)[] = 0
-        cast[ptr int32](memory[retArea + 44].addr)[] = cast[int32](res.gbruh.len)
-        cast[ptr int8](memory[retArea + 48].addr)[] = cast[int8](res.g)
-        cast[ptr uint8](memory[retArea + 49].addr)[] = cast[uint8](res.h)
-        cast[ptr int32](memory[retArea + 52].addr)[] = res.i.isErr.int32
+          cast[ptr int32](memory[retArea + 32].addr)[] = 0.int32
+        cast[ptr int32](memory[retArea + 36].addr)[] = cast[int32](res.gbruh.len)
+        cast[ptr int8](memory[retArea + 40].addr)[] = cast[int8](res.g)
+        cast[ptr uint8](memory[retArea + 41].addr)[] = cast[uint8](res.h)
+        cast[ptr int32](memory[retArea + 44].addr)[] = res.i.isErr.int32
         if res.i.isOk:
           if res.i.value.x.len > 0:
             let dataPtrWasm3 = block:
@@ -543,75 +876,15 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
               ?reallocImpl.addr.call(store, args, results, t.addr)
               assert results[0].kind == WasmValkind.I32.ValkindT
               results[0].of_field.i32
-            cast[ptr int32](memory[retArea + 56].addr)[] = cast[int32](dataPtrWasm3)
+            cast[ptr int32](memory[retArea + 48].addr)[] = cast[int32](dataPtrWasm3)
             block:
               for i3 in 0 ..< res.i.value.x.len:
-                cast[ptr char](memory[dataPtrWasm3 + i3].addr)[] = res.i.value.x[
-                    i3]
+                memory[dataPtrWasm3 + i3] = cast[uint8](res.i.value.x[i3])
           else:
-            cast[ptr int32](memory[retArea + 56].addr)[] = 0
-          cast[ptr int32](memory[retArea + 60].addr)[] = cast[int32](res.i.value.x.len)
+            cast[ptr int32](memory[retArea + 48].addr)[] = 0.int32
+          cast[ptr int32](memory[retArea + 52].addr)[] = cast[int32](res.i.value.x.len)
         else:
           discard
-        cast[ptr int32](memory[retArea + 64].addr)[] = res.j.kind.int32
-        case res.j.kind
-        of UnPossesed:
-          discard
-        of Possesed:
-          if res.j.possesed.len > 0:
-            let dataPtrWasm2 = block:
-              var t: ptr WasmTrapT = nil
-              var args: array[4, ValT]
-              args[0].kind = WasmValkind.I32.ValkindT
-              args[0].of_field.i32 = 0
-              args[1].kind = WasmValkind.I32.ValkindT
-              args[1].of_field.i32 = 0
-              args[2].kind = WasmValkind.I32.ValkindT
-              args[2].of_field.i32 = 4
-              args[3].kind = WasmValkind.I32.ValkindT
-              args[3].of_field.i32 = (res.j.possesed.len * 1).int32
-              var results: array[1, ValT]
-              ?reallocImpl.addr.call(store, args, results, t.addr)
-              assert results[0].kind == WasmValkind.I32.ValkindT
-              results[0].of_field.i32
-            cast[ptr int32](memory[retArea + 68].addr)[] = cast[int32](dataPtrWasm2)
-            block:
-              for i2 in 0 ..< res.j.possesed.len:
-                cast[ptr char](memory[dataPtrWasm2 + i2].addr)[] = res.j.possesed[
-                    i2]
-          else:
-            cast[ptr int32](memory[retArea + 68].addr)[] = 0
-          cast[ptr int32](memory[retArea + 72].addr)[] = cast[int32](res.j.possesed.len)
-        if res.k.len > 0:
-          let dataPtrWasm1 = block:
-            var t: ptr WasmTrapT = nil
-            var args: array[4, ValT]
-            args[0].kind = WasmValkind.I32.ValkindT
-            args[0].of_field.i32 = 0
-            args[1].kind = WasmValkind.I32.ValkindT
-            args[1].of_field.i32 = 0
-            args[2].kind = WasmValkind.I32.ValkindT
-            args[2].of_field.i32 = 4
-            args[3].kind = WasmValkind.I32.ValkindT
-            args[3].of_field.i32 = (res.k.len * 16).int32
-            var results: array[1, ValT]
-            ?reallocImpl.addr.call(store, args, results, t.addr)
-            assert results[0].kind == WasmValkind.I32.ValkindT
-            results[0].of_field.i32
-          cast[ptr int32](memory[retArea + 76].addr)[] = cast[int32](dataPtrWasm1)
-          block:
-            for i1 in 0 ..< res.k.len:
-              cast[ptr int32](memory[dataPtrWasm1 + i1 * 16 + 0].addr)[] = res.k[
-                  i1].a
-              cast[ptr float32](memory[dataPtrWasm1 + i1 * 16 + 4].addr)[] = res.k[
-                  i1].b
-              cast[ptr Rune](memory[dataPtrWasm1 + i1 * 16 + 8].addr)[] = res.k[
-                  i1].c
-              cast[ptr bool](memory[dataPtrWasm1 + i1 * 16 + 12].addr)[] = res.k[
-                  i1].d
-        else:
-          cast[ptr int32](memory[retArea + 76].addr)[] = 0
-        cast[ptr int32](memory[retArea + 80].addr)[] = cast[int32](res.k.len)
     if e.isErr:
       return e
   block:
@@ -637,7 +910,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           let p0 = cast[ptr UncheckedArray[uint8]](memory[parameters[0].i32].addr)
           init = newSeq[typeof(init[0])](parameters[1].i32)
           for i0 in 0 ..< init.len:
-            init[i0] = cast[uint8](cast[ptr uint8](p0[i0 * 1 + 0].addr)[])
+            init[i0] = convert(cast[ptr uint8](p0[i0 * 1 + 0].addr)[], uint8)
         let res = testInterfaceNewBlob(host, store, init)
         parameters[0].i32 = ?host.resources.resourceNew(res)
     if e.isErr:
@@ -667,7 +940,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           let p0 = cast[ptr UncheckedArray[uint8]](memory[parameters[1].i32].addr)
           bytes = newSeq[typeof(bytes[0])](parameters[2].i32)
           for i0 in 0 ..< bytes.len:
-            bytes[i0] = cast[uint8](cast[ptr uint8](p0[i0 * 1 + 0].addr)[])
+            bytes[i0] = convert(cast[ptr uint8](p0[i0 * 1 + 0].addr)[], uint8)
         testInterfaceWrite(host, store, self[], bytes)
     if e.isErr:
       return e
@@ -693,7 +966,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         var self: ptr MyBlob
         var n: int32
         self = ?host.resources.resourceHostData(parameters[0].i32, MyBlob)
-        n = cast[int32](parameters[1].i32)
+        n = convert(parameters[1].i32, int32)
         let res = testInterfaceRead(host, store, self[], n)
         let retArea = parameters[^1].i32
         if res.len > 0:
@@ -717,7 +990,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
             for i0 in 0 ..< res.len:
               cast[ptr uint8](memory[dataPtrWasm0 + i0 * 1 + 0].addr)[] = res[i0]
         else:
-          cast[ptr int32](memory[retArea + 0].addr)[] = 0
+          cast[ptr int32](memory[retArea + 0].addr)[] = 0.int32
         cast[ptr int32](memory[retArea + 4].addr)[] = cast[int32](res.len)
     if e.isErr:
       return e
@@ -765,9 +1038,9 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         var data: uint32
         var key: uint32
         var drop: uint32
-        data = cast[uint32](parameters[0].i32)
-        key = cast[uint32](parameters[1].i32)
-        drop = cast[uint32](parameters[2].i32)
+        data = convert(parameters[0].i32, uint32)
+        key = convert(parameters[1].i32, uint32)
+        drop = convert(parameters[2].i32, uint32)
         let res = callbackTypesNewCallback(host, store, data, key, drop)
         parameters[0].i32 = ?host.resources.resourceNew(res)
     if e.isErr:

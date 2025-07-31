@@ -1,4 +1,4 @@
-import std/[macros, options, unicode, strutils]
+import std/[macros, options, unicode, strutils, strformat]
 
 import wit_guest
 
@@ -42,7 +42,49 @@ proc emscripten_stack_init() {.importc.}
 
 # var gcb: Callback
 
+proc stackWitString*(arr: openArray[char]): WitString =
+  if arr.len == 0:
+    return WitString()
+  let p = cast[ptr UncheckedArray[char]](stackAlloc(arr.len, 1))
+  for i in 0..<arr.len:
+    p[i] = arr[i]
+  result = ws(p, arr.len)
+
+proc stackWitString*(str: string): WitString =
+  stackWitString(str.toOpenArray(0, str.high))
+
+proc stackWitList*[T](arr: openArray[T]): WitList[T] =
+  if arr.len == 0:
+    return WitList[T]()
+  let p = cast[ptr UncheckedArray[T]](stackAlloc(sizeof(T) * arr.len, sizeof(T)))
+  for i in 0..<arr.len:
+    p[i] = arr[i]
+  result = wl[T](p, arr.len)
+
 proc addCallback(a: proc(x: int): int) {.importc.}
+
+proc callCallback(fun: uint32; param: Baz): void =
+  echo &"[plugin1] callCallback {fun}, {param}"
+
+proc callCallback2(fun: uint32; param: Baz; param2: Bar): void =
+  echo &"[plugin1] callCallback2 {fun}, {param}, {param2}"
+
+proc callCallback3(fun: uint32; p: WitList[WitString]): void =
+  echo &"[plugin1] callCallback3 {fun}, {p}"
+
+proc callCallback4(fun: uint32): int32 =
+  echo &"[plugin1] callCallback4 {fun}"
+  return fun.int32
+
+proc callCallback5(fun: uint32): WitString =
+  echo &"[plugin1] callCallback5 {fun}"
+  return ws"callCallback5 result"
+
+let uiae = [ws"callCallback6 result", ws"aaaaaaaaaah"]
+proc callCallback6(fun: uint32): WitList[WitString] =
+  echo &"[plugin1] callCallback6 {fun}"
+  return stackWitList([ws"callCallback6 result", ws"aaaaaaaaaah", stackWitString(&"uiae {fun}")])
+  # return @@uiae
 
 proc start() =
   emscripten_stack_init()
@@ -61,7 +103,8 @@ proc start() =
   testNoParams()
 
   echo "[plugin1] call testNoParams2"
-  testNoParams2(Baz(x: ws"uiae", c: Foo(x: ws"xvlc"), f: @@[Foo(x: ws"1"), Foo(x: ws"9"), Foo(x: ws"6")], d: (111, 222.333), gbruh: @@[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @@[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)]))
+  testNoParams2(Baz(x: ws"uiae", c: Foo(x: ws"xvlc"), d: (111, 222.333), gbruh: @@[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some))
+  # testNoParams2(Baz(x: ws"uiae", c: Foo(x: ws"xvlc"), f: @@[Foo(x: ws"1"), Foo(x: ws"9"), Foo(x: ws"6")], d: (111, 222.333), gbruh: @@[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @@[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)]))
 
   echo "[plugin1] call testSimpleParams"
   testSimpleParams(-123, -456, -789, -1592648, 123, 456, 789, 1592648, 147.258, 369.852, true, "ä".runeAt(0))

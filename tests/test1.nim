@@ -135,9 +135,30 @@ proc testInterfaceTestSimpleReturnPtr(host: MyContext, store: ptr ContextT, x: i
   return Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true)
 
 proc testInterfaceTestSimpleReturnPtr2(host: MyContext; store: ptr ContextT): Baz =
-  return Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])
+  return Baz(x: "uiae", c: Foo(x: "xvlc"), d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some)
+  # return Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])
 
 const useBuiltinWasi = false
+
+# proc defineThreadingApis() =
+  # discard linker.defineFuncUnchecked("env", "_emscripten_thread_set_strongref", newFunctype([WasmValkind.I32], [])):
+  #   echo "[host] _emscripten_thread_set_strongref"
+  # discard linker.defineFuncUnchecked("env", "emscripten_exit_with_live_runtime", newFunctype([], [])):
+  #   echo "[host] emscripten_exit_with_live_runtime"
+  # discard linker.defineFuncUnchecked("env", "_emscripten_init_main_thread_js", newFunctype([WasmValkind.I32], [])):
+  #   echo "[host] _emscripten_init_main_thread_js"
+  # discard linker.defineFuncUnchecked("env", "_emscripten_thread_mailbox_await", newFunctype([WasmValkind.I32], [])):
+  #   echo "[host] _emscripten_thread_mailbox_await"
+  # discard linker.defineFuncUnchecked("env", "_emscripten_receive_on_main_thread_js", newFunctype([WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [WasmValkind.F64])):
+  #   echo "[host] _emscripten_receive_on_main_thread_js"
+  # discard linker.defineFuncUnchecked("env", "emscripten_check_blocking_allowed", newFunctype([], [])):
+  #   echo "[host] emscripten_check_blocking_allowed"
+  # discard linker.defineFuncUnchecked("env", "_emscripten_thread_cleanup", newFunctype([WasmValkind.I32], [])):
+  #   echo "[host] _emscripten_thread_cleanup"
+  # discard linker.defineFuncUnchecked("env", "_emscripten_notify_mailbox_postmessage", newFunctype([WasmValkind.I32, WasmValkind.I32], [])):
+  #   echo "[host] _emscripten_notify_mailbox_postmessage"
+  # discard linker.defineFuncUnchecked("env", "__pthread_create_js", newFunctype([WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [WasmValkind.I32])):
+  #   echo "[host] __pthread_create_js"
 
 proc getMemory(caller: ptr CallerT, store: ptr ContextT, host: MyContext): WasmMemory =
   var mainMemory = caller.getExport("memory")
@@ -182,11 +203,18 @@ proc main(): WasmtimeResult[void] =
 
     of cmdLongOption, cmdShortOption:
       discard
+      # case key
+      # of "help", "h":
+      #   echo helpText
+      #   quit(0)
 
     of cmdEnd: assert(false) # cannot happen
 
   echo "[host] load wasm file ", path
   let wasmBytes = readFile(path)
+  # let wasmBuilder = wasmBytes.toOpenArray(0, wasmBytes.high).decodeWasmBinary()
+  # echo wasmBuilder
+  # let wasmBytes2 = wasmBuilder.generateBinary()
   let module = engine.newModule(wasmBytes).okOr(err):
     echo "[host] Failed to load wasm module: ", err.msg
     return
@@ -271,11 +299,58 @@ proc main(): WasmtimeResult[void] =
   var functionTable = functionTableExport.get.of_field.table
   echo &"function table {context.size(functionTable.addr)}"
 
+  var funcs: ExportedFuncs
+  funcs.collectExports(instance, context)
+  funcs.mMemory = block:
+    var item: ExternT
+    item.kind = WASMTIME_EXTERN_SHAREDMEMORY
+    item.of_field.sharedmemory = ctx.sharedMemory
+    item.some
+
   echo "[host] ============== call start"
-  let mainExport = instance.getExport(context, "start")
-  mainExport.get.of_field.func_field.addr.call(context, [], [], trap.addr).toResult(void).okOr(err):
+  funcs.start().okOr(err):
     echo "[host] Failed to call start: ", err.msg
     return
+
+  echo "[host] ============== call callCallback"
+  funcs.callCallback(123, Baz(x: "uiae", c: Foo(x: "xvlc"), d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some)).okOr(err):
+  # funcs.callCallback(123, Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])).okOr(err):
+    echo "[host] Failed to call callCallback: ", err.msg
+    return
+
+  echo "[host] ============== call callCallback2"
+  funcs.callCallback2(123, Baz(x: "uiae", c: Foo(x: "xvlc"), d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some), Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true)).okOr(err):
+  # funcs.callCallback2(123, Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])).okOr(err):
+    echo "[host] Failed to call callCallback2: ", err.msg
+
+  echo "[host] ============== call callCallback3"
+  funcs.callCallback3(123, @["hello", "world"]).okOr(err):
+    echo "[host] Failed to call callCallback3: ", err.msg
+    return
+
+  echo "[host] ============== call callCallback4"
+  let res1 = funcs.callCallback4(123).okOr(err):
+    echo "[host] Failed to call callCallback4: ", err.msg
+    return
+  echo "[host] -> ", res1
+
+  echo "[host] ============== call callCallback5"
+  let res2 = funcs.callCallback5(123).okOr(err):
+    echo "[host] Failed to call callCallback5: ", err.msg
+    return
+  echo "[host] -> '", res2, "'"
+
+  echo "[host] ============== call callCallback6"
+  let res3 = funcs.callCallback6(123).okOr(err):
+    echo "[host] Failed to call callCallback6: ", err.msg
+    return
+  echo "[host] -> ", res3
+
+  # echo "[host] ============== call start"
+  # let mainExport = instance.getExport(context, "start")
+  # mainExport.get.of_field.func_field.addr.call(context, [], [], trap.addr).toResult(void).okOr(err):
+  #   echo "[host] Failed to call start: ", err.msg
+    # return
 
   for cb in callbacks:
     echo &"[host] ============== call callback {cb}"

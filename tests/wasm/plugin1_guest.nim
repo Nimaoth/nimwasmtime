@@ -38,13 +38,10 @@ type
     c*: Foo
     d*: (int32, float32)
     e*: Option[int32]
-    f*: WitList[Foo]
     gbruh*: WitList[Props]
     g*: DescriptorType
     h*: Props
     i*: Result[Foo, void]
-    j*: Voodoo
-    k*: WitList[Bar]
   Blob* = object
     handle*: int32
   Callback* = object
@@ -63,62 +60,61 @@ proc `=destroy`*(a: Callback) =
   if a.handle != 0:
     callbackTypesCallbackDrop(a.handle - 1)
 
-proc envTestNoParams2Imported(a0: int32): void {.
+proc envTestNoParams2Imported(a0: int32; a1: int32; a2: int32; a3: int32;
+                              a4: int32; a5: float32; a6: int32; a7: int32;
+                              a8: int32; a9: int32; a10: int8; a11: uint8;
+                              a12: int32; a13: int32; a14: int32): void {.
     wasmimport("test-no-params2", "env").}
 proc testNoParams2*(b: Baz): void {.nodestroy.} =
-  var retArea: array[88, uint8]
+  var
+    arg0: int32
+    arg1: int32
+    arg2: int32
+    arg3: int32
+    arg4: int32
+    arg5: float32
+    arg6: int32
+    arg7: int32
+    arg8: int32
+    arg9: int32
+    arg10: int8
+    arg11: uint8
+    arg12: int32
+    arg13: int32
+    arg14: int32
   if b.x.len > 0:
-    cast[ptr int32](retArea[0].addr)[] = cast[int32](b.x[0].addr)
+    arg0 = cast[int32](b.x[0].addr)
   else:
-    cast[ptr int32](retArea[0].addr)[] = 0
-  cast[ptr int32](retArea[4].addr)[] = cast[int32](b.x.len)
+    arg0 = 0.int32
+  arg1 = cast[int32](b.x.len)
   if b.c.x.len > 0:
-    cast[ptr int32](retArea[8].addr)[] = cast[int32](b.c.x[0].addr)
+    arg2 = cast[int32](b.c.x[0].addr)
   else:
-    cast[ptr int32](retArea[8].addr)[] = 0
-  cast[ptr int32](retArea[12].addr)[] = cast[int32](b.c.x.len)
-  cast[ptr int32](retArea[16].addr)[] = b.d[0]
-  cast[ptr float32](retArea[20].addr)[] = b.d[1]
-  cast[ptr int32](retArea[24].addr)[] = b.e.isSome.int32
+    arg2 = 0.int32
+  arg3 = cast[int32](b.c.x.len)
+  arg4 = b.d[0]
+  arg5 = b.d[1]
+  arg6 = b.e.isSome.int32
   if b.e.isSome:
-    cast[ptr int32](retArea[28].addr)[] = b.e.get
-  if b.f.len > 0:
-    cast[ptr int32](retArea[32].addr)[] = cast[int32](b.f[0].addr)
-  else:
-    cast[ptr int32](retArea[32].addr)[] = 0
-  cast[ptr int32](retArea[36].addr)[] = cast[int32](b.f.len)
+    arg7 = b.e.get
   if b.gbruh.len > 0:
-    cast[ptr int32](retArea[40].addr)[] = cast[int32](b.gbruh[0].addr)
+    arg8 = cast[int32](b.gbruh[0].addr)
   else:
-    cast[ptr int32](retArea[40].addr)[] = 0
-  cast[ptr int32](retArea[44].addr)[] = cast[int32](b.gbruh.len)
-  cast[ptr int8](retArea[48].addr)[] = cast[int8](b.g)
-  cast[ptr uint8](retArea[49].addr)[] = cast[uint8](b.h)
-  cast[ptr int32](retArea[52].addr)[] = b.i.isErr.int32
+    arg8 = 0.int32
+  arg9 = cast[int32](b.gbruh.len)
+  arg10 = cast[int8](b.g)
+  arg11 = cast[uint8](b.h)
+  arg12 = b.i.isErr.int32
   if b.i.isOk:
     if b.i.value.x.len > 0:
-      cast[ptr int32](retArea[56].addr)[] = cast[int32](b.i.value.x[0].addr)
+      arg13 = cast[int32](b.i.value.x[0].addr)
     else:
-      cast[ptr int32](retArea[56].addr)[] = 0
-    cast[ptr int32](retArea[60].addr)[] = cast[int32](b.i.value.x.len)
+      arg13 = 0.int32
+    arg14 = cast[int32](b.i.value.x.len)
   else:
     discard
-  cast[ptr int32](retArea[64].addr)[] = b.j.kind.int32
-  case b.j.kind
-  of UnPossesed:
-    discard
-  of Possesed:
-    if b.j.possesed.len > 0:
-      cast[ptr int32](retArea[68].addr)[] = cast[int32](b.j.possesed[0].addr)
-    else:
-      cast[ptr int32](retArea[68].addr)[] = 0
-    cast[ptr int32](retArea[72].addr)[] = cast[int32](b.j.possesed.len)
-  if b.k.len > 0:
-    cast[ptr int32](retArea[76].addr)[] = cast[int32](b.k[0].addr)
-  else:
-    cast[ptr int32](retArea[76].addr)[] = 0
-  cast[ptr int32](retArea[80].addr)[] = cast[int32](b.k.len)
-  envTestNoParams2Imported(cast[int32](retArea[0].addr))
+  envTestNoParams2Imported(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8,
+                           arg9, arg10, arg11, arg12, arg13, arg14)
 
 proc testInterfaceTestNoParamsImported(): void {.
     wasmimport("test-no-params", "my:host/test-interface").}
@@ -197,15 +193,15 @@ proc addCallback*(env: WitString; name: WitString): uint32 {.nodestroy.} =
   if env.len > 0:
     arg0 = cast[int32](env[0].addr)
   else:
-    arg0 = 0
+    arg0 = 0.int32
   arg1 = cast[int32](env.len)
   if name.len > 0:
     arg2 = cast[int32](name[0].addr)
   else:
-    arg2 = 0
+    arg2 = 0.int32
   arg3 = cast[int32](name.len)
   let res = testInterfaceAddCallbackImported(arg0, arg1, arg2, arg3)
-  result = cast[uint32](res)
+  result = convert(res, uint32)
 
 proc testInterfaceTestSimpleReturnImported(a0: int32): int32 {.
     wasmimport("test-simple-return", "my:host/test-interface").}
@@ -213,7 +209,7 @@ proc testSimpleReturn*(x: int32): int32 {.nodestroy.} =
   var arg0: int32
   arg0 = x
   let res = testInterfaceTestSimpleReturnImported(arg0)
-  result = cast[int32](res)
+  result = convert(res, int32)
 
 proc testInterfaceTestSimpleReturn2Imported(a0: int8): int8 {.
     wasmimport("test-simple-return2", "my:host/test-interface").}
@@ -221,7 +217,7 @@ proc testSimpleReturn2*(x: int8): int8 {.nodestroy.} =
   var arg0: int8
   arg0 = x
   let res = testInterfaceTestSimpleReturn2Imported(arg0)
-  result = cast[int8](res)
+  result = convert(res, int8)
 
 proc testInterfaceTestSimpleReturnPtrImported(a0: int8; a1: int32): void {.
     wasmimport("test-simple-return-ptr", "my:host/test-interface").}
@@ -232,49 +228,37 @@ proc testSimpleReturnPtr*(x: int8): Bar {.nodestroy.} =
   arg0 = x
   testInterfaceTestSimpleReturnPtrImported(arg0,
       cast[int32](retArea[0].addr))
-  result.a = cast[int32](cast[ptr int32](retArea[0].addr)[])
-  result.b = cast[float32](cast[ptr float32](retArea[4].addr)[])
+  result.a = convert(cast[ptr int32](retArea[0].addr)[], int32)
+  result.b = convert(cast[ptr float32](retArea[4].addr)[], float32)
   result.c = cast[ptr Rune](retArea[8].addr)[].Rune
   result.d = cast[ptr bool](retArea[12].addr)[].bool
 
 proc testInterfaceTestSimpleReturnPtr2Imported(a0: int32): void {.
     wasmimport("test-simple-return-ptr2", "my:host/test-interface").}
 proc testSimpleReturnPtr2*(): Baz {.nodestroy.} =
-  var retArea: array[88, uint8]
+  var retArea: array[60, uint8]
   testInterfaceTestSimpleReturnPtr2Imported(cast[int32](retArea[0].addr))
   result.x = ws(cast[ptr char](cast[ptr int32](retArea[0].addr)[]),
                 cast[ptr int32](retArea[4].addr)[])
   result.c.x = ws(cast[ptr char](cast[ptr int32](retArea[8].addr)[]),
                   cast[ptr int32](retArea[12].addr)[])
-  result.d[0] = cast[int32](cast[ptr int32](retArea[16].addr)[])
-  result.d[1] = cast[float32](cast[ptr float32](retArea[20].addr)[])
+  result.d[0] = convert(cast[ptr int32](retArea[16].addr)[], int32)
+  result.d[1] = convert(cast[ptr float32](retArea[20].addr)[], float32)
   if cast[ptr int32](retArea[24].addr)[] != 0:
     var temp: int32
-    temp = cast[int32](cast[ptr int32](retArea[28].addr)[])
+    temp = convert(cast[ptr int32](retArea[28].addr)[], int32)
     result.e = temp.some
-  result.f = wl(cast[ptr typeof(result.f[0])](cast[ptr int32](retArea[32].addr)[]),
-                cast[ptr int32](retArea[36].addr)[])
-  result.gbruh = wl(cast[ptr typeof(result.gbruh[0])](cast[ptr int32](retArea[40].addr)[]),
-                    cast[ptr int32](retArea[44].addr)[])
-  result.g = cast[DescriptorType](cast[ptr int8](retArea[48].addr)[])
-  result.h = cast[Props](cast[ptr uint8](retArea[49].addr)[])
-  if cast[ptr int32](retArea[52].addr)[] == 0:
+  result.gbruh = wl(cast[ptr typeof(result.gbruh[0])](cast[ptr int32](retArea[32].addr)[]),
+                    cast[ptr int32](retArea[36].addr)[])
+  result.g = cast[DescriptorType](cast[ptr int8](retArea[40].addr)[])
+  result.h = cast[Props](cast[ptr uint8](retArea[41].addr)[])
+  if cast[ptr int32](retArea[44].addr)[] == 0:
     var tempOk: Foo
-    tempOk.x = ws(cast[ptr char](cast[ptr int32](retArea[56].addr)[]),
-                  cast[ptr int32](retArea[60].addr)[])
+    tempOk.x = ws(cast[ptr char](cast[ptr int32](retArea[48].addr)[]),
+                  cast[ptr int32](retArea[52].addr)[])
     result.i = results.Result[Foo, void].ok(tempOk)
   else:
     result.i = results.Result[Foo, void].err()
-  case cast[VoodooKind](cast[ptr int32](retArea[64].addr)[])
-  of UnPossesed:
-    result.j = Voodoo(kind: UnPossesed)
-  of Possesed:
-    var temp: WitString
-    temp = ws(cast[ptr char](cast[ptr int32](retArea[68].addr)[]),
-              cast[ptr int32](retArea[72].addr)[])
-    result.j = Voodoo(kind: Possesed, possesed: temp)
-  result.k = wl(cast[ptr typeof(result.k[0])](cast[ptr int32](retArea[76].addr)[]),
-                cast[ptr int32](retArea[80].addr)[])
 
 proc testInterfaceNewBlobImported(a0: int32; a1: int32): int32 {.
     wasmimport("[constructor]blob", "my:host/test-interface").}
@@ -285,7 +269,7 @@ proc newBlob*(init: WitList[uint8]): Blob {.nodestroy.} =
   if init.len > 0:
     arg0 = cast[int32](init[0].addr)
   else:
-    arg0 = 0
+    arg0 = 0.int32
   arg1 = cast[int32](init.len)
   let res = testInterfaceNewBlobImported(arg0, arg1)
   result.handle = res + 1
@@ -301,7 +285,7 @@ proc write*(self: Blob; bytes: WitList[uint8]): void {.nodestroy.} =
   if bytes.len > 0:
     arg1 = cast[int32](bytes[0].addr)
   else:
-    arg1 = 0
+    arg1 = 0.int32
   arg2 = cast[int32](bytes.len)
   testInterfaceWriteImported(arg0, arg1, arg2)
 
@@ -340,5 +324,115 @@ proc print*(lhs: Blob; rhs: Blob): void {.nodestroy.} =
   testInterfacePrintImported(arg0, arg1)
 
 proc start(): void
-proc startExported(): void {.wasmexport("start", "").} =
+proc startExported(): void {.wasmexport("start", "my:test-package/plugin-api").} =
   start()
+
+proc callCallback(fun: uint32; param: Baz): void
+proc callCallbackExported(a0: uint32; a1: int32; a2: int32; a3: int32;
+                          a4: int32; a5: int32; a6: float32; a7: int32;
+                          a8: int32; a9: int32; a10: int32; a11: int8;
+                          a12: uint8; a13: int32; a14: int32; a15: int32): void {.
+    wasmexport("call-callback", "my:test-package/plugin-api").} =
+  var
+    fun: uint32
+    param: Baz
+  fun = convert(a0, uint32)
+  param.x = ws(cast[ptr char](a1), a2)
+  param.c.x = ws(cast[ptr char](a3), a4)
+  param.d[0] = convert(a5, int32)
+  param.d[1] = convert(a6, float32)
+  if a7 != 0:
+    var temp: int32
+    temp = convert(a8, int32)
+    param.e = temp.some
+  param.gbruh = wl(cast[ptr typeof(param.gbruh[0])](a9), a10)
+  param.g = cast[DescriptorType](a11)
+  param.h = cast[Props](a12)
+  if a13 == 0:
+    var tempOk: Foo
+    tempOk.x = ws(cast[ptr char](a14), a15)
+    param.i = results.Result[Foo, void].ok(tempOk)
+  else:
+    param.i = results.Result[Foo, void].err()
+  callCallback(fun, param)
+
+proc callCallback2(fun: uint32; param: Baz; param2: Bar): void
+var callCallback2RetArea: array[80, uint8]
+proc callCallback2Exported(a0: int32): void {.
+    wasmexport("call-callback2", "my:test-package/plugin-api").} =
+  var
+    fun: uint32
+    param: Baz
+    param2: Bar
+  fun = convert(cast[ptr uint32](a0 + 0)[], uint32)
+  param.x = ws(cast[ptr char](cast[ptr int32](a0 + 4)[]),
+               cast[ptr int32](a0 + 8)[])
+  param.c.x = ws(cast[ptr char](cast[ptr int32](a0 + 12)[]),
+                 cast[ptr int32](a0 + 16)[])
+  param.d[0] = convert(cast[ptr int32](a0 + 20)[], int32)
+  param.d[1] = convert(cast[ptr float32](a0 + 24)[], float32)
+  if cast[ptr int32](a0 + 28)[] != 0:
+    var temp: int32
+    temp = convert(cast[ptr int32](a0 + 32)[], int32)
+    param.e = temp.some
+  param.gbruh = wl(cast[ptr typeof(param.gbruh[0])](cast[ptr int32](a0 + 36)[]),
+                   cast[ptr int32](a0 + 40)[])
+  param.g = cast[DescriptorType](cast[ptr int8](a0 + 44)[])
+  param.h = cast[Props](cast[ptr uint8](a0 + 45)[])
+  if cast[ptr int32](a0 + 48)[] == 0:
+    var tempOk: Foo
+    tempOk.x = ws(cast[ptr char](cast[ptr int32](a0 + 52)[]),
+                  cast[ptr int32](a0 + 56)[])
+    param.i = results.Result[Foo, void].ok(tempOk)
+  else:
+    param.i = results.Result[Foo, void].err()
+  param2.a = convert(cast[ptr int32](a0 + 60)[], int32)
+  param2.b = convert(cast[ptr float32](a0 + 64)[], float32)
+  param2.c = cast[ptr Rune](a0 + 68)[].Rune
+  param2.d = cast[ptr bool](a0 + 72)[].bool
+  callCallback2(fun, param, param2)
+
+proc callCallback3(fun: uint32; p: WitList[WitString]): void
+proc callCallback3Exported(a0: uint32; a1: int32; a2: int32): void {.
+    wasmexport("call-callback3", "my:test-package/plugin-api").} =
+  var
+    fun: uint32
+    p: WitList[WitString]
+  fun = convert(a0, uint32)
+  p = wl(cast[ptr typeof(p[0])](a1), a2)
+  callCallback3(fun, p)
+
+proc callCallback4(fun: uint32): int32
+proc callCallback4Exported(a0: uint32): int32 {.
+    wasmexport("call-callback4", "my:test-package/plugin-api").} =
+  var fun: uint32
+  fun = convert(a0, uint32)
+  cast[int32](callCallback4(fun))
+
+proc callCallback5(fun: uint32): WitString
+var callCallback5RetArea: array[8, uint8]
+proc callCallback5Exported(a0: uint32): int32 {.
+    wasmexport("call-callback5", "my:test-package/plugin-api").} =
+  var fun: uint32
+  fun = convert(a0, uint32)
+  let res = callCallback5(fun)
+  if res.len > 0:
+    cast[ptr int32](callCallback5RetArea[0].addr)[] = cast[int32](res[0].addr)
+  else:
+    cast[ptr int32](callCallback5RetArea[0].addr)[] = 0.int32
+  cast[ptr int32](callCallback5RetArea[4].addr)[] = cast[int32](res.len)
+  cast[int32](callCallback5RetArea[0].addr)
+
+proc callCallback6(fun: uint32): WitList[WitString]
+var callCallback6RetArea: array[8, uint8]
+proc callCallback6Exported(a0: uint32): int32 {.
+    wasmexport("call-callback6", "my:test-package/plugin-api").} =
+  var fun: uint32
+  fun = convert(a0, uint32)
+  let res = callCallback6(fun)
+  if res.len > 0:
+    cast[ptr int32](callCallback6RetArea[0].addr)[] = cast[int32](res[0].addr)
+  else:
+    cast[ptr int32](callCallback6RetArea[0].addr)[] = 0.int32
+  cast[ptr int32](callCallback6RetArea[4].addr)[] = cast[int32](res.len)
+  cast[int32](callCallback6RetArea[0].addr)

@@ -20,7 +20,7 @@ macro wasmexport*(name: static[string], env: static[string], t: typed): untyped 
   let module = env
   let exportName = name.replace("-", "_")
   let attrib = if module != "":
-    &"""__attribute__((__export_name__("{module}#{exportName}")))"""
+    &"""__attribute__((__export_module__("{module}"), __export_name__("{exportName}")))"""
   else:
     &"""__attribute__((__export_name__("{exportName}")))"""
 
@@ -360,9 +360,10 @@ proc genExport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
         var liftContext = WitLiftContext(memoryAccess: memoryAccess)
         ctx.lift(loweredPtrArgs, args, fun.params, liftCode, Parameter, liftContext)
 
-        let freeCode = genAst(retAreaSize):
-          cabi_dealloc(a0, retAreaSize, 4) # todo: alignment
-        lowerCode.add freeCode
+        # todo: this is necessary for e.g. C, but not for Nim
+        # let freeCode = genAst(retAreaSize):
+        #   cabi_dealloc(a0, retAreaSize, 4) # todo: alignment
+        # lowerCode.add freeCode
 
       if flatFuncType.resultsFlat:
         if flatFuncType.results.len > 0:

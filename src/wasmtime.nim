@@ -625,6 +625,8 @@ import wit_types
 
 {.pop.}
 
+type WasmPtr* = distinct int32
+
 template vec(T: untyped, unchecked: bool = true): untyped =
   type ItemType = typeof(T().data[])
 
@@ -935,9 +937,33 @@ when nimWasmtimeFeatureComponentModel:
     else:
       {.error: "Can't convert type " & $T & " to ComponentValT".}
 
+proc toWasmVal*(a: int8): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: uint8): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: int16): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: uint16): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
 proc toWasmVal*(a: int32): ValT =
   result.kind = WASMTIME_I32
   result.of_field.i32 = a
+
+proc toWasmVal*(a: uint32): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: uint64): ValT =
+  result.kind = WASMTIME_I64
+  result.of_field.i64 = cast[int64](a)
 
 proc toWasmVal*(a: int64): ValT =
   result.kind = WASMTIME_I64
@@ -950,6 +976,20 @@ proc toWasmVal*(a: float32): ValT =
 proc toWasmVal*(a: float64): ValT =
   result.kind = WASMTIME_F64
   result.of_field.f64 = a
+
+proc `$`*(a: ValT): string =
+  case a.kind
+  of WASMTIME_I32: $a.of_field.i32
+  of WASMTIME_I64: $a.of_field.i64
+  of WASMTIME_F32: $a.of_field.f32
+  of WASMTIME_F64: $a.of_field.f64
+
+  of WASMTIME_V128: $a.of_field.v128
+  of WASMTIME_ANYREF: $a.of_field.anyref
+  of WASMTIME_EXTERNREF: $a.of_field.externref
+  of WASMTIME_FUNCREF: $a.of_field.funcref
+  else:
+    return
 
 proc to*(a: ValT, T: typedesc): T =
   # echo a, ", ", a.kind.ComponentValKind, " to ", T
@@ -965,6 +1005,10 @@ proc to*(a: ValT, T: typedesc): T =
     assert a.kind == WASMTIME_I32
     result = a.of_field.i32
 
+  elif T is WasmPtr:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.WasmPtr
+
   elif T is int64:
     assert a.kind == WASMTIME_I64
     result = a.of_field.i64
@@ -976,6 +1020,15 @@ proc to*(a: ValT, T: typedesc): T =
   elif T is float64:
     assert a.kind == WASMTIME_F64
     result = a.of_field.f64
+
+proc convert*(a: ValT, T: typedesc): T {.inline.} =
+  a.to(T)
+
+proc convert*(a: SomeInteger, T: typedesc): T {.inline.} =
+  cast[T](a)
+
+proc convert*(a: SomeFloat, T: typedesc): T {.inline.} =
+  cast[T](a)
 
 macro getSetTargetType(t: typed): untyped =
   ## Given set[T], return T
@@ -1240,11 +1293,23 @@ template okOr*(res: ptr WasmTrapT; e: untyped; body: untyped): untyped =
     let e {.cursor.} = temp.err
     body
 
+# template `?`*[T](self: WasmtimeResult[T]): untyped =
+#   block:
+#     var t = self
+#     if t.isErr:
+#       return t.toResult(T)
+#     when T isnot void:
+#       t.val.ensureMove
+
 template `?`*[T](self: WasmtimeResult[T]): untyped =
   block:
     var t = self
     if t.isErr:
-      return t.toResult(void)
+      when compiles(result.val):
+        type ReturnType = typeof(result.val)
+        return t.toResult(ReturnType)
+      else:
+        return t.toResult(void)
     when T isnot void:
       t.val.ensureMove
 
@@ -1663,7 +1728,7 @@ type WasmMemory* = object
   data: ptr UncheckedArray[uint8]
   len: int = int.high
 
-type WasmPtr* = distinct int32
+proc `+`*(a: WasmPtr, b: SomeInteger): WasmPtr = (a.int32 + b.int32).WasmPtr
 
 proc initWasmMemory*(mem: ptr SharedmemoryT): WasmMemory =
   let data = data(mem)
@@ -1685,6 +1750,33 @@ proc read*[T](mem: WasmMemory, p: WasmPtr): T =
   assert p >= 0 and p + sizeof(T) <= mem.len
   return cast[ptr T](mem.data[p].addr)[]
 
+proc `[]`*(mem: WasmMemory, p: WasmPtr): uint8 {.inline.} =
+  let p = p.int
+  assert p >= 0 and p < mem.len
+  return mem.data[p]
+
+proc `[]`*(mem: WasmMemory, p: int): uint8 {.inline.} =
+  assert p >= 0 and p < mem.len
+  return mem.data[p]
+
+proc `[]`*(mem: var WasmMemory, p: WasmPtr): var uint8 {.inline.} =
+  let p = p.int
+  assert p >= 0 and p < mem.len
+  return mem.data[p]
+
+proc `[]`*(mem: var WasmMemory, p: int): var uint8 {.inline.} =
+  assert p >= 0 and p < mem.len
+  return mem.data[p]
+
+proc `[]=`*(mem: var WasmMemory, p: WasmPtr, data: uint8) {.inline.} =
+  let p = p.int
+  assert p >= 0 and p < mem.len
+  mem.data[p] = data
+
+proc `[]=`*(mem: var WasmMemory, p: int, data: uint8) {.inline.} =
+  assert p >= 0 and p < mem.len
+  mem.data[p] = data
+
 proc getRawPtr*(mem: WasmMemory, p: WasmPtr): ptr UncheckedArray[uint8] =
   let p = p.int
   assert p >= 0 and p < mem.len
@@ -1700,3 +1792,62 @@ template getOpenArray*[T](mem: WasmMemory, address: WasmPtr, length: int): openA
     let p = address.int
     assert p >= 0 and p + sizeof(T) <= mem.len
     cast[ptr UncheckedArray[T]](mem.data[p].addr).toOpenArray(0, length - 1)
+
+proc realloc*(fun: FuncT, store: ptr ContextT, address: WasmPtr, originalLen: int32, alignment: int32, byteSize: int32): WasmtimeResult[WasmPtr] =
+  var t: ptr WasmTrapT = nil
+  var args: array[4, ValT]
+  args[0].kind = WASMTIME_I32
+  args[0].of_field.i32 = address.int32 # original ptr
+  args[1].kind = WASMTIME_I32
+  args[1].of_field.i32 = originalLen # original len
+  args[2].kind = WASMTIME_I32
+  args[2].of_field.i32 = alignment # alignment
+  args[3].kind = WASMTIME_I32
+  args[3].of_field.i32 = byteSize # byte size
+  var results: array[1, ValT]
+  let err = fun.addr.call(store, args, results, t.addr)
+  if err != nil:
+    return err.toResult(WasmPtr)
+  assert results[0].kind == WASMTIME_I32
+  return results[0].of_field.i32.WasmPtr.ok
+
+proc dealloc*(fun: FuncT, store: ptr ContextT, address: WasmPtr, originalLen: int32, alignment: int32): WasmtimeResult[void] =
+  var t: ptr WasmTrapT = nil
+  var args: array[4, ValT]
+  args[0].kind = WASMTIME_I32
+  args[0].of_field.i32 = address.int32 # original ptr
+  args[1].kind = WASMTIME_I32
+  args[1].of_field.i32 = originalLen # original len
+  args[2].kind = WASMTIME_I32
+  args[2].of_field.i32 = alignment # alignment
+  return fun.addr.call(store, args, [], t.addr).toResult(void)
+
+proc stackAlloc*(fun: FuncT, store: ptr ContextT, size: int32, alignment: int32): WasmtimeResult[WasmPtr] =
+  var t: ptr WasmTrapT = nil
+  var args: array[2, ValT]
+  args[0].kind = WASMTIME_I32
+  args[0].of_field.i32 = size # size
+  args[1].kind = WASMTIME_I32
+  args[1].of_field.i32 = alignment # alignment
+  var results: array[1, ValT]
+  let err = fun.addr.call(store, args, results, t.addr)
+  if err != nil:
+    return err.toResult(WasmPtr)
+  assert results[0].kind == WASMTIME_I32
+  return results[0].of_field.i32.WasmPtr.ok
+
+proc stackSave*(fun: FuncT, store: ptr ContextT): WasmtimeResult[uint64] =
+  var t: ptr WasmTrapT = nil
+  var results: array[1, ValT]
+  let err = fun.addr.call(store, [], results, t.addr)
+  if err != nil:
+    return err.toResult(uint64)
+  assert results[0].kind == WASMTIME_I64
+  return cast[uint64](results[0].of_field.i64).ok
+
+proc stackRestore*(fun: FuncT, store: ptr ContextT, point: uint64): WasmtimeResult[void] =
+  var t: ptr WasmTrapT = nil
+  var args: array[1, ValT]
+  args[0].kind = WASMTIME_I64
+  args[0].of_field.i64 = cast[int64](point)
+  return fun.addr.call(store, args, [], t.addr).toResult(void)

@@ -9,6 +9,15 @@ world plugin1 {
   import my:host/test-interface;
   // import my:plugin1/callbacks;
   export my:plugin1/api;
+  use my:host/test-types.{bar, baz};
 
-  export start: func();
+  export plugin-api;
+
+  // export start: func();
+  // export call-callback: func(fun: u32, param: baz);
+  // export call-callback2: func(fun: u32, param: baz, param2: bar);
+  // export call-callback3: func(fun: u32, p: list<string>);
+  // export call-callback4: func(fun: u32) -> s32;
+  // export call-callback5: func(fun: u32) -> string;
+  // export call-callback6: func(fun: u32) -> list<string>;
 }
