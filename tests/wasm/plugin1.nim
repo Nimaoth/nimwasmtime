@@ -42,25 +42,6 @@ proc emscripten_stack_init() {.importc.}
 
 # var gcb: Callback
 
-proc stackWitString*(arr: openArray[char]): WitString =
-  if arr.len == 0:
-    return WitString()
-  let p = cast[ptr UncheckedArray[char]](stackAlloc(arr.len, 1))
-  for i in 0..<arr.len:
-    p[i] = arr[i]
-  result = ws(p, arr.len)
-
-proc stackWitString*(str: string): WitString =
-  stackWitString(str.toOpenArray(0, str.high))
-
-proc stackWitList*[T](arr: openArray[T]): WitList[T] =
-  if arr.len == 0:
-    return WitList[T]()
-  let p = cast[ptr UncheckedArray[T]](stackAlloc(sizeof(T) * arr.len, sizeof(T)))
-  for i in 0..<arr.len:
-    p[i] = arr[i]
-  result = wl[T](p, arr.len)
-
 proc addCallback(a: proc(x: int): int) {.importc.}
 
 proc callCallback(fun: uint32; param: Baz): void =
@@ -83,8 +64,39 @@ proc callCallback5(fun: uint32): WitString =
 let uiae = [ws"callCallback6 result", ws"aaaaaaaaaah"]
 proc callCallback6(fun: uint32): WitList[WitString] =
   echo &"[plugin1] callCallback6 {fun}"
+
+  let a = cast[ptr array[1, int32]](stackAlloc(4, 4))
+  let b = cast[ptr array[1, int32]](stackAlloc(4, 4))
+  a[][0] = 123
+  b[][0] = 456
+  echo a[]
+  echo b[]
+
+  let b2 = cast[ptr array[2, int32]](stackRealloc(b, 4, 8, 4))
+  b2[][1] = 654
+  let a2 = cast[ptr array[2, int32]](stackRealloc(a, 4, 8, 4))
+  a2[][1] = 789
+  echo a2[]
+  echo b2[]
+
+  let a3 = cast[ptr array[2, int32]](stackRealloc(a2, 8, 8, 1024))
+  echo a3[]
+
+  echo cast[int](a).toHex
+  echo cast[int](a2).toHex
+  echo cast[int](a3).toHex
+
+  let a4 = cast[ptr array[1, int32]](stackRealloc(a3, 8, 4, 1024))
+  let b4 = cast[ptr array[1, int32]](stackRealloc(b2, 8, 4, 4))
+  echo a4[]
+  echo b4[]
+  echo cast[int](a4).toHex
+
+  let a5 = cast[ptr array[2, int32]](stackRealloc(a4, 4, 8, 1024))
+  echo a5[]
+  echo cast[int](a5).toHex
+
   return stackWitList([ws"callCallback6 result", ws"aaaaaaaaaah", stackWitString(&"uiae {fun}")])
-  # return @@uiae
 
 proc start() =
   emscripten_stack_init()

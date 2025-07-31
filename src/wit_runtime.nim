@@ -1,5 +1,5 @@
 import std/strformat
-import wit_guest
+import wit_guest, wit_types
 
 proc convert*(a: SomeInteger, T: typedesc): T {.inline.} =
   cast[T](a)
@@ -64,6 +64,62 @@ proc stackAlloc*(size: int32, alignment: int32): pointer {.wasmexport("mem_stack
   bucket[].len += (alignedAddress - address).int + size.int
   return cast[pointer](alignedAddress)
 
+proc stackRealloc*(address: pointer, oldSize: int32, size: int32, alignment: int32): pointer {.wasmexport("mem_stack_realloc", "").} =
+  ## Allocate memory on top of the stack.
+
+  # echo &"stackRealloc {cast[int](address)}, {oldSize} -> {size}, align: {alignment}"
+  # defer:
+  #   echo &"-> {cast[int](result)}"
+
+  if address == nil or buckets.len == 0:
+    return stackAlloc(size, alignment)
+
+  let addressInt = cast[int](address)
+
+  var bucket: ptr Bucket = nil
+  for i in countdown(buckets.high, 0):
+    # echo &"{addressInt} in {cast[int](buckets[i].data)}..{cast[int](buckets[i].data) + buckets[i].len}"
+    if addressInt >= cast[int](buckets[i].data) and addressInt < cast[int](buckets[i].data) + buckets[i].len:
+      bucket = buckets[i].addr
+      break
+
+  if bucket == nil:
+    echo "Trying to realloc address " & $addressInt & " in stack allocator but it wasn't allocated with the stack allocator"
+    assert bucket != nil, "Trying to realloc address " & $addressInt & " in stack allocator but it wasn't allocated with the stack allocator"
+    return nil
+
+  let offsetInBucket = addressInt - cast[int](bucket[].data)
+  assert offsetInBucket >= 0
+  assert offsetInBucket < bucket[].len
+
+  let isLastAllocation = offsetInBucket + oldSize == bucket[].len
+
+  if size < oldSize:
+    if isLastAllocation:
+      bucket[].len = offsetInBucket + size
+    return address
+
+  var inPlace = true
+  if align(addressInt, alignment) != addressInt:
+    # Alignment changed
+    inPlace = false
+
+  elif not isLastAllocation:
+    # Not the last allocation in the current bucket
+    inPlace = false
+
+  elif offsetInBucket + size >= bucket[].capacity:
+    # No space in current bucket
+    inPlace = false
+
+  if inPlace:
+    bucket[].len = offsetInBucket + size
+    return address
+  else:
+    let newMem = stackAlloc(size, alignment)
+    copyMem(newMem, address, oldSize)
+    return newMem
+
 proc stackSave*(): uint64 {.wasmexport("mem_stack_save", "").} =
   ## Save the current stack size, to be restored with stackRestore
   if buckets.len == 0:
@@ -89,3 +145,22 @@ proc stackRestore*(p: uint64) {.wasmexport("mem_stack_restore", "").} =
   # echo &"mem_stack_restore {oldBucketsLen}, {oldLen} -> {bucketsLen}, {len}"
   if buckets.len > 0:
     buckets[buckets.high].len = len
+
+proc stackWitString*(arr: openArray[char]): WitString =
+  if arr.len == 0:
+    return WitString()
+  let p = cast[ptr UncheckedArray[char]](stackAlloc(arr.len, 1))
+  for i in 0..<arr.len:
+    p[i] = arr[i]
+  result = ws(p, arr.len)
+
+proc stackWitString*(str: string): WitString =
+  stackWitString(str.toOpenArray(0, str.high))
+
+proc stackWitList*[T](arr: openArray[T]): WitList[T] =
+  if arr.len == 0:
+    return WitList[T]()
+  let p = cast[ptr UncheckedArray[T]](stackAlloc(sizeof(T) * arr.len, sizeof(T)))
+  for i in 0..<arr.len:
+    p[i] = arr[i]
+  result = wl[T](p, arr.len)

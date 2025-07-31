@@ -97,6 +97,16 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
   let host = ident"host"
   let store = genAst(funcs = ident"funcs", store = ident"mContext", funcs.store)
 
+  let returnType = if fun.results.len == 0:
+    ident"void"
+  elif fun.results.len == 1:
+    ctx.getTypeName(fun.results[0], Return)
+  else:
+    var t = nnkTupleTy.newTree()
+    for r in fun.results:
+      t.add(ctx.getTypeName(fun.results[0], Return))
+    t
+
   let getExportCode = genAst(name = ident(name),
       nameStr = fun.name.replace('-', '_'),
       instance = ident"instance",
@@ -157,13 +167,13 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
         let userType = ctx.types[typ.index]
         ctx.byteSize(userType.listTarget)
 
-      result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results"):
+      result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results", returnType):
         dataPtr = block:
           # todo: this memory needs to be freed
           # let temp = realloc(funcs.mRealloc.get.of_field.func_field, funcs.mContext, 0.WasmPtr, 0, 4, (param.len * byteSize).int32)
           let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field, funcs.mContext, (param.len * byteSize).int32, 4)
           if temp.isErr:
-            return temp.toResult(void)
+            return temp.toResult(returnType)
           temp.val
         # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr.int
 
@@ -187,12 +197,12 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
     let needsRetArea = not flatFuncType.paramsFlat or not flatFuncType.resultsFlat
     let paramsMemSize = max(flatFuncTargetType.toCoreType.paramsByteSize, flatFuncTargetType.toCoreType.resultsByteSize)
     if needsRetArea or true:
-      let c = genAst(paramsMem, byteSize = paramsMemSize, temp = ident"temp", args = ident("args")):
+      let c = genAst(paramsMem, byteSize = paramsMemSize, temp = ident"temp", args = ident("args"), returnType):
         let paramsMem: WasmPtr = block:
           # let temp = realloc(funcs.mRealloc.get.of_field.func_field, funcs.mContext, 0.WasmPtr, 0, 4, byteSize.int32)
           let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field, funcs.mContext, byteSize.int32, 4)
           if temp.isErr:
-            return temp.toResult(void)
+            return temp.toResult(returnType)
           temp.val
         args[0] = paramsMem.int32.toWasmVal
         # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr.int
@@ -235,12 +245,12 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
         let userType = ctx.types[typ.index]
         ctx.byteSize(userType.listTarget)
 
-      result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results"):
+      result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results", returnType):
         dataPtr = block:
           # let temp = realloc(funcs.mRealloc.get.of_field.func_field, funcs.mContext, 0.WasmPtr, 0, 4, (param.len * byteSize).int32)
           let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field, funcs.mContext, byteSize.int32, 4)
           if temp.isErr:
-            return temp.toResult(void)
+            return temp.toResult(returnType)
           temp.val
         # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr.int
 
@@ -264,16 +274,6 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
       for i in 0..fun.results.high:
         nnkBracketExpr.newTree(ident"retVal", newLit(i))
         # ident"retVal"
-
-  let returnType = if fun.results.len == 0:
-    ident"void"
-  elif fun.results.len == 1:
-    ctx.getTypeName(fun.results[0], Return)
-  else:
-    var t = nnkTupleTy.newTree()
-    for r in fun.results:
-      t.add(ctx.getTypeName(fun.results[0], Return))
-    t
 
   # let (flatFuncTypeLift, flatFuncTargetTypeLift) = ctx.flattenFuncType(fun, Lift)
   # echo flatFuncTypeLift
@@ -368,7 +368,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
       dataPtrs
       lowerCode
       let res = funcs.name.addr.call(funcs.context,
-          args.toOpenArray(0, numArgs - 1), results.toOpenArray(0, numResults - 1), trap.addr).toResult(void)
+          args.toOpenArray(0, numArgs - 1), results.toOpenArray(0, numResults - 1), trap.addr).toResult(returnType)
 
       # frees
 
