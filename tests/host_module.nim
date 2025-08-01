@@ -79,46 +79,46 @@ proc collectExports(funcs: var ExportedFuncs; instance: InstanceT;
   funcs.mStackAlloc = instance.getExport(context, "mem_stack_alloc")
   funcs.mStackSave = instance.getExport(context, "mem_stack_save")
   funcs.mStackRestore = instance.getExport(context, "mem_stack_restore")
-  let f_570427281 = instance.getExport(context, "start")
-  if f_570427281.isSome:
-    assert f_570427281.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.start = f_570427281.get.of_field.func_field
+  let f_570427327 = instance.getExport(context, "start")
+  if f_570427327.isSome:
+    assert f_570427327.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.start = f_570427327.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "start", "\'"
-  let f_570427326 = instance.getExport(context, "call_callback")
-  if f_570427326.isSome:
-    assert f_570427326.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback = f_570427326.get.of_field.func_field
+  let f_570427372 = instance.getExport(context, "call_callback")
+  if f_570427372.isSome:
+    assert f_570427372.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback = f_570427372.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback", "\'"
-  let f_570427357 = instance.getExport(context, "call_callback2")
-  if f_570427357.isSome:
-    assert f_570427357.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback2 = f_570427357.get.of_field.func_field
-  else:
-    echo "Failed to find exported function \'", "call_callback2", "\'"
-  let f_570427376 = instance.getExport(context, "call_callback3")
-  if f_570427376.isSome:
-    assert f_570427376.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback3 = f_570427376.get.of_field.func_field
-  else:
-    echo "Failed to find exported function \'", "call_callback3", "\'"
-  let f_570427377 = instance.getExport(context, "call_callback4")
-  if f_570427377.isSome:
-    assert f_570427377.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback4 = f_570427377.get.of_field.func_field
-  else:
-    echo "Failed to find exported function \'", "call_callback4", "\'"
-  let f_570427403 = instance.getExport(context, "call_callback5")
+  let f_570427403 = instance.getExport(context, "call_callback2")
   if f_570427403.isSome:
     assert f_570427403.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback5 = f_570427403.get.of_field.func_field
+    funcs.callCallback2 = f_570427403.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback2", "\'"
+  let f_570427422 = instance.getExport(context, "call_callback3")
+  if f_570427422.isSome:
+    assert f_570427422.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback3 = f_570427422.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback3", "\'"
+  let f_570427423 = instance.getExport(context, "call_callback4")
+  if f_570427423.isSome:
+    assert f_570427423.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback4 = f_570427423.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback4", "\'"
+  let f_570427449 = instance.getExport(context, "call_callback5")
+  if f_570427449.isSome:
+    assert f_570427449.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback5 = f_570427449.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback5", "\'"
-  let f_570427404 = instance.getExport(context, "call_callback6")
-  if f_570427404.isSome:
-    assert f_570427404.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback6 = f_570427404.get.of_field.func_field
+  let f_570427450 = instance.getExport(context, "call_callback6")
+  if f_570427450.isSome:
+    assert f_570427450.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback6 = f_570427450.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback6", "\'"
 
@@ -390,7 +390,7 @@ proc callCallback4(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[int32] =
   args[0] = toWasmVal(fun)
   let res = funcs.callCallback4.addr.call(funcs.mContext,
       args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
-      void)
+      int32)
   if res.isErr:
     return res.toResult(int32)
   var retVal: int32
@@ -410,7 +410,7 @@ proc callCallback5(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[string] =
   args[0] = toWasmVal(fun)
   let res = funcs.callCallback5.addr.call(funcs.mContext,
       args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
-      void)
+      string)
   if res.isErr:
     return res.toResult(string)
   var retVal: string
@@ -438,7 +438,7 @@ proc callCallback6(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[
   args[0] = toWasmVal(fun)
   let res = funcs.callCallback6.addr.call(funcs.mContext,
       args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
-      void)
+      seq[string])
   if res.isErr:
     return res.toResult(seq[string])
   var retVal: seq[string]
@@ -457,7 +457,7 @@ proc callCallback6(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[
           retVal[i0][i1] = p1[i1]
   return wasmtime.ok(retVal)
 
-proc envTestNoParams2(host: MyContext; store: ptr ContextT; b: Baz): void
+proc envTestNoParams2(host: MyContext; store: ptr ContextT; b: sink Baz): void
 proc testInterfaceTestNoParams(host: MyContext; store: ptr ContextT): void
 proc testInterfaceTestSimpleParams(host: MyContext; store: ptr ContextT;
                                    a: int8; b: int16; c: int32; d: int64;
@@ -469,8 +469,8 @@ proc testInterfaceTestSimpleParamsPtr(host: MyContext; store: ptr ContextT;
                                       i: float32; j: float64; k: bool; l: Rune;
                                       m: int32; n: int32; o: int32; p: int32;
                                       q: int32): void
-proc testInterfaceAddCallback(host: MyContext; store: ptr ContextT; env: string;
-                              name: string): uint32
+proc testInterfaceAddCallback(host: MyContext; store: ptr ContextT;
+                              env: sink string; name: sink string): uint32
 proc testInterfaceTestSimpleReturn(host: MyContext; store: ptr ContextT;
                                    x: int32): int32
 proc testInterfaceTestSimpleReturn2(host: MyContext; store: ptr ContextT;
@@ -478,9 +478,10 @@ proc testInterfaceTestSimpleReturn2(host: MyContext; store: ptr ContextT;
 proc testInterfaceTestSimpleReturnPtr(host: MyContext; store: ptr ContextT;
                                       x: int8): Bar
 proc testInterfaceTestSimpleReturnPtr2(host: MyContext; store: ptr ContextT): Baz
-proc testInterfaceNewBlob(host: MyContext; store: ptr ContextT; init: seq[uint8]): MyBlob
+proc testInterfaceNewBlob(host: MyContext; store: ptr ContextT;
+                          init: sink seq[uint8]): MyBlob
 proc testInterfaceWrite(host: MyContext; store: ptr ContextT; self: var MyBlob;
-                        bytes: seq[uint8]): void
+                        bytes: sink seq[uint8]): void
 proc testInterfaceRead(host: MyContext; store: ptr ContextT; self: var MyBlob;
                        n: int32): seq[uint8]
 proc testInterfaceMerge(host: MyContext; store: ptr ContextT; lhs: sink MyBlob;

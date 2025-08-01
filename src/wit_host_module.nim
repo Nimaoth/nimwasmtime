@@ -9,12 +9,12 @@ const cmdPrefix = when windowsHost: "cmd /E:ON /C " else: ""
 type
   Slot = object
     data: pointer
-    drop: proc(data: pointer, callDestroy: bool) {.cdecl.}
+    drop: proc(data: pointer, callDestroy: bool) {.cdecl, gcsafe, raises: [].}
 
   WasmModuleResources* = object
     resources: seq[Slot]
 
-proc resourceNew*[T](self: var WasmModuleResources, data: sink T): WasmtimeResult[int32] =
+proc resourceNew*[T](self: var WasmModuleResources, data: sink T): WasmtimeResult[int32] {.gcsafe, raises: [].} =
   proc dropImpl(b: pointer, callDestroy: bool) {.cdecl.} =
     let b = cast[ptr T](b)
     if callDestroy:
@@ -37,13 +37,13 @@ proc resourceNew*[T](self: var WasmModuleResources, data: sink T): WasmtimeResul
 
   return wasmtime.ok(index.int32)
 
-proc resourceHostData*(self: var WasmModuleResources, handle: int32, T: typedesc): WasmtimeResult[ptr T] =
+proc resourceHostData*(self: var WasmModuleResources, handle: int32, T: typedesc): WasmtimeResult[ptr T] {.gcsafe, raises: [].} =
   assert handle >= 0
   assert handle < self.resources.len
   assert self.resources[handle].data != nil
   return wasmtime.ok(cast[ptr T](self.resources[handle].data))
 
-proc resourceDrop*(self: var WasmModuleResources, handle: int32, callDestroy: bool): WasmtimeResult[void] =
+proc resourceDrop*(self: var WasmModuleResources, handle: int32, callDestroy: bool): WasmtimeResult[void] {.gcsafe, raises: [].} =
   assert handle >= 0
   assert handle < self.resources.len
   assert self.resources[handle].data != nil
@@ -83,11 +83,9 @@ proc coreTypeToWasmValkindName(t: CoreType): string =
   # of FuncRef: "funcref"
 
 proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode, fun: WitFunc) =
-  echo &"genExport {fun}"
+  # echo &"genExport {fun}"
 
   let (flatFuncType, flatFuncTargetType) = ctx.flattenFuncType(fun, Lift)
-  echo flatFuncType
-  echo flatFuncTargetType
 
   let name = fun.name.toCamelCase(false)
 
@@ -355,7 +353,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
       returnType
       ):
 
-    proc name(funcs: funcsType): WasmtimeResult[returnType] =
+    proc name*(funcs: funcsType): WasmtimeResult[returnType] =
       var args: array[max(1, numArgs), ValT]
       var results: array[max(1, numResults), ValT]
       var trap: ptr WasmTrapT = nil
@@ -475,7 +473,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       funcs = ident"funcs",
       err = ident"err"):
 
-    proc name(funcs: var funcsType, instance: InstanceT, context: ptr ContextT) =
+    proc name*(funcs: var funcsType, instance: InstanceT, context: ptr ContextT) =
       funcs.mContext = context
       funcs.mMemory = instance.getExport(context, "memory")
       funcs.mRealloc = instance.getExport(context, "cabi_realloc")
@@ -563,9 +561,36 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       else:
         call.add name
 
+      proc passAsSink(t: WitType): bool =
+        if t.builtin == "string":
+          return true
+        elif t.builtin != "":
+          return false
+        let kind = ctx.types[t.index].kind
+        case kind
+        of List:
+          return true
+        of Record, Variant, Tuple:
+          for f in ctx.types[t.index].fields:
+            if f.typ.passAsSink:
+              return true
+        of Option:
+          return ctx.types[t.index].optionTarget.passAsSink()
+        of Result:
+          if ctx.types[t.index].resultOkTarget.passAsSink():
+            return true
+          if ctx.types[t.index].resultErrTarget.passAsSink():
+            return true
+        else:
+          discard
+        return false
+
       var declParamType = ctx.getTypeName(p.typ, Parameter)
       if paramKind == BorrowedResource:
         declParamType = nnkVarTy.newTree(declParamType)
+      elif p.typ.passAsSink():
+        declParamType = nnkCommand.newTree(ident"sink", declParamType)
+
       decl[3].add nnkIdentDefs.newTree(name, declParamType, newEmptyNode())
 
       if p.typ.builtin != "":

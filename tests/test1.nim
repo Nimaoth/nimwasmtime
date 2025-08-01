@@ -54,13 +54,13 @@ else:
   static: hint("Using cached test.wit (host.nim)")
   include host_module
 
-proc testInterfaceNewBlob(host: MyContext, store: ptr ContextT, init: seq[uint8]): MyBlob =
+proc testInterfaceNewBlob(host: MyContext, store: ptr ContextT, init: sink seq[uint8]): MyBlob =
   inc blobCounter
   echo &"[host] testInterfaceNewBlob {init}"
   result = MyBlob(blobName: "constr" & $host.counter, i: host.counter, arr: init)
   host.counter.inc
 
-proc testInterfaceWrite(host: MyContext, store: ptr ContextT, self: var MyBlob, bytes: seq[uint8]) =
+proc testInterfaceWrite(host: MyContext, store: ptr ContextT, self: var MyBlob, bytes: sink seq[uint8]) =
   echo &"[host] testInterfaceWrite {self} {bytes}"
   self.arr.add bytes
 
@@ -82,7 +82,7 @@ proc testInterfacePrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, r
 # proc testInterfaceBarBaz(host: MyContext, store: ptr ContextT, a: int32, b: float32): float32 =
 #   result = a.float32 - b
 
-proc envTestNoParams2(host: MyContext, store: ptr ContextT, b: Baz) =
+proc envTestNoParams2(host: MyContext, store: ptr ContextT, b: sink Baz) =
   echo "[host] envTestNoParams2 ", b
 
 proc testInterfaceTestNoParams(host: MyContext, store: ptr ContextT) =
@@ -119,7 +119,7 @@ proc callbackTypesData(host: MyContext, store: ptr ContextT, self: var Callback)
 proc callbackTypesKey(host: MyContext, store: ptr ContextT, self: var Callback): uint32 =
   self.key
 
-proc testInterfaceAddCallback(host: MyContext, store: ptr ContextT, env: string, name: string): uint32 =
+proc testInterfaceAddCallback(host: MyContext, store: ptr ContextT, env: sink string, name: sink string): uint32 =
   discard
 
 proc testInterfaceTestSimpleReturn(host: MyContext, store: ptr ContextT, x: int32): int32 =
