@@ -76,6 +76,8 @@ type
   WitInterface* = object
     name*: string
     funcs*: seq[WitFunc]
+    types*: seq[int] # index into ctx.types
+    imports*: seq[string]
     package*: int
 
   WitWorld* = object
@@ -97,6 +99,12 @@ type
     interfaces*: seq[WitInterface]
     useCustomBuiltinTypes*: bool
     nameMap*: Table[string, string]
+
+proc getInterface*(ctx: WitContext, name: string): lent WitInterface =
+  for i in ctx.interfaces:
+    if i.name == name:
+      return i
+  error("Unknown interface " & name)
 
 proc getWorld*(ctx: WitContext, name: string): lent WitWorld =
   for w in ctx.worlds:
@@ -238,6 +246,12 @@ proc collectFuncsInRoot(ctx: WitContext, json: JsonNode) =
     if world.hasKey("imports"):
       w.funcs.add ctx.collectFuncs(world["imports"], w.package)
 
+      for name, val in world["imports"]:
+        if val.hasKey("interface"):
+          let index = val["interface"]["id"].getInt
+          if ctx.interfaces[index].name == "":
+            ctx.interfaces[index].name = name
+
     if world.hasKey("exports"):
       w.exports.add ctx.collectFuncs(world["exports"], w.package)
 
@@ -248,6 +262,10 @@ proc collectInterfaces(ctx: WitContext, json: JsonNode) =
     var res = WitInterface()
     res.name = interfac["name"].getStr
     res.package = interfac["package"].getInt
+    if interfac.hasKey("types"):
+      for name, index in interfac["types"].fields.pairs:
+        res.types.add index.jsonTo(int)
+
     ctx.interfaces.add res
 
   for i, interfac in json["interfaces"].elems:
@@ -656,4 +674,11 @@ proc newWitContext*(witJson: JsonNode): WitContext =
   result.collectPackages(witJson)
   result.collectInterfaces(witJson)
   result.collectTypes(witJson)
+
+  for i in result.interfaces.mitems:
+    for t in i.types:
+      let typeInterface = result.types[t].interfaceName
+      if typeInterface != i.name and i.imports.find(typeInterface) == -1:
+        i.imports.add typeInterface
+
   result.collectFuncsInRoot(witJson)

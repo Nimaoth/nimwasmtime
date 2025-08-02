@@ -1,4 +1,4 @@
-import std/[strformat, os, macros, strutils, json, genasts, options, math, sugar, tables]
+import std/[strformat, os, macros, strutils, json, genasts, options, math, sugar, tables, sets]
 import wit, wit_gen
 
 when not declared(buildOS):
@@ -409,13 +409,17 @@ proc genExport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
 
       funcList.add funNode
 
-proc genResourceLifetimeFuncs(ctx: WitContext, funcList: NimNode) =
+proc genResourceLifetimeFuncs(ctx: WitContext, funcList: NimNode, interfaceName: string = "") =
   let dropTempl = genAst(a = ident"a"):
     proc foo(a: int32): void {.wasmimport("", "").}
 
   for t in ctx.types:
     if t.refIndex.isSome:
       continue
+
+    if interfaceName != "" and t.interfaceName != interfaceName:
+      continue
+
     case t.kind
     of Resource:
       let dropName = if t.interfaceName != "":
@@ -453,9 +457,21 @@ proc replace*(node: NimNode, key: NimNode, repl: seq[NimNode]) =
     else:
       c.replace(key, repl)
 
+proc collectInterfacesToGenerate(ctx: WitContext, importedInterfaces: var Table[string, WitInterfaceGen], name: string) =
+  if name != "" and not importedInterfaces.contains(name):
+    importedInterfaces.add(name, WitInterfaceGen(
+      name: name,
+      imports: nnkStmtList.newTree(),
+      types: nnkStmtList.newTree(),
+      functions: nnkStmtList.newTree(),
+    ))
+
+    for imp in ctx.getInterface(name).imports:
+      ctx.collectInterfacesToGenerate(importedInterfaces, imp)
+
 macro importWitImpl(witPath: static[string], cacheFile: static[string], worldName: static[string], dir: static[string],
     customCodeGen:static[proc(
-      ctx: WitContext, world: WitWorld, importSection: var NimNode, typeSection: var NimNode, funcList: var NimNode
+      ctx: WitContext, world: WitWorld, importSection: var NimNode, funcList: var NimNode
     )]): untyped =
   let path = if witPath.isAbsolute:
     witPath
@@ -476,53 +492,94 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], worldNam
   var ctx = newWitContext(json)
   ctx.useCustomBuiltinTypes = true
 
-  var typeSection = ctx.genTypeSection(host=false)
   var funcList = nnkStmtList.newTree()
   var importSection = nnkStmtList.newTree()
-
-  ctx.genResourceLifetimeFuncs(funcList)
-
+  var funcListPerInterface = initTable[string, NimNode]()
+  var importedInterfaces = initTable[string, WitInterfaceGen]()
+  var exportedInterfaces = initHashSet[string]()
   let world = ctx.getWorld(worldName)
 
   for f in world.funcs:
-    ctx.genImport(funcList, f)
+    ctx.collectInterfacesToGenerate(importedInterfaces, f.interfaceName)
+
+  for f in world.exports:
+    if f.interfaceName != "":
+      exportedInterfaces.incl(f.interfaceName)
+
+  for name, gen in importedInterfaces.mpairs:
+    gen.imports = nnkStmtList.newTree()
+    gen.functions = nnkStmtList.newTree()
+
+    let interfac = ctx.getInterface(name)
+    for imp in interfac.imports:
+      gen.imports.add block:
+        genAst(imp = ident(imp.replace('-', '_'))):
+          import imp
+    gen.types = ctx.genTypeSection(host = false, name)
+    ctx.genResourceLifetimeFuncs(gen.functions, name)
+
+  for f in world.funcs:
+    let interfaceName = f.interfaceName
+    ctx.genImport(importedInterfaces[interfaceName].functions, f)
 
   for f in world.exports:
     ctx.genExport(funcList, f)
 
   if customCodeGen != nil:
-    customCodeGen(ctx, world, importSection, typeSection, funcList)
+    customCodeGen(ctx, world, importSection, funcList)
 
-  let code = genAst(importSection, typeSection, funcList):
-    {.push hint[DuplicateModuleImport]:off.}
-    import std/[options]
-    from std/unicode import Rune
-    import results, wit_types, wit_runtime
-    {.pop.}
+  for interfaceName, gen in importedInterfaces.pairs:
+    importSection.add block:
+      genAst(imp = ident(interfaceName.replace('-', '_'))):
+        import imp
+        export imp
 
-    importSection
-
-    typeSection
-
-    funcList
-
-  let cacheFile = if cacheFile.isAbsolute:
+  let cacheFilePath = if cacheFile.isAbsolute:
     cacheFile
   else:
     dir / cacheFile
 
-  hint "Write api to " & cacheFile
-  writeFile(cacheFile, code.repr)
+  for interfaceName, gen in importedInterfaces.pairs:
+    let code = genAst(importSection = gen.imports, typeSection = gen.types, funcs = gen.functions):
+      {.push hint[DuplicateModuleImport]:off.}
+      import std/[options]
+      from std/unicode import Rune
+      import results, wit_types, wit_runtime, wit_guest
+      {.pop.}
 
-  return code
+      importSection
+
+      typeSection
+
+      funcs
+
+    let cacheFile = cacheFilePath.splitPath.head / interfaceName.replace("-", "_") & ".nim"
+    hint &"Write '{interfaceName}' api to " & cacheFile
+    writeFile(cacheFile, code.repr)
+
+  let code = genAst(importSection, funcList):
+    {.push hint[DuplicateModuleImport]:off.}
+    import std/[options]
+    from std/unicode import Rune
+    import results, wit_types, wit_runtime, wit_guest
+    {.pop.}
+
+    importSection
+
+    funcList
+
+  hint "Write api to " & cacheFilePath
+  writeFile(cacheFilePath, code.repr)
+
+  return nnkStmtList.newTree()
 
 template importWit*(witPath: static[string], body: untyped): untyped =
   var cacheFile {.compiletime, inject.} = "guest.nim"
   var world {.compiletime, inject.} = ""
-  var customCodeGenCode {.compiletime, inject.}: proc(ctx: WitContext, world: WitWorld, importSection: var NimNode, typeSection: var NimNode, funcList: var NimNode)
+  var customCodeGenCode {.compiletime, inject.}: proc(ctx: WitContext, world: WitWorld, importSection: var NimNode, funcList: var NimNode)
 
   template customCodeGen*(b: untyped) =
-    customCodeGenCode = proc(ctx {.inject.}: WitContext, world {.inject.}: WitWorld, importSection {.inject.}: var NimNode, typeSection {.inject.}: var NimNode, funcList {.inject.}: var NimNode) =
+    customCodeGenCode = proc(ctx {.inject.}: WitContext, world {.inject.}: WitWorld, importSection {.inject.}: var NimNode, funcList {.inject.}: var NimNode) =
       b
 
   static:

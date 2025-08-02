@@ -15,7 +15,7 @@ type
     resources: seq[Slot]
 
 proc resourceNew*[T](self: var WasmModuleResources, data: sink T): WasmtimeResult[int32] {.gcsafe, raises: [].} =
-  proc dropImpl(b: pointer, callDestroy: bool) {.cdecl.} =
+  proc dropImpl(b: pointer, callDestroy: bool) {.cdecl, gcsafe, raises: [].} =
     let b = cast[ptr T](b)
     if callDestroy:
       `=destroy`(b[])

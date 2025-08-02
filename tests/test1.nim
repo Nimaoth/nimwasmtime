@@ -1,6 +1,8 @@
 import std/[strformat, options, macros, tables, unicode, parseopt, strutils]
 import wasmtime, wit_host_module, wasm_builder
 
+{.push gcsafe, raises: [].}
+
 type MyContext = ref object
   resources: WasmModuleResources
   counter: int
@@ -84,6 +86,9 @@ proc testInterfacePrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, r
 
 proc envTestNoParams2(host: MyContext, store: ptr ContextT, b: sink Baz) =
   echo "[host] envTestNoParams2 ", b
+
+proc testInterface2TestNoParams(host: MyContext, store: ptr ContextT) =
+  echo "[host] testInterface2TestNoParams"
 
 proc testInterfaceTestNoParams(host: MyContext, store: ptr ContextT) =
   echo "[host] testInterfaceTestNoParams"
@@ -211,7 +216,12 @@ proc main(): WasmtimeResult[void] =
     of cmdEnd: assert(false) # cannot happen
 
   echo "[host] load wasm file ", path
-  let wasmBytes = readFile(path)
+  let wasmBytes = block:
+    try:
+      readFile(path)
+    except IOError as err:
+      echo "[host] Failed to load wasm module: ", err.msg
+      return
   # let wasmBuilder = wasmBytes.toOpenArray(0, wasmBytes.high).decodeWasmBinary()
   # echo wasmBuilder
   # let wasmBytes2 = wasmBuilder.generateBinary()
@@ -251,9 +261,12 @@ proc main(): WasmtimeResult[void] =
         return
 
       var bytesWritten: uint32 = 0
-      for vec in mem.getOpenArray[:Iovec](iovecsPtr, numIovecs):
-        let data = mem.getRawPtr(vec.data)
-        bytesWritten += file.writeBytes(data.toOpenArray(0, vec.len.int - 1), 0, vec.len).uint32
+      try:
+        for vec in mem.getOpenArray[:Iovec](iovecsPtr, numIovecs):
+          let data = mem.getRawPtr(vec.data)
+          bytesWritten += file.writeBytes(data.toOpenArray(0, vec.len.int - 1), 0, vec.len).uint32
+      except IOError:
+        discard
 
       mem.write[:uint32](pNumWritten, bytesWritten)
 

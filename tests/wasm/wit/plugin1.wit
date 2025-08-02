@@ -7,6 +7,7 @@ world plugin1 {
   }
 
   import my:host/test-interface;
+  import my:host/test-interface2;
   // import my:plugin1/callbacks;
   export my:plugin1/api;
   use my:host/test-types.{bar, baz};

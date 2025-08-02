@@ -9,7 +9,8 @@ when defined(witRebuild):
     cacheFile = "plugin1_guest.nim"
 else:
   static: hint("Using cached wit")
-  include plugin1_guest
+
+include plugin1_guest
 
 proc emscripten_notify_memory_growth*(a: int32) {.exportc.} =
   discard
@@ -112,7 +113,8 @@ proc start() =
     return x + 2
 
   echo "[plugin1] call testNoParams"
-  testNoParams()
+  test_interface.testNoParams()
+  test_interface2.testNoParams()
 
   echo "[plugin1] call testNoParams2"
   testNoParams2(Baz(x: ws"uiae", c: Foo(x: ws"xvlc"), d: (111, 222.333), gbruh: @@[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some))

@@ -70,8 +70,8 @@ proc mem(funcs: ExportedFuncs): WasmMemory =
   elif funcs.mMemory.get.kind == WASMTIME_EXTERN_MEMORY:
     return initWasmMemory(funcs.mContext, funcs.mMemory.get.of_field.memory.addr)
 
-proc collectExports(funcs: var ExportedFuncs; instance: InstanceT;
-                    context: ptr ContextT) =
+proc collectExports*(funcs: var ExportedFuncs; instance: InstanceT;
+                     context: ptr ContextT) =
   funcs.mContext = context
   funcs.mMemory = instance.getExport(context, "memory")
   funcs.mRealloc = instance.getExport(context, "cabi_realloc")
@@ -79,50 +79,50 @@ proc collectExports(funcs: var ExportedFuncs; instance: InstanceT;
   funcs.mStackAlloc = instance.getExport(context, "mem_stack_alloc")
   funcs.mStackSave = instance.getExport(context, "mem_stack_save")
   funcs.mStackRestore = instance.getExport(context, "mem_stack_restore")
-  let f_570427327 = instance.getExport(context, "start")
-  if f_570427327.isSome:
-    assert f_570427327.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.start = f_570427327.get.of_field.func_field
+  let f_570427339 = instance.getExport(context, "start")
+  if f_570427339.isSome:
+    assert f_570427339.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.start = f_570427339.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "start", "\'"
-  let f_570427372 = instance.getExport(context, "call_callback")
-  if f_570427372.isSome:
-    assert f_570427372.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback = f_570427372.get.of_field.func_field
+  let f_570427384 = instance.getExport(context, "call_callback")
+  if f_570427384.isSome:
+    assert f_570427384.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback = f_570427384.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback", "\'"
-  let f_570427403 = instance.getExport(context, "call_callback2")
-  if f_570427403.isSome:
-    assert f_570427403.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback2 = f_570427403.get.of_field.func_field
+  let f_570427415 = instance.getExport(context, "call_callback2")
+  if f_570427415.isSome:
+    assert f_570427415.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback2 = f_570427415.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback2", "\'"
-  let f_570427422 = instance.getExport(context, "call_callback3")
-  if f_570427422.isSome:
-    assert f_570427422.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback3 = f_570427422.get.of_field.func_field
+  let f_570427434 = instance.getExport(context, "call_callback3")
+  if f_570427434.isSome:
+    assert f_570427434.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback3 = f_570427434.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback3", "\'"
-  let f_570427423 = instance.getExport(context, "call_callback4")
-  if f_570427423.isSome:
-    assert f_570427423.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback4 = f_570427423.get.of_field.func_field
+  let f_570427435 = instance.getExport(context, "call_callback4")
+  if f_570427435.isSome:
+    assert f_570427435.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback4 = f_570427435.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback4", "\'"
-  let f_570427449 = instance.getExport(context, "call_callback5")
-  if f_570427449.isSome:
-    assert f_570427449.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback5 = f_570427449.get.of_field.func_field
+  let f_570427461 = instance.getExport(context, "call_callback5")
+  if f_570427461.isSome:
+    assert f_570427461.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback5 = f_570427461.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback5", "\'"
-  let f_570427450 = instance.getExport(context, "call_callback6")
-  if f_570427450.isSome:
-    assert f_570427450.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback6 = f_570427450.get.of_field.func_field
+  let f_570427462 = instance.getExport(context, "call_callback6")
+  if f_570427462.isSome:
+    assert f_570427462.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback6 = f_570427462.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback6", "\'"
 
-proc start(funcs: ExportedFuncs): WasmtimeResult[void] =
+proc start*(funcs: ExportedFuncs): WasmtimeResult[void] =
   var args: array[max(1, 0), ValT]
   var results: array[max(1, 0), ValT]
   var trap: ptr WasmTrapT = nil
@@ -138,7 +138,7 @@ proc start(funcs: ExportedFuncs): WasmtimeResult[void] =
   if res.isErr:
     return res.toResult(void)
   
-proc callCallback(funcs: ExportedFuncs; fun: uint32; param: Baz): WasmtimeResult[
+proc callCallback*(funcs: ExportedFuncs; fun: uint32; param: Baz): WasmtimeResult[
     void] =
   var args: array[max(1, 16), ValT]
   var results: array[max(1, 0), ValT]
@@ -228,7 +228,7 @@ proc callCallback(funcs: ExportedFuncs; fun: uint32; param: Baz): WasmtimeResult
   if res.isErr:
     return res.toResult(void)
   
-proc callCallback2(funcs: ExportedFuncs; fun: uint32; param: Baz; param2: Bar): WasmtimeResult[
+proc callCallback2*(funcs: ExportedFuncs; fun: uint32; param: Baz; param2: Bar): WasmtimeResult[
     void] =
   var args: array[max(1, 1), ValT]
   var results: array[max(1, 0), ValT]
@@ -329,7 +329,7 @@ proc callCallback2(funcs: ExportedFuncs; fun: uint32; param: Baz; param2: Bar): 
   if res.isErr:
     return res.toResult(void)
   
-proc callCallback3(funcs: ExportedFuncs; fun: uint32; p: seq[string]): WasmtimeResult[
+proc callCallback3*(funcs: ExportedFuncs; fun: uint32; p: seq[string]): WasmtimeResult[
     void] =
   var args: array[max(1, 3), ValT]
   var results: array[max(1, 0), ValT]
@@ -377,7 +377,7 @@ proc callCallback3(funcs: ExportedFuncs; fun: uint32; p: seq[string]): WasmtimeR
   if res.isErr:
     return res.toResult(void)
   
-proc callCallback4(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[int32] =
+proc callCallback4*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[int32] =
   var args: array[max(1, 1), ValT]
   var results: array[max(1, 1), ValT]
   var trap: ptr WasmTrapT = nil
@@ -397,7 +397,7 @@ proc callCallback4(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[int32] =
   retVal = convert(results[0], int32)
   return wasmtime.ok(retVal)
 
-proc callCallback5(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[string] =
+proc callCallback5*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[string] =
   var args: array[max(1, 1), ValT]
   var results: array[max(1, 1), ValT]
   var trap: ptr WasmTrapT = nil
@@ -424,7 +424,7 @@ proc callCallback5(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[string] =
       retVal[i0] = p0[i0]
   return wasmtime.ok(retVal)
 
-proc callCallback6(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[
+proc callCallback6*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[
     seq[string]] =
   var args: array[max(1, 1), ValT]
   var results: array[max(1, 1), ValT]
@@ -488,6 +488,7 @@ proc testInterfaceMerge(host: MyContext; store: ptr ContextT; lhs: sink MyBlob;
                         rhs: sink MyBlob): MyBlob
 proc testInterfacePrint(host: MyContext; store: ptr ContextT; lhs: var MyBlob;
                         rhs: var MyBlob): void
+proc testInterface2TestNoParams(host: MyContext; store: ptr ContextT): void
 proc callbackTypesNewCallback(host: MyContext; store: ptr ContextT;
                               data: uint32; key: uint32; drop: uint32): Callback
 proc callbackTypesData(host: MyContext; store: ptr ContextT; self: var Callback): uint32
@@ -1028,6 +1029,13 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         lhs = ?host.resources.resourceHostData(parameters[0].i32, MyBlob)
         rhs = ?host.resources.resourceHostData(parameters[1].i32, MyBlob)
         testInterfacePrint(host, store, lhs[], rhs[])
+    if e.isErr:
+      return e
+  block:
+    let e = block:
+      var ty: ptr WasmFunctypeT = newFunctype([], [])
+      linker.defineFuncUnchecked("my:host/test-interface2", "test-no-params", ty):
+        testInterface2TestNoParams(host, store)
     if e.isErr:
       return e
   block:

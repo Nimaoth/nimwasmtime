@@ -8,6 +8,7 @@ world host {
   }
 
   import my:host/test-interface;
+  import my:host/test-interface2;
   import my:host/callback-types;
   use my:host/test-types.{bar, baz};
 

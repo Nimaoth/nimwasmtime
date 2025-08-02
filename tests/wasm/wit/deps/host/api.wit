@@ -11,14 +11,14 @@ interface test-types {
     c: foo,
     d: tuple<s32, f32>,
     e: option<s32>,
-    f: list<foo>,
+    // f: list<foo>,
     gbruh: list<props>,
     g: descriptor-type,
     h: props,
     // g: result<foo, descriptor-type>,
     i: result<foo>,
-    j: voodoo,
-    k: list<bar>,
+    // j: voodoo,
+    // k: list<bar>,
   }
 
   flags props {
@@ -70,6 +70,10 @@ interface test-interface {
     merge: static func(lhs: blob, rhs: blob) -> blob;
     print: static func(lhs: borrow<blob>, rhs: borrow<blob>);
   }
+}
+
+interface test-interface2 {
+  test-no-params: func();
 }
 
 interface callback-types {

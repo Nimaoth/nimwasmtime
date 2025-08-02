@@ -1,4 +1,4 @@
-import std/[macros, options, strutils, genasts, sugar]
+import std/[macros, options, strutils, genasts, sugar, tables]
 import wit
 
 
@@ -16,6 +16,12 @@ type
     storeArg*: proc(arg: NimNode, param: NimNode): NimNode = nil
     memoryAccess*: proc(a: NimNode): NimNode = nil
     memoryAlloc*: proc(param: NimNode, typ: WitType, depth: int): tuple[code: NimNode, dataPtr: NimNode] = nil
+
+  WitInterfaceGen* = object
+    name*: string
+    imports*: NimNode
+    types*: NimNode
+    functions*: NimNode
 
 proc getParamTypeKind*(ctx: WitContext, typ: WitType): WitParamTypeKind =
   if typ.builtin != "":
@@ -69,12 +75,15 @@ proc getTypeName*(ctx: WitContext, typ: WitType, context: WitNimTypeNameContext)
       error("type without name: " & $ctx.types[typ.index])
     return ctx.getNimName(ctx.types[typ.index].name, true).ident
 
-proc genTypeSection*(ctx: WitContext, host: bool): NimNode =
+proc genTypeSection*(ctx: WitContext, host: bool, interfaceName: string = ""): NimNode =
   var typeSection = nnkTypeSection.newTree()
   result = nnkStmtList.newTree(typeSection)
 
   for t in ctx.types:
     if t.refIndex.isSome:
+      continue
+
+    if interfaceName != "" and t.interfaceName != interfaceName:
       continue
 
     case t.kind
