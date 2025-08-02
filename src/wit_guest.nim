@@ -88,7 +88,14 @@ proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
       assert i != -1
       "new-" & fun.name[i + 1..^1]
 
-    of Method, Static:
+    of Static:
+      let i = fun.name.find(".")
+      assert i != -1
+      let typeName = fun.name["[static]".len..<i]
+      let funName = fun.name[i + 1..^1]
+      typeName.toCamelCase(false) & funName.toCamelCase(true)
+
+    of Method:
       let i = fun.name.find(".")
       assert i != -1
       fun.name[i + 1..^1]

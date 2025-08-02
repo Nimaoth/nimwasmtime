@@ -207,7 +207,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
   hint "Write api to " & cacheFile
   writeFile(cacheFile, code.repr)
 
-  return code
+  return nnkStmtList.newTree()
 
 template importWit*(witPath: static[string], hostType: untyped, body: untyped): untyped =
   var cacheFile {.compiletime, inject.} = "host.nim"

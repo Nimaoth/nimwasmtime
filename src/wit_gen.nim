@@ -14,6 +14,7 @@ type
     convertToCoreTypes*: bool = true
     copyMemory*: bool = false
     storeArg*: proc(arg: NimNode, param: NimNode): NimNode = nil
+    lowerHandle*: proc(a: NimNode): NimNode = nil
     memoryAccess*: proc(a: NimNode): NimNode = nil
     memoryAlloc*: proc(param: NimNode, typ: WitType, depth: int): tuple[code: NimNode, dataPtr: NimNode] = nil
 
@@ -394,8 +395,11 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       outCode.add code
 
     of Handle:
-      let p = genAst(param = param):
-        cast[int32](param.handle - 1)
+      let p = if lowerContext.lowerHandle != nil:
+        lowerContext.lowerHandle(param)
+      else:
+        genAst(param = param):
+          cast[int32](param.handle - 1)
       let code = storeArg(loweredArgs[0], p)
       outCode.add code
 

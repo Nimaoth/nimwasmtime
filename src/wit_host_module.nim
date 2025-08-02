@@ -521,7 +521,14 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       assert i != -1
       "new-" & fun.name[i + 1..^1]
 
-    of Method, Static:
+    of Static:
+      let i = fun.name.find(".")
+      assert i != -1
+      let typeName = fun.name["[static]".len..<i]
+      let funName = fun.name[i + 1..^1]
+      typeName.toCamelCase(false) & funName.toCamelCase(true)
+
+    of Method:
       let i = fun.name.find(".")
       assert i != -1
       fun.name[i + 1..^1]
@@ -689,6 +696,10 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         let res = call
         # parameters[0] = res.toVal # todo
 
+      proc lowerHandle(param: NimNode): NimNode =
+        return genAst(host, param):
+          ?host.resources.resourceNew(param)
+
       let r = fun.results[0]
       if ctx.isOwnedHandle(r):
         callAndResult = genAst(host, res, call):
@@ -767,7 +778,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
                 results[0].of_field.i32
               # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr
 
-          var lowerContext = WitLowerContext(memoryAccess: memoryAccess, memoryAlloc: memoryAlloc, convertToCoreTypes: false, copyMemory: true)
+          var lowerContext = WitLowerContext(memoryAccess: memoryAccess, memoryAlloc: memoryAlloc, convertToCoreTypes: false, copyMemory: true, lowerHandle: lowerHandle)
           ctx.lower(loweredPtrArgs, results, fun.results, body, Return, lowerContext)
           discard
 
@@ -849,7 +860,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
   hint "Write api to " & cacheFile
   writeFile(cacheFile, code.repr)
 
-  return code
+  return nnkStmtList.newTree()
 
 template importWit*(witPath: static[string], hostType: untyped, body: untyped): untyped =
   var cacheFile {.compiletime, inject.} = "host.nim"

@@ -937,6 +937,36 @@ when nimWasmtimeFeatureComponentModel:
     else:
       {.error: "Can't convert type " & $T & " to ComponentValT".}
 
+proc toWasmValRaw*(a: int8): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: uint8): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: int16): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: uint16): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: int32): ValRaw =
+  result.i32 = a
+
+proc toWasmValRaw*(a: uint32): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: uint64): ValRaw =
+  result.i64 = cast[int64](a)
+
+proc toWasmValRaw*(a: int64): ValRaw =
+  result.i64 = a
+
+proc toWasmValRaw*(a: float32): ValRaw =
+  result.f32 = a
+
+proc toWasmValRaw*(a: float64): ValRaw =
+  result.f64 = a
+
 proc toWasmVal*(a: int8): ValT =
   result.kind = WASMTIME_I32
   result.of_field.i32 = cast[int32](a)
