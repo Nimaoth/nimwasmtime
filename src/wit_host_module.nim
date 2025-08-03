@@ -8,13 +8,14 @@ const cmdPrefix = when windowsHost: "cmd /E:ON /C " else: ""
 
 type
   Slot = object
+    store*: ptr ContextT
     data: pointer
     drop: proc(data: pointer, callDestroy: bool) {.cdecl, gcsafe, raises: [].}
 
   WasmModuleResources* = object
     resources: seq[Slot]
 
-proc resourceNew*[T](self: var WasmModuleResources, data: sink T): WasmtimeResult[int32] {.gcsafe, raises: [].} =
+proc resourceNew*[T](self: var WasmModuleResources, store: ptr ContextT, data: sink T): WasmtimeResult[int32] {.gcsafe, raises: [].} =
   proc dropImpl(b: pointer, callDestroy: bool) {.cdecl, gcsafe, raises: [].} =
     let b = cast[ptr T](b)
     if callDestroy:
@@ -33,22 +34,29 @@ proc resourceNew*[T](self: var WasmModuleResources, data: sink T): WasmtimeResul
   if index == self.resources.len:
     self.resources.add Slot()
 
-  self.resources[index] = Slot(data: d, drop: dropImpl)
+  self.resources[index] = Slot(store: store, data: d, drop: dropImpl)
 
   return wasmtime.ok(index.int32)
 
-proc resourceHostData*(self: var WasmModuleResources, handle: int32, T: typedesc): WasmtimeResult[ptr T] {.gcsafe, raises: [].} =
+proc resourceHostData*(self: var WasmModuleResources, handle: int32, T: typedesc): ptr T {.gcsafe, raises: [].} =
   assert handle >= 0
   assert handle < self.resources.len
   assert self.resources[handle].data != nil
-  return wasmtime.ok(cast[ptr T](self.resources[handle].data))
+  return cast[ptr T](self.resources[handle].data)
 
-proc resourceDrop*(self: var WasmModuleResources, handle: int32, callDestroy: bool): WasmtimeResult[void] {.gcsafe, raises: [].} =
+proc resourceDrop*(self: var WasmModuleResources, handle: int32, callDestroy: bool): void {.gcsafe, raises: [].} =
   assert handle >= 0
   assert handle < self.resources.len
   assert self.resources[handle].data != nil
   self.resources[handle].drop(self.resources[handle].data, callDestroy)
   self.resources[handle] = Slot()
+
+proc dropResources*(self: var WasmModuleResources, store: ptr ContextT, callDestroy: bool) {.gcsafe, raises: [].} =
+  for r in self.resources.mitems:
+    if r.store == store:
+      assert r.data != nil
+      r.drop(r.data, callDestroy)
+      r = Slot()
 
 func hostQuoteShell(s: string): string =
   ## Quote ``s``, so it can be safely passed to shell.
@@ -90,7 +98,6 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
   let name = fun.name.toCamelCase(false)
 
   let memory = ident"memory"
-  let reallocImpl = ident"reallocImpl"
   let linker = ident"linker"
   let host = ident"host"
   let store = genAst(funcs = ident"funcs", store = ident"mContext", funcs.store)
@@ -165,7 +172,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
         let userType = ctx.types[typ.index]
         ctx.byteSize(userType.listTarget)
 
-      result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results", returnType):
+      result.code = genAst(store, memory, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results", returnType):
         dataPtr = block:
           # todo: this memory needs to be freed
           # let temp = realloc(funcs.mRealloc.get.of_field.func_field, funcs.mContext, 0.WasmPtr, 0, 4, (param.len * byteSize).int32)
@@ -243,7 +250,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
         let userType = ctx.types[typ.index]
         ctx.byteSize(userType.listTarget)
 
-      result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results", returnType):
+      result.code = genAst(store, memory, param, byteSize, dataPtr = result.dataPtr, temp = ident"temp", t = ident"t", args = ident"args", results = ident"results", returnType):
         dataPtr = block:
           # let temp = realloc(funcs.mRealloc.get.of_field.func_field, funcs.mContext, 0.WasmPtr, 0, 4, (param.len * byteSize).int32)
           let temp = stackAlloc(funcs.mStackAlloc.get.of_field.func_field, funcs.mContext, byteSize.int32, 4)
@@ -409,6 +416,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
   var linker = ident"linker"
   var host = ident"host"
   var store = ident"store"
+  var stackAllocFunc = ident"stackAllocFunc"
   var defineComponentFun = genAst(linker, host, hostType):
     proc defineComponent*(linker: ptr LinkerT, host: hostType): WasmtimeResult[void] =
       discard
@@ -433,7 +441,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         block:
           let e = block:
             linker.defineFuncUnchecked(env, dropName, newFunctype([WasmValkind.I32], [])):
-              ?host.resources.resourceDrop(parameters[0].i32, callDestroy=true)
+              host.resources.resourceDrop(parameters[0].i32, callDestroy=true)
           if e.isErr:
             return e
 
@@ -541,7 +549,6 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       ident(funcNimName.toCamelCase(false) & "")
 
     let memory = ident"memory"
-    let reallocImpl = ident"reallocImpl"
     var needsMemory = false
     var needsRealloc = false
 
@@ -633,22 +640,22 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       if userType.owned:
         return genAst(host, arg, param, ptrName = ident("resPtr"), typ):
           block:
-            let ptrName = ?host.resources.resourceHostData(arg, typ)
+            let ptrName = host.resources.resourceHostData(arg, typ)
             # Would be nicer to do:
             #   param = ptrName[].ensureMove
             # but that doesn't compile, so to avoid the `=copy` hook use raw memory copy
             copyMem(param.addr, ptrName, sizeof(typeof(param)))
-            ?host.resources.resourceDrop(arg, callDestroy=false)
+            host.resources.resourceDrop(arg, callDestroy=false)
 
       else:
         return genAst(host, arg, param, typ):
-          param = ?host.resources.resourceHostData(arg, typ)
+          param = host.resources.resourceHostData(arg, typ)
 
     # lift parameters
     if flatFuncType.paramsFlat:
       let args = collect:
         for p in fun.params:
-          ident(p.name)
+          ident(p.name.toCamelCase(false))
 
       let loweredArgs = collect:
         for i in 0..flatFuncTargetType.params.high:
@@ -666,7 +673,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     else:
       let args = collect:
         for p in fun.params:
-          ident(p.name)
+          ident(p.name.toCamelCase(false))
 
       var i = 0
       let loweredArgs = collect:
@@ -698,13 +705,13 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
 
       proc lowerHandle(param: NimNode): NimNode =
         return genAst(host, param):
-          ?host.resources.resourceNew(param)
+          ?host.resources.resourceNew(store, param)
 
       let r = fun.results[0]
       if ctx.isOwnedHandle(r):
         callAndResult = genAst(host, res, call):
           let res = call
-          parameters[0].i32 = ?host.resources.resourceNew(res)
+          parameters[0].i32 = ?host.resources.resourceNew(store, res)
 
         body.add callAndResult
 
@@ -760,23 +767,8 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
               let userType = ctx.types[typ.index]
               ctx.byteSize(userType.listTarget)
 
-            result.code = genAst(store, memory, reallocImpl, param, byteSize, dataPtr = result.dataPtr, t = ident"t", args = ident"args", results = ident"results"):
-              let dataPtr = block:
-                var t: ptr WasmTrapT = nil
-                var args: array[4, ValT]
-                args[0].kind = WasmValkind.I32.ValkindT
-                args[0].of_field.i32 = 0 # original ptr
-                args[1].kind = WasmValkind.I32.ValkindT
-                args[1].of_field.i32 = 0 # original len
-                args[2].kind = WasmValkind.I32.ValkindT
-                args[2].of_field.i32 = 4 # alignment
-                args[3].kind = WasmValkind.I32.ValkindT
-                args[3].of_field.i32 = (param.len * byteSize).int32 # byte size
-                var results: array[1, ValT]
-                ?reallocImpl.addr.call(store, args, results, t.addr)
-                assert results[0].kind == WasmValkind.I32.ValkindT
-                results[0].of_field.i32
-              # echo "allocated ", param.len, " * ", byteSize, " = ", (param.len * byteSize), " bytes at ", dataPtr
+            result.code = genAst(store, stackAllocFunc, param, byteSize, dataPtr = result.dataPtr, t = ident"t", args = ident"args", results = ident"results", temp = ident"temp"):
+              let dataPtr = int32(?stackAlloc(stackAllocFunc, store, (param.len * byteSize).int32, 4))
 
           var lowerContext = WitLowerContext(memoryAccess: memoryAccess, memoryAlloc: memoryAlloc, convertToCoreTypes: false, copyMemory: true, lowerHandle: lowerHandle)
           ctx.lower(loweredPtrArgs, results, fun.results, body, Return, lowerContext)
@@ -814,19 +806,19 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     else:
       nnkStmtList.newTree()
 
-    var reallocDecl = if needsRealloc:
-      genAst(reallocImplName = reallocImpl):
-        let reallocImplName = caller.getExport("cabi_realloc").get.of_field.func_field
+    var stackAllocDecl = if needsRealloc:
+      genAst(stackAllocFunc):
+        let stackAllocFunc = caller.getExport("mem_stack_alloc").get.of_field.func_field
     else:
       nnkStmtList.newTree()
 
-    let code = genAst(linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, memoryDecl, reallocDecl):
+    let code = genAst(linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, memoryDecl, stackAllocDecl):
       block:
         let e = block:
           var ty: ptr WasmFunctypeT = newFunctype(parameterTypes, resultTypes)
           linker.defineFuncUnchecked(env, name, ty):
             memoryDecl
-            reallocDecl
+            stackAllocDecl
             body
 
         if e.isErr:
