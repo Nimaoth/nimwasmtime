@@ -1369,6 +1369,14 @@ proc newModule*(engine: ptr WasmEngineT; wasm: string): WasmtimeResult[ptr Modul
     return err.toResult(ptr ModuleT)
   return res.ok
 
+proc wat2wasm*(wat: ptr UncheckedArray[char]; wat_len: csize_t; ret: ptr WasmByteVecT): ptr ErrorT {.cdecl, importc: "wasmtime_wat2wasm".}
+proc wat2wasm*(wat: openArray[char]): WasmtimeResult[WasmByteVecT] =
+  var res: WasmByteVecT
+  let err = wat2wasm(cast[ptr UncheckedArray[char]](wat[0].addr), wat.len.csize_t, res.addr)
+  if err != nil:
+    return err.toResult(WasmByteVecT)
+  return wasmtime.ok(res.ensureMove)
+
 proc imports*(module: ptr ModuleT): WasmImporttypeVecT =
   module.imports(result.addr)
 

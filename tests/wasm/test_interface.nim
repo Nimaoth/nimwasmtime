@@ -208,23 +208,23 @@ proc read*(self: Blob; n: int32): WitList[uint8] {.nodestroy.} =
   result = wl(cast[ptr typeof(result[0])](cast[ptr int32](retArea[0].addr)[]),
               cast[ptr int32](retArea[4].addr)[])
 
-proc testInterfaceMergeImported(a0: int32; a1: int32): int32 {.
+proc testInterfaceBlobMergeImported(a0: int32; a1: int32): int32 {.
     wasmimport("[static]blob.merge", "my:host/test-interface").}
-proc merge*(lhs: sink Blob; rhs: sink Blob): Blob {.nodestroy.} =
+proc blobMerge*(lhs: sink Blob; rhs: sink Blob): Blob {.nodestroy.} =
   var
     arg0: int32
     arg1: int32
   arg0 = cast[int32](lhs.handle - 1)
   arg1 = cast[int32](rhs.handle - 1)
-  let res = testInterfaceMergeImported(arg0, arg1)
+  let res = testInterfaceBlobMergeImported(arg0, arg1)
   result.handle = res + 1
 
-proc testInterfacePrintImported(a0: int32; a1: int32): void {.
+proc testInterfaceBlobPrintImported(a0: int32; a1: int32): void {.
     wasmimport("[static]blob.print", "my:host/test-interface").}
-proc print*(lhs: Blob; rhs: Blob): void {.nodestroy.} =
+proc blobPrint*(lhs: Blob; rhs: Blob): void {.nodestroy.} =
   var
     arg0: int32
     arg1: int32
   arg0 = cast[int32](lhs.handle - 1)
   arg1 = cast[int32](rhs.handle - 1)
-  testInterfacePrintImported(arg0, arg1)
+  testInterfaceBlobPrintImported(arg0, arg1)

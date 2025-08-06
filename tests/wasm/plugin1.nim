@@ -129,9 +129,9 @@ proc start() =
   echo "[plugin1] create blobs"
   var b1 = newBlob(@@[1.uint8, 2, 3])
   var b2 = newBlob(@@[4.uint8, 5, 6])
-  print(b1, b2)
+  blobPrint(b1, b2)
   echo "[plugin1] b1: ", b1, ", ", b2
-  let b3 = merge(b1.ensureMove, b2.ensureMove)
+  let b3 = blobMerge(b1.ensureMove, b2.ensureMove)
   echo "[plugin1] b3: ", b3
   b3.write(@@[42.uint8, 69])
   b3.write(@@[127.uint8, 63])

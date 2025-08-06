@@ -54,7 +54,8 @@ when defined(witRebuild):
     mapName "blob", MyBlob
 else:
   static: hint("Using cached test.wit (host.nim)")
-  include host_module
+
+include host_module
 
 proc testInterfaceNewBlob(host: MyContext, store: ptr ContextT, init: sink seq[uint8]): MyBlob =
   inc blobCounter
@@ -72,13 +73,13 @@ proc testInterfaceRead(host: MyContext, store: ptr ContextT, self: var MyBlob, n
   let l = min(self.arr.len, n.int)
   return self.arr[0..<l]
 
-proc testInterfaceMerge(host: MyContext, store: ptr ContextT, lhs: sink MyBlob, rhs: sink MyBlob): MyBlob =
+proc testInterfaceBlobMerge(host: MyContext, store: ptr ContextT, lhs: sink MyBlob, rhs: sink MyBlob): MyBlob =
   inc blobCounter
   echo "[host] ================================== merge ", lhs, ", ", rhs
   result = MyBlob(i: host.counter, blobName: "merge" & $host.counter, arr: lhs.arr & rhs.arr)
   host.counter.inc
 
-proc testInterfacePrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, rhs: var MyBlob) =
+proc testInterfaceBlobPrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, rhs: var MyBlob) =
   echo "[host] ================================== print ", lhs, ", ", rhs
 
 # proc testInterfaceBarBaz(host: MyContext, store: ptr ContextT, a: int32, b: float32): float32 =
