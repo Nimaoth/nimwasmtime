@@ -37,6 +37,7 @@ type
     interfaceName*: string
     env*: string
     package*: int
+    docs*: string
     case kind*: WitUserTypeKind
     of Record, Variant, Tuple:
       fields*: seq[RecordField]
@@ -303,11 +304,15 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
     else:
       ctx.packages[package].name & "/" & interfaceName
 
+    var docs = ""
+    if t.hasKey("docs"):
+      docs = t["docs"]["contents"].getStr
+
     let kind = t["kind"]
     if kind.kind == JString:
       case kind.getStr
       of "resource":
-        res.add(WitUserType(kind: Resource, name: name, interfaceName: interfaceName, env: env, package: package))
+        res.add(WitUserType(kind: Resource, name: name, interfaceName: interfaceName, env: env, package: package, docs: docs))
       else:
         error(&"Not implemented: collectType({kind})")
       continue
@@ -317,34 +322,34 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
       for field in kind["record"]["fields"]:
         let name = field["name"].getStr
         fields.add (name, field["type"].jsonTo(WitType))
-      res.add(WitUserType(kind: Record, index: res.len, name: name, fields: fields, interfaceName: interfaceName, env: env, package: package))
+      res.add(WitUserType(kind: Record, index: res.len, name: name, fields: fields, interfaceName: interfaceName, env: env, package: package, docs: docs))
 
     elif kind.hasKey("enum"):
       var cases: seq[string]
       for cas in kind["enum"]["cases"]:
         let name = cas["name"].getStr
         cases.add name
-      res.add(WitUserType(kind: Enum, index: res.len, name: name, cases: cases, interfaceName: interfaceName, env: env, package: package))
+      res.add(WitUserType(kind: Enum, index: res.len, name: name, cases: cases, interfaceName: interfaceName, env: env, package: package, docs: docs))
 
     elif kind.hasKey("flags"):
       var cases: seq[string]
       for field in kind["flags"]["flags"]:
         let name = field["name"].getStr
         cases.add name
-      res.add(WitUserType(kind: Flags, index: res.len, name: name, cases: cases, interfaceName: interfaceName, env: env, package: package))
+      res.add(WitUserType(kind: Flags, index: res.len, name: name, cases: cases, interfaceName: interfaceName, env: env, package: package, docs: docs))
 
     elif kind.hasKey("option"):
       let typ = kind["option"].jsonTo(WitType)
-      res.add(WitUserType(kind: Option, index: res.len, optionTarget: typ, interfaceName: interfaceName, env: env, package: package))
+      res.add(WitUserType(kind: Option, index: res.len, optionTarget: typ, interfaceName: interfaceName, env: env, package: package, docs: docs))
 
     elif kind.hasKey("list"):
       let typ = kind["list"].jsonTo(WitType)
-      res.add(WitUserType(kind: List, index: res.len, listTarget: typ, interfaceName: interfaceName, env: env, package: package))
+      res.add(WitUserType(kind: List, index: res.len, listTarget: typ, interfaceName: interfaceName, env: env, package: package, docs: docs))
 
     elif kind.hasKey("result"):
       let okTyp = kind["result"]["ok"].jsonTo(WitType)
       let errTyp = kind["result"]["err"].jsonTo(WitType)
-      res.add(WitUserType(kind: Result, index: res.len, resultOkTarget: okTyp, resultErrTarget: errTyp, interfaceName: interfaceName, env: env, package: package))
+      res.add(WitUserType(kind: Result, index: res.len, resultOkTarget: okTyp, resultErrTarget: errTyp, interfaceName: interfaceName, env: env, package: package, docs: docs))
 
     elif kind.hasKey("type"):
       let index = kind["type"].getInt
@@ -358,19 +363,19 @@ proc collectTypes(ctx: WitContext, json: JsonNode) =
       for field in kind["variant"]["cases"]:
         let name = field["name"].getStr
         fields.add (name, field["type"].jsonTo(WitType))
-      res.add(WitUserType(kind: Variant, index: res.len, name: name, fields: fields, interfaceName: interfaceName, env: env, package: package))
+      res.add(WitUserType(kind: Variant, index: res.len, name: name, fields: fields, interfaceName: interfaceName, env: env, package: package, docs: docs))
 
     elif kind.hasKey("tuple"):
       var fields: seq[RecordField]
       for i, field in kind["tuple"]["types"].elems:
         fields.add ($i, field.jsonTo(WitType))
-      res.add(WitUserType(kind: Tuple, index: res.len, fields: fields, interfaceName: interfaceName, env: env, package: package))
+      res.add(WitUserType(kind: Tuple, index: res.len, fields: fields, interfaceName: interfaceName, env: env, package: package, docs: docs))
 
     elif kind.hasKey("handle"):
       if kind["handle"].hasKey("own"):
-        res.add(WitUserType(kind: Handle, owned: true, handleTarget: kind["handle"]["own"].jsonTo(WitType), interfaceName: interfaceName, env: env, package: package))
+        res.add(WitUserType(kind: Handle, owned: true, handleTarget: kind["handle"]["own"].jsonTo(WitType), interfaceName: interfaceName, env: env, package: package, docs: docs))
       elif kind["handle"].hasKey("borrow"):
-        res.add(WitUserType(kind: Handle, owned: false, handleTarget: kind["handle"]["borrow"].jsonTo(WitType), interfaceName: interfaceName, env: env, package: package))
+        res.add(WitUserType(kind: Handle, owned: false, handleTarget: kind["handle"]["borrow"].jsonTo(WitType), interfaceName: interfaceName, env: env, package: package, docs: docs))
       else:
         error(&"Not implemented: collectType({t})")
 

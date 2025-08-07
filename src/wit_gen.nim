@@ -87,6 +87,9 @@ proc genTypeSection*(ctx: WitContext, host: bool, interfaceName: string = ""): N
     if interfaceName != "" and t.interfaceName != interfaceName:
       continue
 
+    if t.docs.len > 0:
+      typeSection.add newCommentStmtNode(t.docs)
+
     case t.kind
     of Record:
       var recList = nnkRecList.newTree()

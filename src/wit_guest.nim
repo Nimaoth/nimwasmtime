@@ -232,6 +232,8 @@ proc genImport*(ctx: WitContext, funcList: NimNode, fun: WitFunc) =
         ctx.lift(loweredPtrArgs, results, fun.results, liftCode, Return, liftContext)
 
       funNode[6] = nnkStmtList.newTree()
+      if fun.docs.len > 0:
+        funNode[6].add newCommentStmtNode(fun.docs)
       funNode[6].add vars
       funNode[6].add lowerCode
       funNode[6].add call
