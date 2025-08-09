@@ -211,8 +211,12 @@ proc parseWitFunc(json: JsonNode, env: string, interfac: Option[int] = int.none)
   if json.hasKey("docs"):
     result.docs = json["docs"]["contents"].getStr
 
-  result.params = json["params"].elems.mapIt((it["name"].getStr, it["type"].jsonTo(WitType)))
-  result.results = json["results"].elems.mapIt(it["type"].jsonTo(WitType))
+  if json.hasKey("params"):
+    result.params = json["params"].elems.mapIt((it["name"].getStr, it["type"].jsonTo(WitType)))
+  if json.hasKey("results"):
+    result.results = json["results"].elems.mapIt(it["type"].jsonTo(WitType))
+  elif json.hasKey("result"):
+    result.results = @[json["result"].jsonTo(WitType)]
   result.env = env
   result.interfac = interfac
 
