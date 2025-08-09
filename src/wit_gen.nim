@@ -13,7 +13,7 @@ type
   WitLowerContext* = object
     convertToCoreTypes*: bool = true
     copyMemory*: bool = false
-    storeArg*: proc(arg: NimNode, param: NimNode): NimNode = nil
+    storeArg*: proc(arg: NimNode, param: NimNode, typ: WitType): NimNode = nil
     lowerHandle*: proc(a: NimNode): NimNode = nil
     memoryAccess*: proc(a: NimNode): NimNode = nil
     memoryAlloc*: proc(param: NimNode, typ: WitType, depth: int): tuple[code: NimNode, dataPtr: NimNode] = nil
@@ -170,7 +170,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
   # let typ = ctx.despecialize(typ)
   # echo &"lower {param.repr}: {typ}, {loweredArgs[0].treeRepr}, {typ}"
 
-  proc storeArgDefault(arg: NimNode, param: NimNode): NimNode =
+  proc storeArgDefault(arg: NimNode, param: NimNode, typ: WitType): NimNode =
     return genAst(arg, param):
       arg = param
 
@@ -190,7 +190,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
     else:
       param
 
-    let code = storeArg(loweredArgs[0], p)
+    let code = storeArg(loweredArgs[0], p, typ)
     outCode.add code
 
   of "char":
@@ -200,7 +200,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
     else:
       param
 
-    let code = storeArg(loweredArgs[0], p)
+    let code = storeArg(loweredArgs[0], p, typ)
     outCode.add code
 
   of "s8", "s16", "u8", "u16", "s32", "u32":
@@ -210,7 +210,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
     else:
       param
 
-    let code = storeArg(loweredArgs[0], p)
+    let code = storeArg(loweredArgs[0], p, typ)
     outCode.add code
 
   of "s64", "u64":
@@ -220,11 +220,11 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
     else:
       param
 
-    let code = storeArg(loweredArgs[0], p)
+    let code = storeArg(loweredArgs[0], p, typ)
     outCode.add code
 
   of "f32", "f64":
-    let code = storeArg(loweredArgs[0], param)
+    let code = storeArg(loweredArgs[0], param, typ)
     outCode.add code
 
   of "string":
@@ -250,9 +250,9 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
     else:
       nnkStmtList.newTree()
 
-    let storePtrA = storeArg(loweredArgs[0], genAst(dataPtr, cast[int32](dataPtr)))
-    let storePtrB = storeArg(loweredArgs[0], genAst(dataPtr, 0.int32))
-    let storeLen = storeArg(loweredArgs[1], genAst(param, cast[int32](param.len)))
+    let storePtrA = storeArg(loweredArgs[0], genAst(dataPtr, cast[int32](dataPtr)), typ)
+    let storePtrB = storeArg(loweredArgs[0], genAst(dataPtr, 0.int32), typ)
+    let storeLen = storeArg(loweredArgs[1], genAst(param, cast[int32](param.len)), typ)
 
     let code = genAst(storePtrA, storePtrB, storeLen, param, reallocCode, copyCode):
       if param.len > 0:
@@ -306,9 +306,9 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       else:
         nnkStmtList.newTree()
 
-      let storePtrA = storeArg(loweredArgs[0], genAst(dataPtr, cast[int32](dataPtr)))
-      let storePtrB = storeArg(loweredArgs[0], genAst(dataPtr, 0.int32))
-      let storeLen = storeArg(loweredArgs[1], genAst(param, cast[int32](param.len)))
+      let storePtrA = storeArg(loweredArgs[0], genAst(dataPtr, cast[int32](dataPtr)), typ)
+      let storePtrB = storeArg(loweredArgs[0], genAst(dataPtr, 0.int32), typ)
+      let storeLen = storeArg(loweredArgs[1], genAst(param, cast[int32](param.len)), typ)
 
       let code = genAst(storePtrA, storePtrB, storeLen, param, reallocCode, copyCode):
         if param.len > 0:
@@ -325,21 +325,21 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       let t = ident(ctx.flattenType(typ)[0].nimTypeName)
       let p = genAst(param = param, t):
         cast[t](param)
-      let code = storeArg(loweredArgs[0], p)
+      let code = storeArg(loweredArgs[0], p, typ)
       outCode.add code
 
     of Flags:
       let t = ident(ctx.flattenType(typ)[0].nimTypeName)
       let p = genAst(param = param, t):
         cast[t](param)
-      let code = storeArg(loweredArgs[0], p)
+      let code = storeArg(loweredArgs[0], p, typ)
       outCode.add code
 
     of Option:
       let childAccess = nnkDotExpr.newTree(param, ident("get"))
       var lowerChild = nnkStmtList.newTree()
       ctx.lower(loweredArgs[1..^1], childAccess, userType.optionTarget, lowerChild, context, lowerContext, depth + 1, forceDefaultStoreArgs)
-      let storeTag = storeArg(loweredArgs[0], genAst(param, param.isSome.int32))
+      let storeTag = storeArg(loweredArgs[0], genAst(param, param.isSome.int32), typ)
       let code = genAst(storeTag, lowerChild, param):
         storeTag
         if param.isSome:
@@ -353,7 +353,8 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       ctx.lower(loweredArgs[1..^1], childAccess, userType.resultOkTarget, lowerChild, context, lowerContext, depth + 1, forceDefaultStoreArgs)
       var lowerError = nnkStmtList.newTree()
       ctx.lower(loweredArgs[1..^1], errAccess, userType.resultErrTarget, lowerError, context, lowerContext, depth + 1, forceDefaultStoreArgs)
-      let storeTag = storeArg(loweredArgs[0], genAst(param, param.isErr.int32))
+      let r = ctx.flattenVariant(ctx.despecialize(typ))[0] # todo: this could be done more efficiently
+      let storeTag = storeArg(loweredArgs[0], genAst(param, nimType = r.nimTypeName.ident, param.isErr.nimType), typ)
       let code = genAst(storeTag, param, lowerChild, lowerError):
         storeTag
         if param.isOk:
@@ -391,7 +392,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       if addElse:
         cases.add nnkElse.newTree(nnkStmtList.newTree(nnkDiscardStmt.newTree(newEmptyNode())))
 
-      let storeTag = storeArg(loweredArgs[0], genAst(param, param.kind.int32))
+      let storeTag = storeArg(loweredArgs[0], genAst(param, param.kind.int32), typ)
       let code = genAst(storeTag, param, cases):
         storeTag
         cases
@@ -403,7 +404,7 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       else:
         genAst(param = param):
           cast[int32](param.handle - 1)
-      let code = storeArg(loweredArgs[0], p)
+      let code = storeArg(loweredArgs[0], p, typ)
       outCode.add code
 
     else:

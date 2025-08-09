@@ -152,7 +152,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
         genAst(args = ident("args"), index = i):
           args[index]
 
-    proc storeArg(arg: NimNode, param: NimNode): NimNode =
+    proc storeArg(arg: NimNode, param: NimNode, typ: WitType): NimNode =
       return genAst(arg, param):
         arg = toWasmVal(param)
 
@@ -229,7 +229,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
       loweredPtrArgs.add code
       i += p.byteSize
 
-    proc storeArg(arg: NimNode, param: NimNode): NimNode =
+    proc storeArg(arg: NimNode, param: NimNode, typ: WitType): NimNode =
       return genAst(arg, param):
         arg = toWasmVal(param)
 
@@ -740,7 +740,8 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
               inc i
             needsMemory = true
             let code = genAst(memory, retArea, nimType = r.nimTypeName.ident, index = i):
-              cast[ptr nimType](memory[retArea + index].addr)[]
+              # cast[ptr nimType](memory[retArea + index].addr)[]
+              memory[retArea + index].addr
             loweredPtrArgs.add code
             i += r.byteSize
 
@@ -750,6 +751,11 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
             collect:
               for i in 0..fun.results.high:
                 nnkBracketExpr.newTree(res, newLit(i))
+
+          proc storeArg(arg: NimNode, param: NimNode, typ: WitType): NimNode =
+            let r = ctx.flattenType(typ)[0] # todo: this could be done more efficiently
+            return genAst(arg, param, nimType = r.nimTypeName.ident):
+              cast[ptr nimType](arg)[] = param
 
           proc memoryAccess(a: NimNode): NimNode =
             needsMemory = true
@@ -770,7 +776,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
             result.code = genAst(store, stackAllocFunc, param, byteSize, dataPtr = result.dataPtr, t = ident"t", args = ident"args", results = ident"results", temp = ident"temp"):
               let dataPtr = int32(?stackAlloc(stackAllocFunc, store, (param.len * byteSize).int32, 4))
 
-          var lowerContext = WitLowerContext(memoryAccess: memoryAccess, memoryAlloc: memoryAlloc, convertToCoreTypes: false, copyMemory: true, lowerHandle: lowerHandle)
+          var lowerContext = WitLowerContext(memoryAccess: memoryAccess, memoryAlloc: memoryAlloc, convertToCoreTypes: false, copyMemory: true, lowerHandle: lowerHandle, storeArg: storeArg)
           ctx.lower(loweredPtrArgs, results, fun.results, body, Return, lowerContext)
           discard
 

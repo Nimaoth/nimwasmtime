@@ -452,7 +452,7 @@ proc nimTypeName*(typ: SimpleComponentType): string =
   of F64: "float64"
   of Char: "Rune"
 
-proc despecialize(ctx: WitContext, typ: WitType): WitUserType =
+proc despecialize*(ctx: WitContext, typ: WitType): WitUserType =
   case typ.builtin
   of "":
     let userType = ctx.types[typ.index]
@@ -558,7 +558,7 @@ proc byteSize*(ctx: WitContext, typ: WitType): int =
   while result mod maxAlignment != 0:
     inc result
 
-proc flattenVariant(ctx: WitContext, typ: WitUserType): seq[SimpleComponentType] =
+proc flattenVariant*(ctx: WitContext, typ: WitUserType): seq[SimpleComponentType] =
   var flat: seq[SimpleComponentType] = @[]
   for c in typ.fields:
     if c.typ.index != 0 or c.typ.builtin != "void":
