@@ -376,6 +376,9 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
       let res = funcs.name.addr.call(funcs.context,
           args.toOpenArray(0, numArgs - 1), results.toOpenArray(0, numResults - 1), trap.addr).toResult(returnType)
 
+      if trap != nil:
+        return trap.toResult(returnType)
+
       # frees
 
       if res.isErr:
