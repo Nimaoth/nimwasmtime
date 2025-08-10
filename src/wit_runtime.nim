@@ -120,7 +120,7 @@ proc stackRealloc*(address: pointer, oldSize: int32, size: int32, alignment: int
     copyMem(newMem, address, oldSize)
     return newMem
 
-proc stackSave*(): uint64 {.wasmexport("mem_stack_save", "").} =
+proc stackSaveImpl(): uint64 {.wasmexport("mem_stack_save", "").} =
   ## Save the current stack size, to be restored with stackRestore
   if buckets.len == 0:
     return 0
@@ -128,7 +128,7 @@ proc stackSave*(): uint64 {.wasmexport("mem_stack_save", "").} =
   # echo &"mem_stack_save {buckets.len}, {len}"
   return (buckets.len.uint64 shl 32) or len.uint64
 
-proc stackRestore*(p: uint64) {.wasmexport("mem_stack_restore", "").} =
+proc stackRestoreImpl(p: uint64) {.wasmexport("mem_stack_restore", "").} =
   ## Restore the stack allocator to the saved position. Frees overallocated memory.
   # if buckets.len > 0:
     # echo "mem_stack_restore 1: ", cast[ptr (array[4, int32], array[12, char])](buckets[0].data)[]
@@ -164,3 +164,20 @@ proc stackWitList*[T](arr: openArray[T]): WitList[T] =
   for i in 0..<arr.len:
     p[i] = arr[i]
   result = wl[T](p, arr.len)
+
+proc stackSave*(): uint64 = stackSaveImpl()
+proc stackRestore*(p: uint64) = stackRestoreImpl(p)
+
+template stackRegion*(body: untyped): untyped =
+  ## Saves the stack pointer and restores it and the end of the child block
+  let savePoint = stackSave()
+  try:
+    body
+  finally:
+    stackRestore(savePoint)
+
+template stackRegionInline*(): untyped =
+  ## Saves the stack pointer and restores it and the end of the current scope
+  let savePoint = stackSave()
+  defer:
+    stackRestore(savePoint)

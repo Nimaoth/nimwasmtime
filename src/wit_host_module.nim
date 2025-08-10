@@ -286,10 +286,11 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
   if flatFuncType.resultsFlat:
     if fun.results.len > 0:
       liftCode.add block:
-        genAst(retVal = ident"retVal"):
-          var retVal: int32
-      let resultName = genAst(results = ident"results"):
-        results[0]
+        let t = ctx.getTypeName(fun.results[0], Return)
+        genAst(retVal = ident"retVal", t):
+          var retVal: t
+      let resultName = genAst(results = ident"results", t = ident(flatFuncType.results[0].nimTypeName)):
+        results[0].to(t)
       proc memoryAccess(a: NimNode): NimNode =
         genAst(a):
           memoryAccess(a)
