@@ -38,16 +38,14 @@ proc resourceNew*[T](self: var WasmModuleResources, store: ptr ContextT, data: s
 
   return wasmtime.ok(index.int32)
 
-proc resourceHostData*(self: var WasmModuleResources, handle: int32, T: typedesc): ptr T {.gcsafe, raises: [].} =
-  assert handle >= 0
-  assert handle < self.resources.len
-  assert self.resources[handle].data != nil
-  return cast[ptr T](self.resources[handle].data)
+proc resourceHostData*(self: var WasmModuleResources, handle: int32, T: typedesc): WasmtimeResult[ptr T] {.gcsafe, raises: [].} =
+  if handle < 0 or handle >= self.resources.len or self.resources[handle].data == nil:
+    return wasmtime.err((ptr T), "Invalid resource index " & $handle)
+  return wasmtime.ok(cast[ptr T](self.resources[handle].data))
 
-proc resourceDrop*(self: var WasmModuleResources, handle: int32, callDestroy: bool): void {.gcsafe, raises: [].} =
-  assert handle >= 0
-  assert handle < self.resources.len
-  assert self.resources[handle].data != nil
+proc resourceDrop*(self: var WasmModuleResources, handle: int32, callDestroy: bool): WasmtimeResult[void] {.gcsafe, raises: [].} =
+  if handle < 0 or handle >= self.resources.len or self.resources[handle].data == nil:
+    return wasmtime.err(void, "Invalid resource index " & $handle)
   self.resources[handle].drop(self.resources[handle].data, callDestroy)
   self.resources[handle] = Slot()
 
@@ -644,16 +642,16 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       if userType.owned:
         return genAst(host, arg, param, ptrName = ident("resPtr"), typ):
           block:
-            let ptrName = host.resources.resourceHostData(arg, typ)
+            let ptrName = ?host.resources.resourceHostData(arg, typ)
             # Would be nicer to do:
             #   param = ptrName[].ensureMove
             # but that doesn't compile, so to avoid the `=copy` hook use raw memory copy
             copyMem(param.addr, ptrName, sizeof(typeof(param)))
-            host.resources.resourceDrop(arg, callDestroy=false)
+            ?host.resources.resourceDrop(arg, callDestroy=false)
 
       else:
         return genAst(host, arg, param, typ):
-          param = host.resources.resourceHostData(arg, typ)
+          param = ?host.resources.resourceHostData(arg, typ)
 
     # lift parameters
     if flatFuncType.paramsFlat:

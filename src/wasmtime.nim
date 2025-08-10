@@ -1294,6 +1294,19 @@ proc toResult*[T](self: sink WasmtimeResult[T], T2: typedesc): WasmtimeResult[T2
   else:
     WasmtimeResult[T2](kind: Ok)
 
+proc err*(T: typedesc, msg: string): WasmtimeResult[T] =
+  var frames: WasmFrameVecT
+  frames.addr.newEmpty()
+  WasmtimeResult[T](kind: Err, err: (msg, 1, frames))
+
+proc toResult*(self: ref Exception, T: typedesc): WasmtimeResult[T] =
+  if self != nil:
+    var frames: WasmFrameVecT
+    frames.addr.newEmpty()
+    WasmtimeResult[T](kind: Err, err: (self.msg, 1, frames))
+  else:
+    WasmtimeResult[T](kind: Ok)
+
 template okOr*[T](res: WasmtimeResult[T]; body: untyped): T =
   let temp = res
   if temp.isOk:
@@ -1530,14 +1543,11 @@ proc defineFuncUnchecked*[T](linker: ptr LinkerT, env: string, name: string,
 template defineFuncUnchecked*(linker: ptr LinkerT, env: string, name: string, ty: ptr WasmFunctypeT, body: untyped): WasmtimeResult[void] =
   block:
     proc cb(s: ptr ContextT, c: ptr CallerT, data: ptr int, p: var openArray[ValRawT]): ptr WasmTrapT =
-      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: var openArray[ValRawT]): WasmtimeResult[void] =
-        # echo "[host] " & name & &" <- {parameters.len}"
-        # defer:
-        #   echo "[host] " & name & &" -> {parameters.len}"
+      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: var openArray[ValRawT]): WasmtimeResult[void] {.raises: [].} =
         body
 
       inner(s, c, p).okOr(e):
-        let msg = $e
+        let msg = e.msg
         return newTrap(msg.cstring, msg.len.csize_t)
 
       nil
