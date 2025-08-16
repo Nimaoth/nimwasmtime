@@ -2,7 +2,10 @@ package my:host;
 
 interface test-types {
 
-  record foo {
+  /// Docs for foo
+  /// line 2
+  record foo {/// Docs for foo2
+    /// Docs for foo.x
     x: string,
   }
 
@@ -21,6 +24,8 @@ interface test-types {
     // k: list<bar>,
   }
 
+  /// Docs for props
+  /// line 2
   flags props {
     cool,
     lame,
@@ -54,6 +59,8 @@ interface test-types {
 interface test-interface {
   use test-types.{bar, baz};
 
+  /// Test documentation
+  /// line 2
   test-no-params: func();
   test-simple-params: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char);
   test-simple-params-ptr: func(a: s8, b: s16, c: s32, d: s64, e: u8, f: u16, g: u32, h: u64, i: f32, j: f64, k: bool, l: char, m: s32, n: s32, o: s32, p: s32, q: s32);

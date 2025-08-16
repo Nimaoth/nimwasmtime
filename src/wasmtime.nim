@@ -1556,6 +1556,21 @@ proc defineFuncUnchecked*[T](linker: ptr LinkerT, env: string, name: string,
 
 template defineFuncUnchecked*(linker: ptr LinkerT, env: string, name: string, ty: ptr WasmFunctypeT, body: untyped): WasmtimeResult[void] =
   block:
+    proc cb(d: pointer, c: ptr CallerT, p: ptr ValRawT, pl: csize_t): ptr WasmTrapT {.cdecl.} =
+      let s = c.wasmtimeCallerContext()
+      let p = cast[ptr UncheckedArray[ValRawT]](p)
+
+      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: var openArray[ValRawT]): WasmtimeResult[void] {.nimcall, raises: [].} =
+        body
+
+      inner(s, c, p.toOpenArray(0, pl.int - 1)).okOr(e):
+        let msg = e.msg
+        return newTrap(msg.cstring, msg.len.csize_t)
+
+    linker.defineFuncUnchecked(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, ty, cb, nil, nil).toResult(void)
+
+template defineFuncUncheckedClosure*(linker: ptr LinkerT, env: string, name: string, ty: ptr WasmFunctypeT, body: untyped): WasmtimeResult[void] =
+  block:
     proc cb(s: ptr ContextT, c: ptr CallerT, data: ptr int, p: var openArray[ValRawT]): ptr WasmTrapT =
       proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: var openArray[ValRawT]): WasmtimeResult[void] {.raises: [].} =
         body

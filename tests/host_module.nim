@@ -10,8 +10,12 @@ import
 
 {.pop.}
 type
+  ## Docs for foo
+  ## line 2
   Foo* = object
     x*: string
+  ## Docs for props
+  ## line 2
   Prop* = enum
     Cool = "cool", Lame = "lame", SoLame = "so-lame"
   Props* = set[Prop]
@@ -42,6 +46,13 @@ type
     g*: DescriptorType
     h*: Props
     i*: Result[Foo, void]
+  ## record callback {
+  ##   data: u32,
+  ##   key: u32,
+  ##   drop: u32,
+  ## }
+  TestEnum* = enum
+    A = "a", B = "b"
 when not declared(MyBlob):
   {.error: "Missing resource type definition for " & "MyBlob" &
       ". Define the type before the importWit statement.".}
@@ -64,6 +75,7 @@ type
     callCallback4*: FuncT
     callCallback5*: FuncT
     callCallback6*: FuncT
+    callCallback7*: FuncT
 proc mem(funcs: ExportedFuncs): WasmMemory =
   if funcs.mMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
     return initWasmMemory(funcs.mMemory.get.of_field.sharedmemory)
@@ -79,48 +91,54 @@ proc collectExports*(funcs: var ExportedFuncs; instance: InstanceT;
   funcs.mStackAlloc = instance.getExport(context, "mem_stack_alloc")
   funcs.mStackSave = instance.getExport(context, "mem_stack_save")
   funcs.mStackRestore = instance.getExport(context, "mem_stack_restore")
-  let f_570427332 = instance.getExport(context, "start")
-  if f_570427332.isSome:
-    assert f_570427332.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.start = f_570427332.get.of_field.func_field
+  let f_570427403 = instance.getExport(context, "start")
+  if f_570427403.isSome:
+    assert f_570427403.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.start = f_570427403.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "start", "\'"
-  let f_570427377 = instance.getExport(context, "call_callback")
-  if f_570427377.isSome:
-    assert f_570427377.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback = f_570427377.get.of_field.func_field
+  let f_570427448 = instance.getExport(context, "call_callback")
+  if f_570427448.isSome:
+    assert f_570427448.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback = f_570427448.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback", "\'"
-  let f_570427408 = instance.getExport(context, "call_callback2")
-  if f_570427408.isSome:
-    assert f_570427408.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback2 = f_570427408.get.of_field.func_field
+  let f_570427479 = instance.getExport(context, "call_callback2")
+  if f_570427479.isSome:
+    assert f_570427479.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback2 = f_570427479.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback2", "\'"
-  let f_570427427 = instance.getExport(context, "call_callback3")
-  if f_570427427.isSome:
-    assert f_570427427.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback3 = f_570427427.get.of_field.func_field
+  let f_570427498 = instance.getExport(context, "call_callback3")
+  if f_570427498.isSome:
+    assert f_570427498.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback3 = f_570427498.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback3", "\'"
-  let f_570427428 = instance.getExport(context, "call_callback4")
-  if f_570427428.isSome:
-    assert f_570427428.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback4 = f_570427428.get.of_field.func_field
+  let f_570427499 = instance.getExport(context, "call_callback4")
+  if f_570427499.isSome:
+    assert f_570427499.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback4 = f_570427499.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback4", "\'"
-  let f_570427454 = instance.getExport(context, "call_callback5")
-  if f_570427454.isSome:
-    assert f_570427454.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback5 = f_570427454.get.of_field.func_field
+  let f_570427525 = instance.getExport(context, "call_callback5")
+  if f_570427525.isSome:
+    assert f_570427525.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback5 = f_570427525.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback5", "\'"
-  let f_570427455 = instance.getExport(context, "call_callback6")
-  if f_570427455.isSome:
-    assert f_570427455.get.kind == WASMTIME_EXTERN_FUNC
-    funcs.callCallback6 = f_570427455.get.of_field.func_field
+  let f_570427526 = instance.getExport(context, "call_callback6")
+  if f_570427526.isSome:
+    assert f_570427526.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback6 = f_570427526.get.of_field.func_field
   else:
     echo "Failed to find exported function \'", "call_callback6", "\'"
+  let f_570427527 = instance.getExport(context, "call_callback7")
+  if f_570427527.isSome:
+    assert f_570427527.get.kind == WASMTIME_EXTERN_FUNC
+    funcs.callCallback7 = f_570427527.get.of_field.func_field
+  else:
+    echo "Failed to find exported function \'", "call_callback7", "\'"
 
 proc start*(funcs: ExportedFuncs): WasmtimeResult[void] =
   var args: array[max(1, 0), ValT]
@@ -135,6 +153,8 @@ proc start*(funcs: ExportedFuncs): WasmtimeResult[void] =
   let res = funcs.start.addr.call(funcs.mContext, args.toOpenArray(0, 0 - 1),
                                   results.toOpenArray(0, 0 - 1), trap.addr).toResult(
       void)
+  if trap != nil:
+    return trap.toResult(void)
   if res.isErr:
     return res.toResult(void)
   
@@ -225,6 +245,8 @@ proc callCallback*(funcs: ExportedFuncs; fun: uint32; param: Baz): WasmtimeResul
   let res = funcs.callCallback.addr.call(funcs.mContext,
       args.toOpenArray(0, 16 - 1), results.toOpenArray(0, 0 - 1), trap.addr).toResult(
       void)
+  if trap != nil:
+    return trap.toResult(void)
   if res.isErr:
     return res.toResult(void)
   
@@ -326,6 +348,8 @@ proc callCallback2*(funcs: ExportedFuncs; fun: uint32; param: Baz; param2: Bar):
   let res = funcs.callCallback2.addr.call(funcs.mContext,
       args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 0 - 1), trap.addr).toResult(
       void)
+  if trap != nil:
+    return trap.toResult(void)
   if res.isErr:
     return res.toResult(void)
   
@@ -374,6 +398,8 @@ proc callCallback3*(funcs: ExportedFuncs; fun: uint32; p: seq[string]): Wasmtime
   let res = funcs.callCallback3.addr.call(funcs.mContext,
       args.toOpenArray(0, 3 - 1), results.toOpenArray(0, 0 - 1), trap.addr).toResult(
       void)
+  if trap != nil:
+    return trap.toResult(void)
   if res.isErr:
     return res.toResult(void)
   
@@ -391,10 +417,12 @@ proc callCallback4*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[int32] =
   let res = funcs.callCallback4.addr.call(funcs.mContext,
       args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
       int32)
+  if trap != nil:
+    return trap.toResult(int32)
   if res.isErr:
     return res.toResult(int32)
   var retVal: int32
-  retVal = convert(results[0], int32)
+  retVal = convert(results[0].to(int32), int32)
   return wasmtime.ok(retVal)
 
 proc callCallback5*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[string] =
@@ -411,6 +439,8 @@ proc callCallback5*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[string] =
   let res = funcs.callCallback5.addr.call(funcs.mContext,
       args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
       string)
+  if trap != nil:
+    return trap.toResult(string)
   if res.isErr:
     return res.toResult(string)
   var retVal: string
@@ -439,6 +469,8 @@ proc callCallback6*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[
   let res = funcs.callCallback6.addr.call(funcs.mContext,
       args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
       seq[string])
+  if trap != nil:
+    return trap.toResult(seq[string])
   if res.isErr:
     return res.toResult(seq[string])
   var retVal: seq[string]
@@ -457,49 +489,68 @@ proc callCallback6*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[
           retVal[i0][i1] = p1[i1]
   return wasmtime.ok(retVal)
 
-proc envTestNoParams2(host: MyContext; store: ptr ContextT; b: sink Baz): void
-proc testInterfaceTestNoParams(host: MyContext; store: ptr ContextT): void
-proc testInterfaceTestSimpleParams(host: MyContext; store: ptr ContextT;
-                                   a: int8; b: int16; c: int32; d: int64;
-                                   e: uint8; f: uint16; g: uint32; h: uint64;
-                                   i: float32; j: float64; k: bool; l: Rune): void
-proc testInterfaceTestSimpleParamsPtr(host: MyContext; store: ptr ContextT;
-                                      a: int8; b: int16; c: int32; d: int64;
-                                      e: uint8; f: uint16; g: uint32; h: uint64;
+proc callCallback7*(funcs: ExportedFuncs; fun: uint32): WasmtimeResult[TestEnum] =
+  var args: array[max(1, 1), ValT]
+  var results: array[max(1, 1), ValT]
+  var trap: ptr WasmTrapT = nil
+  var memory = funcs.mem
+  let savePoint = stackSave(funcs.mStackSave.get.of_field.func_field,
+                            funcs.mContext)
+  defer:
+    discard stackRestore(funcs.mStackRestore.get.of_field.func_field,
+                         funcs.mContext, savePoint.val)
+  args[0] = toWasmVal(fun)
+  let res = funcs.callCallback7.addr.call(funcs.mContext,
+      args.toOpenArray(0, 1 - 1), results.toOpenArray(0, 1 - 1), trap.addr).toResult(
+      TestEnum)
+  if trap != nil:
+    return trap.toResult(TestEnum)
+  if res.isErr:
+    return res.toResult(TestEnum)
+  var retVal: TestEnum
+  retVal = cast[TestEnum](results[0].to(int8))
+  return wasmtime.ok(retVal)
+
+proc envTestNoParams2(instance: ptr InstanceData; b: sink Baz): void
+proc testInterfaceTestNoParams(instance: ptr InstanceData): void
+proc testInterfaceTestSimpleParams(instance: ptr InstanceData; a: int8;
+                                   b: int16; c: int32; d: int64; e: uint8;
+                                   f: uint16; g: uint32; h: uint64; i: float32;
+                                   j: float64; k: bool; l: Rune): void
+proc testInterfaceTestSimpleParamsPtr(instance: ptr InstanceData; a: int8;
+                                      b: int16; c: int32; d: int64; e: uint8;
+                                      f: uint16; g: uint32; h: uint64;
                                       i: float32; j: float64; k: bool; l: Rune;
                                       m: int32; n: int32; o: int32; p: int32;
                                       q: int32): void
-proc testInterfaceAddCallback(host: MyContext; store: ptr ContextT;
-                              env: sink string; name: sink string): uint32
-proc testInterfaceTestSimpleReturn(host: MyContext; store: ptr ContextT;
-                                   x: int32): int32
-proc testInterfaceTestSimpleReturn2(host: MyContext; store: ptr ContextT;
-                                    x: int8): int8
-proc testInterfaceTestSimpleReturnPtr(host: MyContext; store: ptr ContextT;
-                                      x: int8): Bar
-proc testInterfaceTestSimpleReturnPtr2(host: MyContext; store: ptr ContextT): Baz
-proc testInterfaceNewBlob(host: MyContext; store: ptr ContextT;
-                          init: sink seq[uint8]): MyBlob
-proc testInterfaceWrite(host: MyContext; store: ptr ContextT; self: var MyBlob;
+proc testInterfaceAddCallback(instance: ptr InstanceData; env: sink string;
+                              name: sink string): uint32
+proc testInterfaceTestSimpleReturn(instance: ptr InstanceData; x: int32): int32
+proc testInterfaceTestSimpleReturn2(instance: ptr InstanceData; x: int8): int8
+proc testInterfaceTestSimpleReturnPtr(instance: ptr InstanceData; x: int8): Bar
+proc testInterfaceTestSimpleReturnPtr2(instance: ptr InstanceData): Baz
+proc testInterfaceNewBlob(instance: ptr InstanceData; init: sink seq[uint8]): MyBlob
+proc testInterfaceWrite(instance: ptr InstanceData; self: var MyBlob;
                         bytes: sink seq[uint8]): void
-proc testInterfaceRead(host: MyContext; store: ptr ContextT; self: var MyBlob;
-                       n: int32): seq[uint8]
-proc testInterfaceBlobMerge(host: MyContext; store: ptr ContextT;
-                            lhs: sink MyBlob; rhs: sink MyBlob): MyBlob
-proc testInterfaceBlobPrint(host: MyContext; store: ptr ContextT;
-                            lhs: var MyBlob; rhs: var MyBlob): void
-proc testInterface2TestNoParams(host: MyContext; store: ptr ContextT): void
-proc callbackTypesNewCallback(host: MyContext; store: ptr ContextT;
-                              data: uint32; key: uint32; drop: uint32): Callback
-proc callbackTypesData(host: MyContext; store: ptr ContextT; self: var Callback): uint32
-proc callbackTypesKey(host: MyContext; store: ptr ContextT; self: var Callback): uint32
-proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void] =
+proc testInterfaceRead(instance: ptr InstanceData; self: var MyBlob; n: int32): seq[
+    uint8]
+proc testInterfaceBlobMerge(instance: ptr InstanceData; lhs: sink MyBlob;
+                            rhs: sink MyBlob): MyBlob
+proc testInterfaceBlobPrint(instance: ptr InstanceData; lhs: var MyBlob;
+                            rhs: var MyBlob): void
+proc testInterface2TestNoParams(instance: ptr InstanceData): void
+proc callbackTypesNewCallback(instance: ptr InstanceData; data: uint32;
+                              key: uint32; drop: uint32): Callback
+proc callbackTypesData(instance: ptr InstanceData; self: var Callback): uint32
+proc callbackTypesKey(instance: ptr InstanceData; self: var Callback): uint32
+proc defineComponent*(linker: ptr LinkerT): WasmtimeResult[void] =
   block:
     let e = block:
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "[resource-drop]blob",
                                  newFunctype([WasmValkind.I32], [])):
-        host.resources.resourceDrop(parameters[0].i32, callDestroy = true)
+        var instance = cast[ptr InstanceData](store.getData())
+        instance.resources.resourceDrop(parameters[0].i32, callDestroy = true)
     if e.isErr:
       return e
   block:
@@ -507,7 +558,8 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
       linker.defineFuncUnchecked("my:host/callback-types",
                                  "[resource-drop]callback",
                                  newFunctype([WasmValkind.I32], [])):
-        host.resources.resourceDrop(parameters[0].i32, callDestroy = true)
+        var instance = cast[ptr InstanceData](store.getData())
+        instance.resources.resourceDrop(parameters[0].i32, callDestroy = true)
     if e.isErr:
       return e
   block:
@@ -518,9 +570,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32,
           WasmValkind.I32], [])
       linker.defineFuncUnchecked("env", "test-no-params2", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memory: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memory = cast[ptr UncheckedArray[uint8]](data(
@@ -565,14 +618,15 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           b.i = results.Result[Foo, void].ok(tempOk)
         else:
           b.i = results.Result[Foo, void].err()
-        envTestNoParams2(host, store, b)
+        envTestNoParams2(instance, b)
     if e.isErr:
       return e
   block:
     let e = block:
       var ty: ptr WasmFunctypeT = newFunctype([], [])
       linker.defineFuncUnchecked("my:host/test-interface", "test-no-params", ty):
-        testInterfaceTestNoParams(host, store)
+        var instance = cast[ptr InstanceData](store.getData())
+        testInterfaceTestNoParams(instance)
     if e.isErr:
       return e
   block:
@@ -583,6 +637,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           WasmValkind.I32, WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface", "test-simple-params",
                                  ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var a: int8
         var b: int16
         var c: int32
@@ -607,8 +662,8 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         j = convert(parameters[9].f64, float64)
         k = parameters[10].i32.bool
         l = parameters[11].i32.Rune
-        testInterfaceTestSimpleParams(host, store, a, b, c, d, e, f, g, h, i, j,
-                                      k, l)
+        testInterfaceTestSimpleParams(instance, a, b, c, d, e, f, g, h, i, j, k,
+                                      l)
     if e.isErr:
       return e
   block:
@@ -616,9 +671,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
       var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "test-simple-params-ptr", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memory: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memory = cast[ptr UncheckedArray[uint8]](data(
@@ -673,8 +729,8 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
                     int32)
         q = convert(cast[ptr int32](memory[parameters[0].i32 + 72].addr)[],
                     int32)
-        testInterfaceTestSimpleParamsPtr(host, store, a, b, c, d, e, f, g, h, i,
-            j, k, l, m, n, o, p, q)
+        testInterfaceTestSimpleParamsPtr(instance, a, b, c, d, e, f, g, h, i, j,
+            k, l, m, n, o, p, q)
     if e.isErr:
       return e
   block:
@@ -683,9 +739,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32],
           [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/test-interface", "add-callback", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memory: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memory = cast[ptr UncheckedArray[uint8]](data(
@@ -707,7 +764,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           name = newString(parameters[3].i32)
           for i0 in 0 ..< name.len:
             name[i0] = p0[i0]
-        let res = testInterfaceAddCallback(host, store, env, name)
+        let res = testInterfaceAddCallback(instance, env, name)
         parameters[0].i32 = cast[int32](res)
     if e.isErr:
       return e
@@ -717,9 +774,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/test-interface", "test-simple-return",
                                  ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var x: int32
         x = convert(parameters[0].i32, int32)
-        let res = testInterfaceTestSimpleReturn(host, store, x)
+        let res = testInterfaceTestSimpleReturn(instance, x)
         parameters[0].i32 = cast[int32](res)
     if e.isErr:
       return e
@@ -729,9 +787,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "test-simple-return2", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var x: int8
         x = convert(parameters[0].i32, int8)
-        let res = testInterfaceTestSimpleReturn2(host, store, x)
+        let res = testInterfaceTestSimpleReturn2(instance, x)
         parameters[0].i32 = cast[int32](res)
     if e.isErr:
       return e
@@ -741,9 +800,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "test-simple-return-ptr", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memory: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memory = cast[ptr UncheckedArray[uint8]](data(
@@ -755,7 +815,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           assert false
         var x: int8
         x = convert(parameters[0].i32, int8)
-        let res = testInterfaceTestSimpleReturnPtr(host, store, x)
+        let res = testInterfaceTestSimpleReturnPtr(instance, x)
         let retArea = parameters[^1].i32
         cast[ptr int32](memory[retArea + 0].addr)[] = res.a
         cast[ptr float32](memory[retArea + 4].addr)[] = res.b
@@ -768,9 +828,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
       var ty: ptr WasmFunctypeT = newFunctype([WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface",
                                  "test-simple-return-ptr2", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memory: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memory = cast[ptr UncheckedArray[uint8]](data(
@@ -781,7 +842,7 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         else:
           assert false
         let stackAllocFunc = caller.getExport("mem_stack_alloc").get.of_field.func_field
-        let res = testInterfaceTestSimpleReturnPtr2(host, store)
+        let res = testInterfaceTestSimpleReturnPtr2(instance)
         let retArea = parameters[^1].i32
         if res.x.len > 0:
           let dataPtrWasm1 = int32(?stackAlloc(stackAllocFunc, store,
@@ -843,9 +904,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32], [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/test-interface", "[constructor]blob",
                                  ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memory: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memory = cast[ptr UncheckedArray[uint8]](data(
@@ -861,8 +923,8 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           init = newSeq[typeof(init[0])](parameters[1].i32)
           for i0 in 0 ..< init.len:
             init[i0] = convert(cast[ptr uint8](p0[i0 * 1 + 0].addr)[], uint8)
-        let res = testInterfaceNewBlob(host, store, init)
-        parameters[0].i32 = ?host.resources.resourceNew(store, res)
+        let res = testInterfaceNewBlob(instance, init)
+        parameters[0].i32 = ?instance.resources.resourceNew(store, res)
     if e.isErr:
       return e
   block:
@@ -871,9 +933,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface", "[method]blob.write",
                                  ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memory: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memory = cast[ptr UncheckedArray[uint8]](data(
@@ -885,13 +948,13 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           assert false
         var self: ptr MyBlob
         var bytes: seq[uint8]
-        self = host.resources.resourceHostData(parameters[0].i32, MyBlob)
+        self = ?instance.resources.resourceHostData(parameters[0].i32, MyBlob)
         block:
           let p0 = cast[ptr UncheckedArray[uint8]](memory[parameters[1].i32].addr)
           bytes = newSeq[typeof(bytes[0])](parameters[2].i32)
           for i0 in 0 ..< bytes.len:
             bytes[i0] = convert(cast[ptr uint8](p0[i0 * 1 + 0].addr)[], uint8)
-        testInterfaceWrite(host, store, self[], bytes)
+        testInterfaceWrite(instance, self[], bytes)
     if e.isErr:
       return e
   block:
@@ -900,9 +963,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface", "[method]blob.read",
                                  ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memory: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memory = cast[ptr UncheckedArray[uint8]](data(
@@ -915,9 +979,9 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
         let stackAllocFunc = caller.getExport("mem_stack_alloc").get.of_field.func_field
         var self: ptr MyBlob
         var n: int32
-        self = host.resources.resourceHostData(parameters[0].i32, MyBlob)
+        self = ?instance.resources.resourceHostData(parameters[0].i32, MyBlob)
         n = convert(parameters[1].i32, int32)
-        let res = testInterfaceRead(host, store, self[], n)
+        let res = testInterfaceRead(instance, self[], n)
         let retArea = parameters[^1].i32
         if res.len > 0:
           let dataPtrWasm0 = int32(?stackAlloc(stackAllocFunc, store,
@@ -937,18 +1001,23 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32], [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/test-interface", "[static]blob.merge",
                                  ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var lhs: MyBlob
         var rhs: MyBlob
         block:
-          let resPtr = host.resources.resourceHostData(parameters[0].i32, MyBlob)
+          let resPtr = ?instance.resources.resourceHostData(
+              parameters[0].i32, MyBlob)
           copyMem(lhs.addr, resPtr, sizeof(typeof(lhs)))
-          host.resources.resourceDrop(parameters[0].i32, callDestroy = false)
+          ?instance.resources.resourceDrop(parameters[0].i32,
+              callDestroy = false)
         block:
-          let resPtr = host.resources.resourceHostData(parameters[1].i32, MyBlob)
+          let resPtr = ?instance.resources.resourceHostData(
+              parameters[1].i32, MyBlob)
           copyMem(rhs.addr, resPtr, sizeof(typeof(rhs)))
-          host.resources.resourceDrop(parameters[1].i32, callDestroy = false)
-        let res = testInterfaceBlobMerge(host, store, lhs, rhs)
-        parameters[0].i32 = ?host.resources.resourceNew(store, res)
+          ?instance.resources.resourceDrop(parameters[1].i32,
+              callDestroy = false)
+        let res = testInterfaceBlobMerge(instance, lhs, rhs)
+        parameters[0].i32 = ?instance.resources.resourceNew(store, res)
     if e.isErr:
       return e
   block:
@@ -957,18 +1026,20 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32], [])
       linker.defineFuncUnchecked("my:host/test-interface", "[static]blob.print",
                                  ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var lhs: ptr MyBlob
         var rhs: ptr MyBlob
-        lhs = host.resources.resourceHostData(parameters[0].i32, MyBlob)
-        rhs = host.resources.resourceHostData(parameters[1].i32, MyBlob)
-        testInterfaceBlobPrint(host, store, lhs[], rhs[])
+        lhs = ?instance.resources.resourceHostData(parameters[0].i32, MyBlob)
+        rhs = ?instance.resources.resourceHostData(parameters[1].i32, MyBlob)
+        testInterfaceBlobPrint(instance, lhs[], rhs[])
     if e.isErr:
       return e
   block:
     let e = block:
       var ty: ptr WasmFunctypeT = newFunctype([], [])
       linker.defineFuncUnchecked("my:host/test-interface2", "test-no-params", ty):
-        testInterface2TestNoParams(host, store)
+        var instance = cast[ptr InstanceData](store.getData())
+        testInterface2TestNoParams(instance)
     if e.isErr:
       return e
   block:
@@ -977,14 +1048,15 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/callback-types",
                                  "[constructor]callback", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var data: uint32
         var key: uint32
         var drop: uint32
         data = convert(parameters[0].i32, uint32)
         key = convert(parameters[1].i32, uint32)
         drop = convert(parameters[2].i32, uint32)
-        let res = callbackTypesNewCallback(host, store, data, key, drop)
-        parameters[0].i32 = ?host.resources.resourceNew(store, res)
+        let res = callbackTypesNewCallback(instance, data, key, drop)
+        parameters[0].i32 = ?instance.resources.resourceNew(store, res)
     if e.isErr:
       return e
   block:
@@ -993,9 +1065,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/callback-types",
                                  "[method]callback.data", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var self: ptr Callback
-        self = host.resources.resourceHostData(parameters[0].i32, Callback)
-        let res = callbackTypesData(host, store, self[])
+        self = ?instance.resources.resourceHostData(parameters[0].i32, Callback)
+        let res = callbackTypesData(instance, self[])
         parameters[0].i32 = cast[int32](res)
     if e.isErr:
       return e
@@ -1005,9 +1078,10 @@ proc defineComponent*(linker: ptr LinkerT; host: MyContext): WasmtimeResult[void
           [WasmValkind.I32])
       linker.defineFuncUnchecked("my:host/callback-types",
                                  "[method]callback.key", ty):
+        var instance = cast[ptr InstanceData](store.getData())
         var self: ptr Callback
-        self = host.resources.resourceHostData(parameters[0].i32, Callback)
-        let res = callbackTypesKey(host, store, self[])
+        self = ?instance.resources.resourceHostData(parameters[0].i32, Callback)
+        let res = callbackTypesKey(instance, self[])
         parameters[0].i32 = cast[int32](res)
     if e.isErr:
       return e

@@ -97,7 +97,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
 
   let memory = ident"memory"
   let linker = ident"linker"
-  let host = ident"host"
+  let instance = ident"instance"
   let store = genAst(funcs = ident"funcs", store = ident"mContext", funcs.store)
 
   let returnType = if fun.results.len == 0:
@@ -392,7 +392,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
 
   funcList.add f
 
-macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap: static[Table[string, string]], worldName: static[string], dir: static[string], hostType: untyped): untyped =
+macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap: static[Table[string, string]], worldName: static[string], dir: static[string], instanceType: untyped): untyped =
   let path = if witPath.isAbsolute:
     witPath
   else:
@@ -416,15 +416,15 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
   let typeSection = ctx.genTypeSection(host=true)
 
   var linker = ident"linker"
-  var host = ident"host"
+  let instance = ident"instance"
   var store = ident"store"
   var stackAllocFunc = ident"stackAllocFunc"
-  var defineComponentFun = genAst(linker, host, hostType):
-    proc defineComponent*(linker: ptr LinkerT, host: hostType): WasmtimeResult[void] =
+  var defineComponentFun = genAst(linker):
+    proc defineComponent*(linker: ptr LinkerT): WasmtimeResult[void] =
       discard
 
-  let funDeclTempl = genAst(host, store, hostType):
-    proc name*(host: hostType, store: ptr ContextT): void
+  let funDeclTempl = genAst(instance, instanceType):
+    proc name*(instance: ptr instanceType): void
 
   var funDeclarations = nnkStmtList.newTree()
   var defines = nnkStmtList.newTree()
@@ -439,11 +439,12 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     case t.kind
     of Resource:
       let dropName = "[resource-drop]" & t.name
-      let code = genAst(host, linker, env = t.env, name = t.name, dropName, typ = ident(ctx.getNimName(t.name, true)), e = ident"e"):
+      let code = genAst(instance, instanceType, linker, env = t.env, name = t.name, dropName, typ = ident(ctx.getNimName(t.name, true)), e = ident"e"):
         block:
           let e = block:
             linker.defineFuncUnchecked(env, dropName, newFunctype([WasmValkind.I32], [])):
-              host.resources.resourceDrop(parameters[0].i32, callDestroy=true)
+              var instance = cast[ptr instanceType](store.getData())
+              instance.resources.resourceDrop(parameters[0].i32, callDestroy=true)
           if e.isErr:
             return e
 
@@ -491,8 +492,6 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       funcs.mStackAlloc = instance.getExport(context, "mem_stack_alloc")
       funcs.mStackSave = instance.getExport(context, "mem_stack_save")
       funcs.mStackRestore = instance.getExport(context, "mem_stack_restore")
-      # if mainMemory.isNone:
-      #   mainMemory = host.getMemoryFor(caller)
 
   let getMem = genAst(name = ident"mem",
       instance = ident"instance",
@@ -557,7 +556,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     var decl = funDeclTempl.copy()
     decl[0] = implName
 
-    var call = nnkCall.newTree(implName, host, store)
+    var call = nnkCall.newTree(implName, instance)
     funDeclarations.add decl
 
     if fun.results.len > 0:
@@ -620,12 +619,12 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         if userType.kind == Handle:
           let typ = ctx.getTypeName(p.typ, Field)
           if userType.owned:
-            let c = genAst(host, name, ptrName = ident(name.repr & "Ptr"), typ, i):
+            let c = genAst(name, ptrName = ident(name.repr & "Ptr"), typ, i):
               var name: typ
             body.add c
 
           else:
-            let c = genAst(host, name, typ, i):
+            let c = genAst(name, typ, i):
               var name: ptr typ
             body.add c
 
@@ -640,18 +639,18 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       assert userType.kind == Handle
       let typ = ctx.getTypeName(typ, Field)
       if userType.owned:
-        return genAst(host, arg, param, ptrName = ident("resPtr"), typ):
+        return genAst(instance, arg, param, ptrName = ident("resPtr"), typ):
           block:
-            let ptrName = ?host.resources.resourceHostData(arg, typ)
+            let ptrName = ?instance.resources.resourceHostData(arg, typ)
             # Would be nicer to do:
             #   param = ptrName[].ensureMove
             # but that doesn't compile, so to avoid the `=copy` hook use raw memory copy
             copyMem(param.addr, ptrName, sizeof(typeof(param)))
-            ?host.resources.resourceDrop(arg, callDestroy=false)
+            ?instance.resources.resourceDrop(arg, callDestroy=false)
 
       else:
-        return genAst(host, arg, param, typ):
-          param = ?host.resources.resourceHostData(arg, typ)
+        return genAst(instance, arg, param, typ):
+          param = ?instance.resources.resourceHostData(arg, typ)
 
     # lift parameters
     if flatFuncType.paramsFlat:
@@ -706,14 +705,14 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
         # parameters[0] = res.toVal # todo
 
       proc lowerHandle(param: NimNode): NimNode =
-        return genAst(host, param):
-          ?host.resources.resourceNew(store, param)
+        return genAst(instance, param):
+          ?instance.resources.resourceNew(store, param)
 
       let r = fun.results[0]
       if ctx.isOwnedHandle(r):
-        callAndResult = genAst(host, res, call):
+        callAndResult = genAst(instance, res, call):
           let res = call
-          parameters[0].i32 = ?host.resources.resourceNew(store, res)
+          parameters[0].i32 = ?instance.resources.resourceNew(store, res)
 
         body.add callAndResult
 
@@ -799,11 +798,14 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       else:
         parameterTypes.add nnkDotExpr.newTree(ident"WasmValkind", ident(name))
 
+    let instanceDecl = genAst(instance, instanceType, store):
+      var instance = cast[ptr instanceType](store.getData())
+
     var memoryDecl = if needsMemory:
-      genAst(host, store, memoryName = memory, mainMemory = ident"mainMemory"):
+      genAst(instance, store, memoryName = memory, mainMemory = ident"mainMemory"):
         var mainMemory = caller.getExport("memory")
         if mainMemory.isNone:
-          mainMemory = host.getMemoryFor(caller)
+          mainMemory = instance.getMemoryFor(caller)
         var memoryName: ptr UncheckedArray[uint8] = nil
         if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
           memoryName = cast[ptr UncheckedArray[uint8]](data(mainMemory.get.of_field.sharedmemory))
@@ -820,11 +822,12 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     else:
       nnkStmtList.newTree()
 
-    let code = genAst(linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, memoryDecl, stackAllocDecl):
+    let code = genAst(linker, env = fun.env, name = fun.name, body, e = ident"e", ty = ident"ty", parameterTypes, resultTypes, instanceDecl, memoryDecl, stackAllocDecl):
       block:
         let e = block:
           var ty: ptr WasmFunctypeT = newFunctype(parameterTypes, resultTypes)
           linker.defineFuncUnchecked(env, name, ty):
+            instanceDecl
             memoryDecl
             stackAllocDecl
             body
@@ -862,7 +865,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
 
   return nnkStmtList.newTree()
 
-template importWit*(witPath: static[string], hostType: untyped, body: untyped): untyped =
+template importWit*(witPath: static[string], instanceType: untyped, body: untyped): untyped =
   var cacheFile {.compiletime, inject.} = "host.nim"
   var world {.compiletime, inject.} = ""
   var nameMap {.compiletime.} = initTable[string, string]()
@@ -872,4 +875,4 @@ template importWit*(witPath: static[string], hostType: untyped, body: untyped): 
   static:
     body
 
-  importWitImpl(witPath, cacheFile, nameMap, world, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head, hostType)
+  importWitImpl(witPath, cacheFile, nameMap, world, instantiationInfo(-1, true).filename.replace("\\", "/").splitPath.head, instanceType)

@@ -10,8 +10,12 @@ import
 
 {.pop.}
 type
+  ## Docs for foo
+  ## line 2
   Foo* = object
     x*: WitString
+  ## Docs for props
+  ## line 2
   Prop* = enum
     Cool = "cool", Lame = "lame", SoLame = "so-lame"
   Props* = set[Prop]

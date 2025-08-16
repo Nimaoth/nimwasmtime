@@ -25,6 +25,8 @@ proc `=destroy`*(a: Blob) =
 proc testInterfaceTestNoParamsImported(): void {.
     wasmimport("test-no-params", "my:host/test-interface").}
 proc testNoParams*(): void {.nodestroy.} =
+  ## Test documentation
+  ## line 2
   testInterfaceTestNoParamsImported()
 
 proc testInterfaceTestSimpleParamsImported(a0: int8; a1: int16; a2: int32;

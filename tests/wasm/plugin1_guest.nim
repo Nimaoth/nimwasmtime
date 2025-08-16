@@ -146,3 +146,10 @@ proc callCallback6Exported(a0: uint32): int32 {.
     cast[ptr int32](callCallback6RetArea[0].addr)[] = 0.int32
   cast[ptr int32](callCallback6RetArea[4].addr)[] = cast[int32](res.len)
   cast[int32](callCallback6RetArea[0].addr)
+
+proc callCallback7(fun: uint32): TestEnum
+proc callCallback7Exported(a0: uint32): int8 {.
+    wasmexport("call-callback7", "my:test-package/plugin-api").} =
+  var fun: uint32
+  fun = convert(a0, uint32)
+  cast[int8](callCallback7(fun))

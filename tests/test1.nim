@@ -1,5 +1,5 @@
 import std/[strformat, options, macros, tables, unicode, parseopt, strutils]
-import wasmtime, wit_host_module, wasm_builder
+import wasmtime, wit_host_module
 
 {.push gcsafe, raises: [].}
 
@@ -10,6 +10,14 @@ type MyContext = ref object
   # instanceToComponent: Table[ptr ComponentInstanceT, ptr ComponentT]
   # currentInstance: ptr ComponentInstanceT = nil
   sharedMemory: ptr SharedmemoryT
+
+type
+  InstanceData = object
+    resources: WasmModuleResources
+    store: ptr ContextT
+    sharedMemory: ptr SharedmemoryT
+    host: MyContext
+  InstanceDataPtr = ptr InstanceData
 
 type MyBlob = object
   i: int = 1
@@ -35,6 +43,13 @@ proc `=destroy`*(b: MyBlob) =
     dec blobCounter
     echo "[host] --------------------------------- delete MyBlob ", b
 
+proc getMemoryFor(instance: InstanceDataPtr, caller: ptr CallerT): Option[ExternT] =
+  # echo &"[host] getMemoryFor"
+  var item: ExternT
+  item.kind = WASMTIME_EXTERN_SHAREDMEMORY
+  item.of_field.sharedmemory = instance.sharedMemory
+  item.some
+
 proc getMemoryFor(host: MyContext, caller: ptr CallerT): Option[ExternT] =
   # echo &"[host] getMemoryFor"
   var item: ExternT
@@ -48,7 +63,7 @@ template typeId*(_: typedesc[Callback]): int = 2
 
 when defined(witRebuild):
   static: hint("Rebuilding test.wit")
-  importWit "wasm/wit", MyContext:
+  importWit "wasm/wit", InstanceData:
     cacheFile = "host_module.nim"
     world = "host"
     mapName "blob", MyBlob
@@ -57,59 +72,59 @@ else:
 
 include host_module
 
-proc testInterfaceNewBlob(host: MyContext, store: ptr ContextT, init: sink seq[uint8]): MyBlob =
+proc testInterfaceNewBlob(instance: ptr InstanceData, init: sink seq[uint8]): MyBlob =
   inc blobCounter
   echo &"[host] testInterfaceNewBlob {init}"
-  result = MyBlob(blobName: "constr" & $host.counter, i: host.counter, arr: init)
-  host.counter.inc
+  result = MyBlob(blobName: "constr" & $instance.host.counter, i: instance.host.counter, arr: init)
+  instance.host.counter.inc
 
-proc testInterfaceWrite(host: MyContext, store: ptr ContextT, self: var MyBlob, bytes: sink seq[uint8]) =
+proc testInterfaceWrite(instance: ptr InstanceData, self: var MyBlob, bytes: sink seq[uint8]) =
   echo &"[host] testInterfaceWrite {self} {bytes}"
   self.arr.add bytes
 
-proc testInterfaceRead(host: MyContext, store: ptr ContextT, self: var MyBlob, n: int32): seq[uint8] =
+proc testInterfaceRead(instance: ptr InstanceData, self: var MyBlob, n: int32): seq[uint8] =
   defer:
     echo "[host] ############################# read ", self, ", ", n, " -> ", result
   let l = min(self.arr.len, n.int)
   return self.arr[0..<l]
 
-proc testInterfaceBlobMerge(host: MyContext, store: ptr ContextT, lhs: sink MyBlob, rhs: sink MyBlob): MyBlob =
+proc testInterfaceBlobMerge(instance: ptr InstanceData, lhs: sink MyBlob, rhs: sink MyBlob): MyBlob =
   inc blobCounter
   echo "[host] ================================== merge ", lhs, ", ", rhs
-  result = MyBlob(i: host.counter, blobName: "merge" & $host.counter, arr: lhs.arr & rhs.arr)
-  host.counter.inc
+  result = MyBlob(i: instance.host.counter, blobName: "merge" & $instance.host.counter, arr: lhs.arr & rhs.arr)
+  instance.host.counter.inc
 
-proc testInterfaceBlobPrint(host: MyContext, store: ptr ContextT, lhs: var MyBlob, rhs: var MyBlob) =
+proc testInterfaceBlobPrint(instance: ptr InstanceData, lhs: var MyBlob, rhs: var MyBlob) =
   echo "[host] ================================== print ", lhs, ", ", rhs
 
-# proc testInterfaceBarBaz(host: MyContext, store: ptr ContextT, a: int32, b: float32): float32 =
+# proc testInterfaceBarBaz(instance: ptr InstanceData, a: int32, b: float32): float32 =
 #   result = a.float32 - b
 
-proc envTestNoParams2(host: MyContext, store: ptr ContextT, b: sink Baz) =
+proc envTestNoParams2(instance: ptr InstanceData, b: sink Baz) =
   echo "[host] envTestNoParams2 ", b
 
-proc testInterface2TestNoParams(host: MyContext, store: ptr ContextT) =
+proc testInterface2TestNoParams(instance: ptr InstanceData) =
   echo "[host] testInterface2TestNoParams"
 
-proc testInterfaceTestNoParams(host: MyContext, store: ptr ContextT) =
+proc testInterfaceTestNoParams(instance: ptr InstanceData) =
   echo "[host] testInterfaceTestNoParams"
 
-proc testInterfaceTestSimpleParams(host: MyContext, store: ptr ContextT,
+proc testInterfaceTestSimpleParams(instance: ptr InstanceData,
     a: int8, b: int16, c: int32, d: int64, e: uint8, f: uint16, g: uint32, h: uint64, i: float32,
     j: float64, k: bool, l: Rune) =
   echo &"[host] {a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}"
 
-proc testInterfaceTestSimpleParamsPtr(host: MyContext, store: ptr ContextT,
+proc testInterfaceTestSimpleParamsPtr(instance: ptr InstanceData,
     a: int8, b: int16, c: int32, d: int64, e: uint8, f: uint16, g: uint32, h: uint64, i: float32,
     j: float64, k: bool, l: Rune, m: int32, n: int32, o: int32, p: int32, q: int32) =
   echo &"[host] {a}, {b}, {c}, {d}, {e}, {f}, {g}, {h}, {i}, {j}, {k}, {l}, {m}, {n}, {o}, {p}, {q}"
 
-proc callbackTypesNewCallback(host: MyContext, store: ptr ContextT, data: uint32, key: uint32, drop: uint32): Callback =
+proc callbackTypesNewCallback(instance: ptr InstanceData, data: uint32, key: uint32, drop: uint32): Callback =
   proc dropImpl() =
-    host.callbacks.withValue(drop, fun):
+    instance.host.callbacks.withValue(drop, fun):
       echo "[host] Call drop for ", data
       var trap: ptr WasmTrapT = nil
-      fun[].of_field.func_field.addr.call(store, [], [], trap.addr).toResult(void).okOr(err):
+      fun[].of_field.func_field.addr.call(instance.store, [], [], trap.addr).toResult(void).okOr(err):
         echo "[host] Failed to call dealloc callback for key ", key, ": ", err.msg
 
       trap.okOr(err):
@@ -119,28 +134,28 @@ proc callbackTypesNewCallback(host: MyContext, store: ptr ContextT, data: uint32
 
   Callback(data: data, key: key, drop: dropImpl)
 
-proc callbackTypesData(host: MyContext, store: ptr ContextT, self: var Callback): uint32 =
+proc callbackTypesData(instance: ptr InstanceData, self: var Callback): uint32 =
   self.data
 
-proc callbackTypesKey(host: MyContext, store: ptr ContextT, self: var Callback): uint32 =
+proc callbackTypesKey(instance: ptr InstanceData, self: var Callback): uint32 =
   self.key
 
-proc testInterfaceAddCallback(host: MyContext, store: ptr ContextT, env: sink string, name: sink string): uint32 =
+proc testInterfaceAddCallback(instance: ptr InstanceData, env: sink string, name: sink string): uint32 =
   discard
 
-proc testInterfaceTestSimpleReturn(host: MyContext, store: ptr ContextT, x: int32): int32 =
+proc testInterfaceTestSimpleReturn(instance: ptr InstanceData, x: int32): int32 =
   echo "[host] testInterfaceTestSimpleReturn ", x
   return x * 2
 
-proc testInterfaceTestSimpleReturn2(host: MyContext, store: ptr ContextT, x: int8): int8 =
+proc testInterfaceTestSimpleReturn2(instance: ptr InstanceData, x: int8): int8 =
   echo "[host] testInterfaceTestSimpleReturn2 ", x
   return x * 2
 
-proc testInterfaceTestSimpleReturnPtr(host: MyContext, store: ptr ContextT, x: int8): Bar =
+proc testInterfaceTestSimpleReturnPtr(instance: ptr InstanceData, x: int8): Bar =
   echo "[host] testInterfaceTestSimpleReturnPtr ", x
   return Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true)
 
-proc testInterfaceTestSimpleReturnPtr2(host: MyContext; store: ptr ContextT): Baz =
+proc testInterfaceTestSimpleReturnPtr2(instance: ptr InstanceData): Baz =
   return Baz(x: "uiae", c: Foo(x: "xvlc"), d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some)
   # return Baz(x: "uiae", c: Foo(x: "xvlc"), f: @[Foo(x: "1"), Foo(x: "9"), Foo(x: "6")], d: (111, 222.333), gbruh: @[{Lame}, {SoLame}, {Cool, SoLame}, {Cool, Lame}, {SoLame, Lame}, {Cool, SoLame, Lame}], g: BlockDevice, h: {Lame, SoLame}, e: 666.int32.some, k: @[Bar(a: 123, b: 456.789, c: "ü".runeAt(0), d: true), Bar(a: 987, b: 654.321, c: "ö".runeAt(0), d: false)])
 
@@ -166,10 +181,10 @@ const useBuiltinWasi = false
   # discard linker.defineFuncUnchecked("env", "__pthread_create_js", newFunctype([WasmValkind.I32, WasmValkind.I32, WasmValkind.I32, WasmValkind.I32], [WasmValkind.I32])):
   #   echo "[host] __pthread_create_js"
 
-proc getMemory(caller: ptr CallerT, store: ptr ContextT, host: MyContext): WasmMemory =
+proc getMemory(caller: ptr CallerT, store: ptr ContextT, instance: ptr InstanceData): WasmMemory =
   var mainMemory = caller.getExport("memory")
   if mainMemory.isNone:
-    mainMemory = host.getMemoryFor(caller)
+    mainMemory = instance.getMemoryFor(caller)
   if mainMemory.get.kind == WASMTIME_EXTERN_SHAREDMEMORY:
     return initWasmMemory(mainMemory.get.of_field.sharedmemory)
   elif mainMemory.get.kind == WASMTIME_EXTERN_MEMORY:
@@ -186,8 +201,12 @@ proc main(): WasmtimeResult[void] =
   let linker = engine.newLinker()
   defer: linker.delete()
 
-  let store = engine.newStore(nil, nil)
+  var instanceData = InstanceData()
+
+  let store = engine.newStore(instanceData.addr, nil)
   defer: store.delete()
+
+  instanceData.store = store.context()
 
   let context = store.context()
 
@@ -247,7 +266,8 @@ proc main(): WasmtimeResult[void] =
         data: WasmPtr
         len: uint32
 
-      let mem = getMemory(caller, store, ctx)
+      let instance = cast[ptr InstanceData](store.getData())
+      let mem = getMemory(caller, store, instance)
 
       let fd = parameters[0].i32
       let iovecsPtr = parameters[1].i32.WasmPtr
@@ -281,13 +301,14 @@ proc main(): WasmtimeResult[void] =
   var callbacks: seq[int32] = @[]
 
   discard linker.defineFuncUnchecked("env", "addCallback", newFunctype([WasmValkind.I32], [])):
-    let mem = getMemory(caller, store, ctx)
+    let instance = cast[ptr InstanceData](store.getData())
+    let mem = getMemory(caller, store, instance)
     let funcIdxPtr = parameters[0].i32.WasmPtr
     let funcIdx = mem.read[:int32](funcIdxPtr)
     echo &"[host] addCallback {funcIdxPtr.int} -> {funcIdx}"
-    callbacks.add(funcIdx)
+    # callbacks.add(funcIdx)
 
-  linker.defineComponent(ctx).okOr(err):
+  linker.defineComponent().okOr(err):
     echo "[host] Failed to define component: ", err.msg
     return
 
@@ -295,6 +316,7 @@ proc main(): WasmtimeResult[void] =
   ctx.sharedMemory = engine.createSharedMemory(memType).okOr(err):
     echo "[host] Failed to create shared memory: ", err.msg
     return
+  instanceData.sharedMemory = ctx.sharedMemory
 
   linker.defineSharedMemory(context, "env", "memory", ctx.sharedMemory).okOr(err):
     echo "[host] Failed to define shared memory: ", err.msg
