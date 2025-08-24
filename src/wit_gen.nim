@@ -339,7 +339,8 @@ proc lower*(ctx: WitContext, loweredArgs: openArray[NimNode], param: NimNode, ty
       let childAccess = nnkDotExpr.newTree(param, ident("get"))
       var lowerChild = nnkStmtList.newTree()
       ctx.lower(loweredArgs[1..^1], childAccess, userType.optionTarget, lowerChild, context, lowerContext, depth + 1, forceDefaultStoreArgs)
-      let storeTag = storeArg(loweredArgs[0], genAst(param, param.isSome.int32), typ)
+      let r = ctx.flattenVariant(ctx.despecialize(typ))[0] # todo: this could be done more efficiently
+      let storeTag = storeArg(loweredArgs[0], genAst(param, nimType = r.nimTypeName.ident, param.isSome.nimType), typ)
       let code = genAst(storeTag, lowerChild, param):
         storeTag
         if param.isSome:

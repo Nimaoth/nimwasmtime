@@ -86,6 +86,8 @@ iterator pairs*[T](self: WitList[T]): (int, lent T) =
 template toOpenArray*[T](self: WitList[T]): openArray[T] = self.data.toOpenArray(0, self.high)
 template toOpenArray*[T](self: WitList[T], first: int, last: int): openArray[T] = self.data.toOpenArray(first, last)
 
+func `@`*[T](self: WitList[T]): seq[T] = @(self.toOpenArray)
+
 template `ws`*(str: string): WitString =
   let a = str
   if a.len > 0:
