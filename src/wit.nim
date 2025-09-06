@@ -96,7 +96,7 @@ type
     packages*: seq[WitPackage]
     worlds*: seq[WitWorld]
     types*: seq[WitUserType]
-    flatSizeMap*: Table[int, int]
+    # flatSizeMap*: Table[int, int]
     interfaces*: seq[WitInterface]
     useCustomBuiltinTypes*: bool
     nameMap*: Table[string, string]
@@ -614,10 +614,10 @@ proc flattenType*(ctx: WitContext, typ: WitType): seq[SimpleComponentType] =
   else:
     error("Not implemented: flattenType(" & $typ & ")")
 
-  ctx.flatSizeMap[typ.index] = result.len
+  # ctx.flatSizeMap[typ.index] = result.len
 
-proc flatTypeSize*(ctx: WitContext, typ: WitType): int =
-  let typ = ctx.despecialize(typ)
+proc flatTypeSize*(ctx: WitContext, t: WitType): int =
+  let typ = ctx.despecialize(t)
   case typ.kind
   of Builtin:
     case typ.name
@@ -634,9 +634,14 @@ proc flatTypeSize*(ctx: WitContext, typ: WitType): int =
       assert false
       0
 
-  of List: ctx.flatSizeMap[typ.index]
-  of Record: ctx.flatSizeMap[typ.index]
-  of Variant: ctx.flatSizeMap[typ.index]
+  of List: ctx.flattenType(t).len
+  of Record: ctx.flattenType(t).len
+  of Variant: ctx.flattenType(t).len
+
+  # todo: this seems buggy
+  # of List: ctx.flatSizeMap[typ.index]
+  # of Record: ctx.flatSizeMap[typ.index]
+  # of Variant: ctx.flatSizeMap[typ.index]
   of Flags: 1
   of Resource, Handle: 1
 
