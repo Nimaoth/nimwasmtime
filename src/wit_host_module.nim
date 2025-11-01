@@ -554,7 +554,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
     var needsRealloc = false
 
     var decl = funDeclTempl.copy()
-    decl[0] = implName
+    decl[0] = nnkPostfix.newTree(ident"*", implName)
 
     var call = nnkCall.newTree(implName, instance)
     funDeclarations.add decl
