@@ -10,7 +10,6 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 2.0.8"
-requires "https://github.com/Nimaoth/nimgen >= 0.5.4"
 
 var
   cmd = when defined(Windows): "cmd /c " else: ""
@@ -64,6 +63,28 @@ task wasmtime, "Build wasmtime":
 
     when defined(linux):
       exec "cargo build --release --target=x86_64-unknown-linux-musl -p wasmtime-c-api"
+
+import std/strformat
+
+proc getCommandLineParams(): string =
+  defer:
+    echo "Additional command line params: ", result
+  if commandLineParams.len < 3:
+    return ""
+  return commandLineParams[3..^1].join(" ")
+
+task buildWasmComponent, "":
+  exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} \"--passL:-o tests/wasm/plugin1.m.wasm\" ./tests/wasm/plugin1.nim"
+  exec "wasm-tools component embed ./tests/wasm/wit --world plugin1 ./tests/wasm/plugin1.m.wasm -o ./tests/wasm/plugin1.me.wasm --features callbacks-impl"
+  exec "wasm-tools component new ./tests/wasm/plugin1.me.wasm -o ./tests/wasm/plugin1.c.wasm --adapt ./tests/wasm/wasi_snapshot_preview1.reactor.wasm"
+
+task buildWasmComponent2, "":
+  exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} \"--passL:-o tests/wasm/plugin2.m.wasm\" ./tests/wasm/plugin2.nim"
+  exec "wasm-tools component embed ./tests/wasm/wit --world plugin2 ./tests/wasm/plugin2.m.wasm -o ./tests/wasm/plugin2.me.wasm --features callbacks-impl"
+  exec "wasm-tools component new ./tests/wasm/plugin2.me.wasm -o ./tests/wasm/plugin2.c.wasm --adapt ./tests/wasm/wasi_snapshot_preview1.reactor.wasm"
+
+task buildWasmModule, "":
+  exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} \"--passL:-o tests/wasm/plugin1.m.wasm\" ./tests/wasm/plugin1.nim"
 
 before install:
   nimgenTask()

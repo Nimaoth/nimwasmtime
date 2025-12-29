@@ -1,0 +1,24 @@
+package my:test-package;
+
+world host {
+
+  import env: interface {
+    use my:host/test-types.{bar, baz};
+    test-no-params2: func(b: baz);
+  }
+
+  import my:host/test-interface;
+  import my:host/test-interface2;
+  import my:host/callback-types;
+  use my:host/test-types.{bar, baz};
+
+  export plugin-api;
+
+  // export start: func();
+  // export call-callback: func(fun: u32, param: baz);
+  // export call-callback2: func(fun: u32, param: baz, param2: bar);
+  // export call-callback3: func(fun: u32, p: list<string>);
+  // export call-callback4: func(fun: u32) -> s32;
+  // export call-callback5: func(fun: u32) -> string;
+  // export call-callback6: func(fun: u32) -> list<string>;
+}

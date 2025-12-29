@@ -1,5 +1,7 @@
 {.push hint[DuplicateModuleImport]:off.}
-import std/[os, macros, strutils, json, sets, enumerate, tables, options, sequtils]
+import std/[os, macros, strutils, json, sets, enumerate, tables, options, sequtils, strformat]
+
+import results as ress
 
 const nimWasmtimeStatic* {.booldefine.} = true
 const nimWasmtimeOverride* {.strdefine.} = ""
@@ -27,7 +29,7 @@ const nimWasmtimeFeatureGC* {.booldefine.} = true
 const nimWasmtimeFeatureAsync* {.booldefine.} = true
 const nimWasmtimeFeatureCranelift* {.booldefine.} = true
 const nimWasmtimeFeatureWinch* {.booldefine.} = true
-const nimWasmtimeFeatureComponentModel* {.booldefine.} = true
+const nimWasmtimeFeatureComponentModel* {.booldefine.} = false
 const nimWasmtimeFeatureDebugBuiltins* {.booldefine.} = false
 const nimWasmtimeFeaturePoolingAllocator* {.booldefine.} = false
 
@@ -107,6 +109,170 @@ func camelName(str: string): string =
       result.add p.toLowerAscii.capitalizeAscii
 
 var enums {.compiletime.} = initHashSet[string]()
+
+# proc wrapperRenameCallback*(name: string, kind: string, makeUnique: var bool, partof = ""): string =
+#   result = name
+
+#   var nameMap = toTable {
+#     "wasi_config_new": "new_wasi_config",
+
+#     "wasm_config_new": "new_config",
+#     "wasm_engine_new": "new_engine",
+#     "wasm_engine_new_with_config": "new_engine",
+#     "wasm_exporttype_new": "new_exporttype",
+#     "wasm_foreign_new": "new_foreign",
+#     "wasm_func_new": "new_func",
+#     "wasm_functype_new": "new_functype",
+#     "wasm_global_new": "new_global",
+#     "wasm_globaltype_new": "new_globaltype",
+#     "wasm_importtype_new": "new_importtype",
+#     "wasm_instance_new": "new_instance",
+#     "wasm_memory_new": "new_memory",
+#     "wasm_memorytype_new": "new_memorytype",
+#     "wasm_module_new": "new_module",
+#     "wasm_store_new": "new_store",
+#     "wasm_table_new": "new_table",
+#     "wasm_tabletype_new": "new_tabletype",
+#     "wasm_trap_new": "new_trap",
+#     "wasm_valtype_new": "new_valtype",
+
+#     "wasmtime_error_new": "new_error",
+#     "wasmtime_externref_new": "new_externref",
+#     "wasmtime_func_new": "new_func",
+#     "wasmtime_global_new": "new_global",
+#     "wasmtime_guestprofiler_new": "new_guestprofiler",
+#     "wasmtime_instance_new": "new_instance",
+#     "wasmtime_linker_new": "new_linker",
+#     "wasmtime_memory_new": "new_memory",
+#     "wasmtime_memorytype_new": "new_memorytype",
+#     "wasmtime_module_new": "new_module",
+#     "wasmtime_sharedmemory_new": "new_sharedmemory",
+#     "wasmtime_store_new": "new_store",
+#     "wasmtime_table_new": "new_table",
+#     "wasmtime_trap_new": "new_trap",
+
+#     "wasmtime_component_linker_new": "new_component_linker",
+#     "wasmtime_component_store_new": "new_component_store",
+#     "wasmtime_component_store_new": "new_component_store",
+#   }
+
+#   nameMap.withValue(name, n):
+#     result = n[]
+
+#   case kind
+#   of "enumval":
+#     result.removePrefix("WASM_")
+#     if not result.endsWith("_NONE"):
+#       result.removePrefix("WASMTIME_TRAP_CODE_")
+#       result.removePrefix("WASMTIME_OPT_LEVEL_")
+#       result.removePrefix("WASMTIME_PROFILING_STRATEGY_")
+#       result.removePrefix("WASMTIME_STRATEGY_")
+#       result.removePrefix("WASMTIME_COMPONENT_VAL_KIND_")
+#       result.removePrefix("WASMTIME_COMPONENT_RESOURCE_KIND_")
+#       result.removePrefix("WASMTIME_COMPONENT_ITEM_TYPE_")
+#     result.removePrefix("WASMTIME_")
+#     result = processName(result)
+
+#   of "enum":
+#     result.removePrefix("enum_")
+#     result.removeSuffix("_enum")
+#     result.removePrefix("wasmtime_")
+#     result = processName(result)
+#     enums.incl result
+
+#   of "union":
+#     result.removePrefix("union_")
+#     result.removeSuffix("_union")
+#     result.removePrefix("wasmtime_")
+#     result = processName(result)
+#     enums.incl result
+
+#   of "struct", "anon":
+#     result = processName(result)
+
+#   of "typedef":
+#     result.removePrefix("wasmtime_")
+#     result = processName(result)
+
+#   of "proc":
+#     makeUnique = false
+#     result.removePrefix("wasi_config_")
+
+#     result.removePrefix("wasm_byte_vec_")
+#     result.removePrefix("wasm_exporttype_vec_")
+#     result.removePrefix("wasm_extern_vec_")
+#     result.removePrefix("wasm_externtype_vec_")
+#     result.removePrefix("wasm_frame_vec_")
+#     result.removePrefix("wasm_functype_vec_")
+#     result.removePrefix("wasm_globaltype_vec_")
+#     result.removePrefix("wasm_importtype_vec_")
+#     result.removePrefix("wasm_memorytype_vec_")
+#     result.removePrefix("wasm_tabletype_vec_")
+#     result.removePrefix("wasm_val_vec_")
+#     result.removePrefix("wasm_valtype_vec_")
+
+#     result.removePrefix("wasm_config_")
+#     result.removePrefix("wasm_engine_")
+#     result.removePrefix("wasm_exporttype_")
+#     result.removePrefix("wasm_extern_")
+#     result.removePrefix("wasm_externtype_")
+#     result.removePrefix("wasm_foreign_")
+#     result.removePrefix("wasm_frame_")
+#     result.removePrefix("wasm_func_")
+#     result.removePrefix("wasm_functype_")
+#     result.removePrefix("wasm_global_")
+#     result.removePrefix("wasm_globaltype_")
+#     result.removePrefix("wasm_importtype_")
+#     result.removePrefix("wasm_instance_")
+#     result.removePrefix("wasm_memory_")
+#     result.removePrefix("wasm_memorytype_")
+#     result.removePrefix("wasm_module_")
+#     result.removePrefix("wasm_ref_")
+#     result.removePrefix("wasm_shared_")
+#     result.removePrefix("wasm_store_")
+#     result.removePrefix("wasm_table_")
+#     result.removePrefix("wasm_tabletype_")
+#     result.removePrefix("wasm_trap_")
+#     result.removePrefix("wasm_val_")
+#     result.removePrefix("wasm_valtype_")
+
+#     result.removePrefix("wasmtime_component_val_record_field_vec_")
+#     result.removePrefix("wasmtime_component_val_vec_")
+#     result.removePrefix("wasmtime_component_val_flags_vec_")
+
+#     result.removePrefix("wasmtime_component_linker_")
+#     result.removePrefix("wasmtime_component_store_")
+#     result.removePrefix("wasmtime_component_instance_")
+#     result.removePrefix("wasmtime_component_func_")
+#     result.removePrefix("wasmtime_component_val_flags_")
+
+#     result.removePrefix("wasmtime_anyref_")
+#     result.removePrefix("wasmtime_call_")
+#     result.removePrefix("wasmtime_component_")
+#     result.removePrefix("wasmtime_config_")
+#     result.removePrefix("wasmtime_context_")
+#     result.removePrefix("wasmtime_engine_")
+#     result.removePrefix("wasmtime_error_")
+#     result.removePrefix("wasmtime_extern_")
+#     result.removePrefix("wasmtime_externref_")
+#     result.removePrefix("wasmtime_func_")
+#     result.removePrefix("wasmtime_global_")
+#     result.removePrefix("wasmtime_guestprofiler_")
+#     result.removePrefix("wasmtime_instance_")
+#     result.removePrefix("wasmtime_linker_")
+#     result.removePrefix("wasmtime_memory_")
+#     result.removePrefix("wasmtime_memorytype_")
+#     result.removePrefix("wasmtime_module_")
+#     result.removePrefix("wasmtime_sharedmemory_")
+#     result.removePrefix("wasmtime_store_")
+#     result.removePrefix("wasmtime_table_")
+#     result.removePrefix("wasmtime_trap_")
+#     result.removePrefix("wasmtime_val_")
+
+#     result = camelName(result)
+
+#   else:
+#     discard
 
 when defined(useFuthark) or defined(useFutharkForWasmtime):
   import futhark
@@ -244,7 +410,10 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
 
       result.removePrefix("wasmtime_component_linker_")
       result.removePrefix("wasmtime_component_store_")
-      result.removePrefix("wasmtime_component_val_flags_")
+      result.removePrefix("wasmtime_component_valflags_")
+      result.removePrefix("wasmtime_component_valrecord_")
+      result.removePrefix("wasmtime_component_valtuple_")
+      result.removePrefix("wasmtime_component_vallist_")
 
       result.removePrefix("wasmtime_anyref_")
       result.removePrefix("wasmtime_call_")
@@ -307,12 +476,12 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
     "config.h"
     "store.h"
     "async.h"
-    # "component.h"
-    "component/component.h"
-    "component/func.h"
-    "component/instance.h"
-    "component/linker.h"
-    "component/val.h"
+    # if nimWasmtimeFeatureComponentModel:
+    #   "component/component.h"
+    #   "component/func.h"
+    #   "component/instance.h"
+    #   "component/linker.h"
+    #   "component/val.h"
     "engine.h"
     "extern.h"
     "func.h"
@@ -346,6 +515,8 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       import std/[options]
       from std/unicode import Rune, `$`
 
+      # proc `=destroy`*(self: StructWasmtimeComponentVal) {.nodestroy.}
+
       # todo
       # template owned(T: typed): untyped =
       #   proc `=copy`*(self: var T, src: T) {.error.}
@@ -358,6 +529,8 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       #       self.addr.delete()
 
       template vecType(T: untyped, unchecked: bool = true): untyped =
+        type ItemType = typeof(T().data[])
+
         proc `=copy`*(self: var T; src: T) {.error.}
 
         proc `=destroy`*(self: T) =
@@ -376,6 +549,8 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       vecType(WasmTabletypeVecT)
       vecType(WasmValVecT)
       vecType(WasmValtypeVecT)
+
+      # vecType(ComponentValflagsT, unchecked = false)
 
       # todo
       # owned(WasmConfigT)
@@ -415,6 +590,30 @@ when defined(useFuthark) or defined(useFutharkForWasmtime):
       # owned(ComponentStoreT)
       # owned(ComponentT)
 
+      # proc `=destroy`*(self: StructWasmtimeComponentVallist) {.nodestroy.} =
+      #   self.addr.delete()
+      # proc `=destroy`*(self: StructWasmtimeComponentValrecord) {.nodestroy.} =
+      #   self.addr.delete()
+      # proc `=destroy`*(self: StructWasmtimeComponentValtuple) {.nodestroy.} =
+      #   self.addr.delete()
+      # proc `=destroy`*(self: StructWasmtimeComponentValflags) {.nodestroy.} =
+      #   self.addr.delete()
+
+      # proc `=destroy`*(self: StructWasmtimeComponentVal) {.nodestroy.} =
+      #   case self.kind
+      #   of WASMTIME_COMPONENT_STRING:
+      #     `=destroy`(self.of_field.string)
+      #   of WASMTIME_COMPONENT_LIST:
+      #     `=destroy`(self.of_field.list)
+      #   of WASMTIME_COMPONENT_RECORD:
+      #     `=destroy`(self.of_field.record)
+      #   of WASMTIME_COMPONENT_TUPLE:
+      #     `=destroy`(self.of_field.tuple_field)
+      #   of WASMTIME_COMPONENT_FLAGS:
+      #     `=destroy`(self.of_field.flags)
+      #   else:
+      #     discard
+
     static:
       postProcess()
 
@@ -422,7 +621,11 @@ else: # defined(useFuthark) or defined(useFutharkForWasmtime)
   include bindings/wrapper
 
 from std/unicode import Rune, `$`
+import wit_types
+
 {.pop.}
+
+type WasmPtr* = distinct int32
 
 template vec(T: untyped, unchecked: bool = true): untyped =
   type ItemType = typeof(T().data[])
@@ -498,6 +701,12 @@ vec(WasmTabletypeVecT)
 vec(WasmValVecT)
 vec(WasmValtypeVecT)
 
+when nimWasmtimeFeatureComponentModel:
+  vec(ComponentValflagsT, unchecked = false)
+  vec(ComponentVallistT, unchecked = false)
+  vec(ComponentValrecordT, unchecked = false)
+  vec(ComponentValtupleT, unchecked = false)
+
 proc strVal*(name: WasmNameT): string =
   result = newStringOfCap(name.size.int)
   for i in 0..<name.size.int:
@@ -568,6 +777,456 @@ proc `$`*(self: ptr WasmImporttypeT): string =
     result.add name[].strVal
   result.add ": "
   result.add $self.type()
+
+proc toCamelCase(str: string, capitalizeFirst: bool): string =
+  for i, part in enumerate(str.split("-")):
+    if i == 0 and not capitalizeFirst:
+      result.add part
+    else:
+      result.add part.capitalizeAscii
+
+when nimWasmtimeFeatureComponentModel:
+  proc toVal*[T](a: T): ComponentValT =
+    # echo &"toVal {a}"
+    when T is bool:
+      result.kind = ComponentValKind.Bool.ComponentValKindT
+      result.of_field.boolean = a
+
+    elif T is int8:
+      result.kind = ComponentValKind.S8.ComponentValKindT
+      result.of_field.s8 = a
+
+    elif T is int16:
+      result.kind = ComponentValKind.S16.ComponentValKindT
+      result.of_field.s16 = a
+
+    elif T is int32:
+      result.kind = ComponentValKind.S32.ComponentValKindT
+      result.of_field.s32 = a
+
+    elif T is int64:
+      result.kind = ComponentValKind.S64.ComponentValKindT
+      result.of_field.s64 = a
+
+    elif T is uint8:
+      result.kind = ComponentValKind.U8.ComponentValKindT
+      result.of_field.u8 = a
+
+    elif T is uint16:
+      result.kind = ComponentValKind.U16.ComponentValKindT
+      result.of_field.u16 = a
+
+    elif T is uint32:
+      result.kind = ComponentValKind.U32.ComponentValKindT
+      result.of_field.u32 = a
+
+    elif T is uint64:
+      result.kind = ComponentValKind.U64.ComponentValKindT
+      result.of_field.u64 = a
+
+    elif T is float32:
+      result.kind = ComponentValKind.Float32.ComponentValKindT
+      result.of_field.f32 = a
+
+    elif T is float64:
+      result.kind = ComponentValKind.Float64.ComponentValKindT
+      result.of_field.f64 = a
+
+    elif T is Rune:
+      result.kind = ComponentValKind.Char.ComponentValKindT
+      result.of_field.character = a.uint32
+
+    elif T is string:
+      result.kind = ComponentValKind.String.ComponentValKindT
+      let name = a.toName
+      result.of_field.string = name
+
+    elif T is seq:
+      result.kind = ComponentValKind.List.ComponentValKindT
+      result.of_field.list.addr.newUninitialized(a.len.csize_t)
+      for i, v in a:
+        result.of_field.list[i] = v.toVal
+
+    elif T is system.set:
+      result.kind = ComponentValKind.Flags.ComponentValKindT
+      result.of_field.flags.addr.newUninitialized(a.len.csize_t)
+      for i, v in enumerate(a.items):
+        let name = ($v).toName
+        result.of_field.flags[i] = name
+
+    elif T is options.Option:
+      result.kind = ComponentValKind.Option.ComponentValKindT
+      if a.isSome:
+        result.of_field.option = valNew()
+        result.of_field.option[] = a.get.toVal
+      else:
+        result.of_field.option = nil
+
+    elif T is ress.Result:
+      result.kind = ComponentValKind.Result.ComponentValKindT
+      type OkType = typeof(a.value)
+      type ErrType = typeof(a.error)
+      result.of_field.result.val = nil
+      if a.isErr:
+        result.of_field.result.error = true
+        when ErrType isnot void:
+          result.of_field.result.val = valNew()
+          result.of_field.result.val[] = a.error.toVal
+      else:
+        result.of_field.result.error = false
+        when OkType isnot void:
+          result.of_field.result.val = valNew()
+          result.of_field.result.val[] = a.value.toVal
+
+    elif T is enum:
+      result.kind = ComponentValKind.Enum.ComponentValKindT
+      let name = ($a).toName
+      result.of_field.enumeration = name
+
+    elif T is tuple:
+      result.kind = ComponentValKind.Tuple.ComponentValKindT
+      var numFields = 0
+      for k, v in a.fieldPairs:
+        numFields.inc
+
+      result.of_field.tuple_field.addr.newUninitialized(numFields.csize_t)
+
+      var i = 0
+      for k, v in a.fieldPairs:
+        result.of_field.tuple_field[i] = v.toVal
+        inc i
+
+    elif T is object:
+      when not compiles(T().kind):
+        result.kind = ComponentValKind.Record.ComponentValKindT
+        var numFields = 0
+        for k, v in a.fieldPairs:
+          numFields.inc
+
+        result.of_field.record.addr.newUninitialized(numFields.csize_t)
+
+        var i = 0
+        for k, v in a.fieldPairs:
+          result.of_field.record[i] = ComponentValRecordFieldT(name: k.toName, val: v.toVal)
+          inc i
+
+      else:
+        result.kind = ComponentValKind.Variant.ComponentValKindT
+
+        type Kind = typeof(a.kind)
+        let name = ($a.kind).toName
+        result.of_field.variant.name = name
+
+        macro convertField(res: untyped, val: typed): untyped =
+          var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(val, ident"kind"))
+          var addElse = false
+          for v in Kind:
+            let kindName = ident(toCamelCase($v, true))
+            let fieldName = ident(toCamelCase($v, false))
+            var caseCode = genAst(res, val, fieldName):
+              # todo: check this `when` in the macro instead of in the returned code
+              when compiles(val.fieldName):
+                res = valNew()
+                res[] = val.fieldName.toVal
+            cases.add nnkOfBranch.newTree(kindName, caseCode)
+
+          return nnkStmtList.newTree(cases)
+
+        result.of_field.variant.val.convertField(a)
+
+    else:
+      {.error: "Can't convert type " & $T & " to ComponentValT".}
+
+proc toWasmValRaw*(a: char): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: bool): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: int8): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: uint8): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: int16): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: uint16): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: int32): ValRaw =
+  result.i32 = a
+
+proc toWasmValRaw*(a: uint32): ValRaw =
+  result.i32 = cast[int32](a)
+
+proc toWasmValRaw*(a: uint64): ValRaw =
+  result.i64 = cast[int64](a)
+
+proc toWasmValRaw*(a: int64): ValRaw =
+  result.i64 = a
+
+proc toWasmValRaw*(a: float32): ValRaw =
+  result.f32 = a
+
+proc toWasmValRaw*(a: float64): ValRaw =
+  result.f64 = a
+
+proc toWasmVal*(a: char): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: bool): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: int8): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: uint8): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: int16): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: uint16): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: int32): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = a
+
+proc toWasmVal*(a: uint32): ValT =
+  result.kind = WASMTIME_I32
+  result.of_field.i32 = cast[int32](a)
+
+proc toWasmVal*(a: uint64): ValT =
+  result.kind = WASMTIME_I64
+  result.of_field.i64 = cast[int64](a)
+
+proc toWasmVal*(a: int64): ValT =
+  result.kind = WASMTIME_I64
+  result.of_field.i64 = a
+
+proc toWasmVal*(a: float32): ValT =
+  result.kind = WASMTIME_F32
+  result.of_field.f32 = a
+
+proc toWasmVal*(a: float64): ValT =
+  result.kind = WASMTIME_F64
+  result.of_field.f64 = a
+
+proc `$`*(a: ValT): string =
+  case a.kind
+  of WASMTIME_I32: $a.of_field.i32
+  of WASMTIME_I64: $a.of_field.i64
+  of WASMTIME_F32: $a.of_field.f32
+  of WASMTIME_F64: $a.of_field.f64
+
+  of WASMTIME_V128: $a.of_field.v128
+  of WASMTIME_ANYREF: $a.of_field.anyref
+  of WASMTIME_EXTERNREF: $a.of_field.externref
+  of WASMTIME_FUNCREF: $a.of_field.funcref
+  else:
+    return
+
+proc to*(a: ValT, T: typedesc): T =
+  # echo a, ", ", a.kind.ComponentValKind, " to ", T
+  when T is int8:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.int8
+
+  elif T is int16:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.int16
+
+  elif T is int32:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32
+
+  elif T is WasmPtr:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.WasmPtr
+
+  elif T is int64:
+    assert a.kind == WASMTIME_I64
+    result = a.of_field.i64
+
+  elif T is float32:
+    assert a.kind == WASMTIME_F32
+    result = a.of_field.f32
+
+  elif T is float64:
+    assert a.kind == WASMTIME_F64
+    result = a.of_field.f64
+
+proc convert*(a: ValT, T: typedesc): T {.inline.} =
+  a.to(T)
+
+proc convert*(a: SomeInteger, T: typedesc): T {.inline.} =
+  cast[T](a)
+
+proc convert*(a: SomeFloat, T: typedesc): T {.inline.} =
+  cast[T](a)
+
+macro getSetTargetType(t: typed): untyped =
+  ## Given set[T], return T
+  return t.getTypeInst[1].getTypeImpl[1]
+
+when nimWasmtimeFeatureComponentModel:
+  proc to*(a: ComponentValT, T: typedesc): T =
+    # echo a, ", ", a.kind.ComponentValKind, " to ", T
+    when T is int8:
+      assert a.kind == ComponentValKind.S8.ComponentValKindT
+      result = a.of_field.s8
+
+    elif T is int16:
+      assert a.kind == ComponentValKind.S16.ComponentValKindT
+      result = a.of_field.s16
+
+    elif T is int32:
+      assert a.kind == ComponentValKind.S32.ComponentValKindT
+      result = a.of_field.s32
+
+    elif T is int64:
+      assert a.kind == ComponentValKind.S64.ComponentValKindT
+      result = a.of_field.s64
+
+    elif T is uint8:
+      assert a.kind == ComponentValKind.U8.ComponentValKindT
+      result = a.of_field.u8
+
+    elif T is uint16:
+      assert a.kind == ComponentValKind.U16.ComponentValKindT
+      result = a.of_field.u16
+
+    elif T is uint32:
+      assert a.kind == ComponentValKind.U32.ComponentValKindT
+      result = a.of_field.u32
+
+    elif T is uint64:
+      assert a.kind == ComponentValKind.U64.ComponentValKindT
+      result = a.of_field.u64
+
+    elif T is float32:
+      assert a.kind == ComponentValKind.Float32.ComponentValKindT
+      result = a.of_field.f32
+
+    elif T is float64:
+      assert a.kind == ComponentValKind.Float64.ComponentValKindT
+      result = a.of_field.f64
+
+    elif T is Rune:
+      assert a.kind == ComponentValKind.Char.ComponentValKindT
+      result = a.of_field.character.Rune
+
+    elif T is string:
+      assert a.kind == ComponentValKind.String.ComponentValKindT
+      result = a.of_field.string.strVal
+
+    # elif T is WitString:
+    #   assert a.kind == ComponentValKind.String.ComponentValKindT
+    #   result = ws(cast[ptr char](a.of_field.string.data), a.of_field.string.len)
+
+    elif T is bool:
+      assert a.kind == ComponentValKind.Bool.ComponentValKindT
+      result = a.of_field.boolean
+
+    elif T is seq:
+      assert a.kind == ComponentValKind.List.ComponentValKindT
+      type Item = typeof(result[0])
+      for v in a.of_field.list:
+        result.add v.to(Item)
+
+    # elif T is WitList:
+    #   assert a.kind == ComponentValKind.List.ComponentValKindT
+    #   type Item = typeof(result[0])
+    #   for v in a.of_field.list:
+    #     result.add v.to(Item)
+    #   # var res: seq[Item]
+    #   # for v in a.of_field.list:
+    #   #   res.add v.to(Item)
+
+    elif T is system.set:
+      assert a.kind == ComponentValKind.Flags.ComponentValKindT
+      type Item = T.getSetTargetType()
+      for v in a.of_field.flags:
+        let name = v.strVal
+        result.incl parseEnum[Item](name)
+
+    elif T is WitFlags:
+      assert a.kind == ComponentValKind.Flags.ComponentValKindT
+      type Item = T.getFlagsTargetType()
+      for v in a.of_field.flags:
+        let name = v.strVal
+        result.incl parseEnum[Item](name)
+
+    elif T is options.Option:
+      assert a.kind == ComponentValKind.Option.ComponentValKindT
+      if a.of_field.option != nil:
+        result = a.of_field.option[].to(typeof(result.get)).some
+
+    elif T is ress.Result:
+      assert a.kind == ComponentValKind.Result.ComponentValKindT
+      type OkType = typeof(result.value)
+      type ErrType = typeof(result.error)
+      if a.of_field.result.error:
+        when ErrType is void:
+          result = ress.Result[OkType, ErrType].err()
+        else:
+          result = ress.err(a.of_field.result.val[].to(ErrType))
+      else:
+        when OkType is void:
+          result = ress.Result[OkType, ErrType].ok()
+        else:
+          result = ress.ok(a.of_field.result.val[].to(OkType))
+
+    elif T is tuple:
+      if a.kind == ComponentValKind.Tuple.ComponentValKindT:
+        var i = 0
+        for k, v in result.fieldPairs:
+          v = a.of_field.tuple_field[i].to(typeof(v))
+          inc i
+
+    elif T is object:
+      if a.kind == ComponentValKind.Record.ComponentValKindT:
+        var i = 0
+        for k, v in result.fieldPairs:
+          v = a.of_field.record[i].val.to(typeof(v))
+          inc i
+
+      elif a.kind == ComponentValKind.Variant.ComponentValKindT:
+        when compiles(result.kind):
+          type Kind = typeof(result.kind)
+          let tag = parseEnum[Kind](a.of_field.variant.name.strVal)
+          result = T(kind: tag)
+
+          macro convertField(res: typed, val: untyped): untyped =
+            var cases = nnkCaseStmt.newTree(nnkDotExpr.newTree(res, ident"kind"))
+            var addElse = false
+
+            for v in Kind:
+              var caseCode = genAst(res, val, field = ident($v)):
+                # todo: check this `when` in the macro instead of in the returned code
+                when compiles(res.field):
+                  res.field = val.to(typeof(res.field))
+              cases.add nnkOfBranch.newTree(ident(toCamelCase($v, true)), caseCode)
+
+            return nnkStmtList.newTree(cases)
+
+          result.convertField(a.of_field.variant.val[])
+
+    elif T is enum:
+      assert a.kind == ComponentValKind.Enum.ComponentValKindT
+      parseEnum[T](a.of_field.enumeration.strVal)
+
+    else:
+      {.error: "Can't convert ComponentValT to " & $T.}
 
 type
   WasmtimeResultKind* = enum Ok, Err
@@ -649,6 +1308,19 @@ proc toResult*[T](self: sink WasmtimeResult[T], T2: typedesc): WasmtimeResult[T2
   else:
     WasmtimeResult[T2](kind: Ok)
 
+proc err*(T: typedesc, msg: string): WasmtimeResult[T] =
+  var frames: WasmFrameVecT
+  frames.addr.newEmpty()
+  WasmtimeResult[T](kind: Err, err: (msg, 1, frames))
+
+proc toResult*(self: ref Exception, T: typedesc): WasmtimeResult[T] =
+  if self != nil:
+    var frames: WasmFrameVecT
+    frames.addr.newEmpty()
+    WasmtimeResult[T](kind: Err, err: (self.msg, 1, frames))
+  else:
+    WasmtimeResult[T](kind: Ok)
+
 template okOr*[T](res: WasmtimeResult[T]; body: untyped): T =
   let temp = res
   if temp.isOk:
@@ -678,11 +1350,23 @@ template okOr*(res: ptr WasmTrapT; e: untyped; body: untyped): untyped =
     let e {.cursor.} = temp.err
     body
 
+# template `?`*[T](self: WasmtimeResult[T]): untyped =
+#   block:
+#     var t = self
+#     if t.isErr:
+#       return t.toResult(T)
+#     when T isnot void:
+#       t.val.ensureMove
+
 template `?`*[T](self: WasmtimeResult[T]): untyped =
   block:
     var t = self
     if t.isErr:
-      return t.toResult(void)
+      when compiles(result.val):
+        type ReturnType = typeof(result.val)
+        return t.toResult(ReturnType)
+      else:
+        return t.toResult(void)
     when T isnot void:
       t.val.ensureMove
 
@@ -712,15 +1396,31 @@ proc newModule*(engine: ptr WasmEngineT; wasm: string): WasmtimeResult[ptr Modul
     return err.toResult(ptr ModuleT)
   return res.ok
 
+proc wat2wasm*(wat: ptr UncheckedArray[char]; wat_len: csize_t; ret: ptr WasmByteVecT): ptr ErrorT {.cdecl, importc: "wasmtime_wat2wasm".}
+proc wat2wasm*(wat: openArray[char]): WasmtimeResult[WasmByteVecT] =
+  var res: WasmByteVecT
+  let err = wat2wasm(cast[ptr UncheckedArray[char]](wat[0].addr), wat.len.csize_t, res.addr)
+  if err != nil:
+    return err.toResult(WasmByteVecT)
+  return wasmtime.ok(res.ensureMove)
+
 proc imports*(module: ptr ModuleT): WasmImporttypeVecT =
   module.imports(result.addr)
 
 proc exports*(module: ptr ModuleT): WasmExporttypeVecT =
   module.exports(result.addr)
 
+when nimWasmtimeFeatureComponentModel:
+  proc newComponent*(engine: ptr WasmEngineT, buf: openArray[char]): WasmtimeResult[ptr ComponentT] =
+    var c: ptr ComponentT = nil
+    let err = engine.new(cast[ptr uint8](buf[0].addr), buf.len.csize_t, c.addr)
+    if err != nil:
+      return err.toResult(ptr ComponentT)
+    return ok(c)
+
 proc instantiate*(linker: ptr LinkerT, store: ptr ContextT, module: ptr ModuleT, trap: ptr ptr WasmTrapT): WasmtimeResult[InstanceT] =
   var instance: InstanceT
-  let err = linker.instantiate(store, module, instance.addr, trap)
+  let err = linker.instantiate(store, module, cast[ptr cint](instance.addr), trap)
   if err != nil:
     return err.toResult(InstanceT)
   return instance.ok
@@ -747,6 +1447,12 @@ proc getExport*(caller: ptr CallerT; name: string): Option[ExternT] =
   if caller.wasmtimeCallerExportGet(name.cstring, name.len.csize_t, res.addr):
     return res.some
 
+proc get*(table: TableT, store: ptr ContextT, index: int): Option[ValT] =
+  var res: ValT
+  if not get(store, table.addr, index.uint64, res.addr):
+    return ValT.none
+  return res.some
+
 proc data*[T](arr: openArray[T]): ptr T =
   if arr.len == 0:
     nil
@@ -756,6 +1462,59 @@ proc data*[T](arr: openArray[T]): ptr T =
 proc call*(f: ptr FuncT, store: ptr ContextT, args: openArray[ValT],
     results: openArray[ValT], trap: ptr ptr WasmTrapT): ptr ErrorT =
   store.call(f, args.data, args.len.csize_t, results.data, results.len.csize_t, trap)
+
+when nimWasmtimeFeatureComponentModel:
+  proc call*(f: ptr ComponentFuncT, context: ptr ContextT, args: openArray[ComponentValT],
+      results: openArray[ComponentValT]): WasmtimeResult[void] =
+    let argsPtr = if args.len > 0:
+      args[0].addr
+    else:
+      nil
+
+    let resultsPtr = if results.len > 0:
+      results[0].addr
+    else:
+      nil
+
+    result = f.funcCall(context, argsPtr, args.len.csize_t, resultsPtr, results.len.csize_t).toResult(void)
+
+  type ComponentFuncCallback*[T] = proc(ctx: ptr ContextT, data: ptr T, params: openArray[ComponentValT], results: var openArray[ComponentValT]): ptr WasmTrapT
+
+  proc funcNew*[T](linker: ptr ComponentLinkerT, env: string, name: string,
+      callback: ComponentFuncCallback[T], data: ptr T = nil,
+      finalizer: proc (a0: ptr T): void = nil): WasmtimeResult[void] =
+
+    type Data = object
+      callback: ComponentFuncCallback[T]
+      data: ptr T
+      finalizer: proc (a0: ptr T): void
+      env: string
+      name: string
+
+    var ctx = createShared(Data)
+    ctx.callback = callback
+    ctx.data = data
+    ctx.finalizer = finalizer
+    ctx.env = env
+    ctx.name = name
+
+    proc fin(data: pointer) {.cdecl.} =
+      let data = cast[ptr Data](data)
+      if data.finalizer != nil:
+        data.finalizer(data.data)
+      deallocShared(data)
+
+    proc cb(ctx: ptr ContextT, data: pointer, parameters: ptr ComponentValT, paramsLen: csize_t, results: ptr ComponentValT, resultsLen: csize_t): ptr WasmTrapT {.cdecl.} =
+      let data = cast[ptr Data](data)
+      let parameters = cast[ptr UncheckedArray[ComponentValT]](parameters)
+      let results = cast[ptr UncheckedArray[ComponentValT]](results)
+      try:
+        data[].callback(ctx, data[].data, parameters.toOpenArray(0, paramsLen.int - 1), results.toOpenArray(0, resultsLen.int - 1))
+      except Exception as e:
+        let msg = &"Failed to run func '{data.env}.{data.name}': {e.msg}\n{e.getStackTrace()}"
+        newTrap(msg.cstring, msg.len.csize_t)
+
+    return linker.funcNew(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, cb, ctx, fin).toResult(void)
 
 type FuncCallback*[T] = proc(ctx: ptr ContextT, caller: ptr CallerT, data: ptr T, params: var openArray[ValRawT]): ptr WasmTrapT
 
@@ -797,15 +1556,27 @@ proc defineFuncUnchecked*[T](linker: ptr LinkerT, env: string, name: string,
 
 template defineFuncUnchecked*(linker: ptr LinkerT, env: string, name: string, ty: ptr WasmFunctypeT, body: untyped): WasmtimeResult[void] =
   block:
+    proc cb(d: pointer, c: ptr CallerT, p: ptr ValRawT, pl: csize_t): ptr WasmTrapT {.cdecl.} =
+      let s = c.wasmtimeCallerContext()
+      let p = cast[ptr UncheckedArray[ValRawT]](p)
+
+      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: var openArray[ValRawT]): WasmtimeResult[void] {.nimcall, raises: [].} =
+        body
+
+      inner(s, c, p.toOpenArray(0, pl.int - 1)).okOr(e):
+        let msg = e.msg
+        return newTrap(msg.cstring, msg.len.csize_t)
+
+    linker.defineFuncUnchecked(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, ty, cb, nil, nil).toResult(void)
+
+template defineFuncUncheckedClosure*(linker: ptr LinkerT, env: string, name: string, ty: ptr WasmFunctypeT, body: untyped): WasmtimeResult[void] =
+  block:
     proc cb(s: ptr ContextT, c: ptr CallerT, data: ptr int, p: var openArray[ValRawT]): ptr WasmTrapT =
-      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: var openArray[ValRawT]): WasmtimeResult[void] =
-        # echo "[host] " & name & &" <- {parameters.len}"
-        # defer:
-        #   echo "[host] " & name & &" -> {parameters.len}"
+      proc inner(store {.inject.}: ptr ContextT, caller {.inject.}: ptr CallerT, parameters {.inject.}: var openArray[ValRawT]): WasmtimeResult[void] {.raises: [].} =
         body
 
       inner(s, c, p).okOr(e):
-        let msg = $e
+        let msg = e.msg
         return newTrap(msg.cstring, msg.len.csize_t)
 
       nil
@@ -814,7 +1585,346 @@ template defineFuncUnchecked*(linker: ptr LinkerT, env: string, name: string, ty
     let res = linker.defineFuncUnchecked[:int](env, funcName, cb, ty)
     res
 
+proc defineMemory*(linker: ptr LinkerT, store: ptr ContextT, engine: ptr WasmEngineT, env: string, name: string, ty: ptr WasmMemorytypeT): WasmtimeResult[void] =
+  var mem: MemoryT
+  ?newMemory(store, ty, mem.addr).toResult(void)
+
+  var item: ExternT
+  item.kind = WASMTIME_EXTERN_MEMORY
+  item.of_field.memory = mem
+
+  let res = define(linker, store, env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, item.addr)
+  res.toResult(void)
+
+proc defineSharedMemory*(linker: ptr LinkerT, store: ptr ContextT, env: string, name: string, mem: ptr SharedmemoryT): WasmtimeResult[void] =
+  var item: ExternT
+  item.kind = WASMTIME_EXTERN_SHAREDMEMORY
+  item.of_field.sharedmemory = mem
+
+  let res = define(linker, store, env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, item.addr)
+  res.toResult(void)
+
+proc createSharedMemory*(engine: ptr WasmEngineT, ty: ptr WasmMemorytypeT): WasmtimeResult[ptr SharedmemoryT] =
+  var sharedMem: ptr SharedmemoryT = nil
+  let err = engine.newSharedmemory(ty, sharedMem.addr)
+  if err != nil:
+    return err.toResult(ptr SharedmemoryT)
+  return ok(sharedMem)
+
+proc defineSharedMemory*(linker: ptr LinkerT, store: ptr ContextT, engine: ptr WasmEngineT, env: string, name: string, ty: ptr WasmMemorytypeT): WasmtimeResult[void] =
+  var sharedMem: ptr SharedmemoryT = nil
+  ?engine.newSharedmemory(ty, sharedMem.addr).toResult(void)
+  linker.defineSharedMemory(store, env, name, sharedMem)
+
+when nimWasmtimeFeatureComponentModel:
+  template defineFunc*(linker: ptr ComponentLinkerT, env: string, name: string, body: untyped): untyped =
+    block:
+      proc cb(s: ptr ContextT, data: ptr int, p: openArray[ComponentValT], r: var openArray[ComponentValT]): ptr WasmTrapT =
+        proc inner(store {.inject.}: ptr ContextT, parameters {.inject.}: openArray[ComponentValT], results {.inject.}: var openArray[ComponentValT]): WasmtimeResult[void] =
+          # echo "[host] " & name & &" <- {parameters}"
+          # defer:
+          #   echo "[host] " & name & &" -> {results}"
+          body
+
+        inner(s, p, r).okOr(e):
+          let msg = $e
+          return newTrap(msg.cstring, msg.len.csize_t)
+
+        nil
+
+      let funcName {.inject.} = name
+      let res = linker.funcNew[:int](env, funcName, cb)
+      res
+
+  proc resourceHostData*(ctx: ptr ContextT; val: ptr ComponentValT;
+                         T: typedesc): WasmtimeResult[ptr T] =
+    let data: pointer = nil
+    let err = ctx.resourceHostData(val, data.addr)
+    if err != nil:
+      return err.toResult(ptr T)
+    assert data != nil
+    return wasmtime.ok(cast[ptr T](data))
+
+  proc `$`*(a: ComponentValT): string =
+    case a.kind
+    of WASMTIME_COMPONENT_BOOL: $a.of_field.boolean
+    of WASMTIME_COMPONENT_S8: $a.of_field.s8
+    of WASMTIME_COMPONENT_U8: $a.of_field.u8
+    of WASMTIME_COMPONENT_S16: $a.of_field.s16
+    of WASMTIME_COMPONENT_U16: $a.of_field.u16
+    of WASMTIME_COMPONENT_S32: $a.of_field.s32
+    of WASMTIME_COMPONENT_U32: $a.of_field.u32
+    of WASMTIME_COMPONENT_S64: $a.of_field.s64
+    of WASMTIME_COMPONENT_U64: $a.of_field.u64
+    of WASMTIME_COMPONENT_F32: $a.of_field.f32
+    of WASMTIME_COMPONENT_F64: $a.of_field.f64
+    of WASMTIME_COMPONENT_CHAR: $a.of_field.character.Rune
+    of WASMTIME_COMPONENT_STRING: "\"" & $a.of_field.string.strVal & "\""
+
+    of WASMTIME_COMPONENT_LIST:
+      var str = "["
+      for i, v in a.of_field.list:
+        if i > 0: str.add ", "
+        str.add $v
+      str.add "]"
+      str
+
+    of WASMTIME_COMPONENT_RECORD:
+      var str = "{"
+      for i, v in a.of_field.record:
+        if i > 0: str.add ", "
+        str.add v.name.strVal
+        str.add ": "
+        str.add $v.val
+      str.add "}"
+      str
+
+    of WASMTIME_COMPONENT_TUPLE:
+      var str = "("
+      for i, v in a.of_field.tuple_field:
+        if i > 0: str.add ", "
+        str.add $v
+      str.add ")"
+      str
+
+    of WASMTIME_COMPONENT_VARIANT:
+      if a.of_field.variant.val != nil:
+        a.of_field.variant.discriminant.strVal & "(" & $a.of_field.variant.val[] & ")"
+      else:
+        a.of_field.variant.discriminant.strVal
+
+    of WASMTIME_COMPONENT_ENUM: a.of_field.enumeration.strVal
+
+    of WASMTIME_COMPONENT_OPTION:
+      if a.of_field.option != nil:
+        "Some(" & $(a.of_field.option[]) & ")"
+      else:
+        "none"
+
+    of WASMTIME_COMPONENT_RESULT:
+      if not a.of_field.result.is_ok:
+        if a.of_field.result.val == nil:
+          "Err()"
+        else:
+          "Err(" & $(a.of_field.result.val[]) & ")"
+      else:
+        if a.of_field.result.val == nil:
+          "Ok()"
+        else:
+          "Ok(" & $(a.of_field.result.val[]) & ")"
+
+    of WASMTIME_COMPONENT_FLAGS:
+      var str = "{"
+      for i, v in a.of_field.flags:
+        if i > 0: str.add ", "
+        str.add v.strVal
+      str.add "}"
+      str
+
+    else:
+      &"<unknown component val {a.kind.ComponentValkindT}>"
+
+    # of WASMTIME_COMPONENT_RESOURCE:
+    #   let name = a.addr.resourceDump()
+    #   name.strVal
+      # var str = "Resource(idx: " & $a.of_field.resource.idx & ", owned: " & $a.of_field.resource.owned_field & ", ty: "
+      # str.add case a.of_field.resource.ty.kind
+      # of Host: $a.of_field.resource.ty.of_field.host
+      # of Guest: $a.of_field.resource.ty.of_field.guest
+      # of Uninstantiated: $a.of_field.resource.ty.of_field.uninstantiated
+      # str.add ")"
+      # str
+
+  proc `$`*[S](a: array[S, ComponentValT]): string =
+    result = "["
+    for i in 0..a.high:
+      if i > 0:
+        result.add ", "
+      result.add $a[i]
+    result.add "]"
+
+  proc `$`*(a: openArray[ComponentValT]): string =
+    result = "["
+    for i in 0..a.high:
+      if i > 0:
+        result.add ", "
+      result.add $a[i]
+    result.add "]"
+
+  # proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, userId: int, drop: proc(p: pointer) {.cdecl.}): WasmtimeResult[void] =
+  #   return linker.defineResource(env.cstring, env.len.csize_t, name.cstring, name.len.csize_t, userId.csize_t, drop).toResult(void)
+
+  # proc defineResource*(linker: ptr ComponentLinkerT, env: string, name: string, T: typedesc): WasmtimeResult[void] =
+  #   proc deleteImpl(b: pointer) {.cdecl.} =
+  #     let b = cast[ptr T](b)
+  #     `=destroy`(b[])
+  #     deallocShared(b)
+  #   linker.defineResource(env, name, T.typeId, deleteImpl)
+
+  # proc resourceNew*[T](context: ptr ContextT, data: sink T): WasmtimeResult[ComponentValT] =
+  #   var res: ComponentValT
+  #   var r = createShared(T)
+  #   r[] = data.ensureMove
+  #   let err = context.resourceNew(T.typeId, res.addr, r)
+  #   if err != nil:
+  #     return err.toResult(ComponentValT)
+
+  #   return wasmtime.ok(res.ensureMove)
+
+  proc getExport*(component: ptr ComponentT, name: string, parentIndex = ComponentExportIndexT.none): Option[ComponentExportIndexT] =
+    var index: ComponentExportIndexT
+    let parentIndex = parentIndex
+    let parentIndexPtr = if parentIndex.isSome: parentIndex.get.addr else: nil
+    let ex = component.getExportIndex(parentIndexPtr, name.cstring, name.len.csize_t)
+    if ex != nil:
+      return ex[].some
+
+  # type
+  #   ComponentImportsCallback* = proc (path: string, name: string, typ: ComponentItemType)
+
+  # proc toString(s: cstring, l: csize_t): string =
+  #   result = newStringOfCap(l.int)
+  #   for i in 0..<l.int:
+  #     result.add s[i]
+
+  # proc iterateImports*(component: ptr ComponentT, cb: ComponentImportsCallback) =
+  #   var data = cb
+
+  #   proc cbInner(data: pointer, path: cstring, pathLen: csize_t, name: cstring, nameLen: csize_t, typ: ComponentItemTypeT) {.cdecl.} =
+  #     let cb = cast[ptr ComponentImportsCallback](data)[]
+  #     cb(toString(path, pathLen), toString(name, nameLen), typ.ComponentItemType)
+
+  #   component.iterateImports(cbInner, data.addr)
+
 proc newFuncType*(parameters: openArray[WasmValkind], results: openArray[WasmValkind]): ptr WasmFunctypeT =
   var parameters = parameters.mapIt(newValType(it.WasmValkindT)).toVec
   var results = results.mapIt(newValType(it.WasmValkindT)).toVec
   newFunctype(parameters.addr, results.addr)
+
+type WasmMemory* = object
+  data: ptr UncheckedArray[uint8]
+  len: int = int.high
+
+proc `+`*(a: WasmPtr, b: SomeInteger): WasmPtr = (a.int32 + b.int32).WasmPtr
+
+proc initWasmMemory*(mem: ptr SharedmemoryT): WasmMemory =
+  let data = data(mem)
+  let dataSize = dataSize(mem)
+  return WasmMemory(data: cast[ptr UncheckedArray[uint8]](data), len: dataSize.int)
+
+proc initWasmMemory*(store: ptr ContextT, mem: ptr MemoryT): WasmMemory =
+  let data = cast[ptr UncheckedArray[uint8]](store.data(mem))
+  let dataSize = store.dataSize(mem)
+  return WasmMemory(data: cast[ptr UncheckedArray[uint8]](data), len: dataSize.int)
+
+proc write*[T](mem: WasmMemory, p: WasmPtr, data: T) =
+  let p = p.int
+  assert p >= 0 and p + sizeof(T) <= mem.len
+  cast[ptr T](mem.data[p].addr)[] = data
+
+proc read*[T](mem: WasmMemory, p: WasmPtr): T =
+  let p = p.int
+  assert p >= 0 and p + sizeof(T) <= mem.len
+  return cast[ptr T](mem.data[p].addr)[]
+
+proc `[]`*(mem: WasmMemory, p: WasmPtr): uint8 {.inline.} =
+  let p = p.int
+  assert p >= 0 and p < mem.len
+  return mem.data[p]
+
+proc `[]`*(mem: WasmMemory, p: int): uint8 {.inline.} =
+  assert p >= 0 and p < mem.len
+  return mem.data[p]
+
+proc `[]`*(mem: var WasmMemory, p: WasmPtr): var uint8 {.inline.} =
+  let p = p.int
+  assert p >= 0 and p < mem.len
+  return mem.data[p]
+
+proc `[]`*(mem: var WasmMemory, p: int): var uint8 {.inline.} =
+  assert p >= 0 and p < mem.len
+  return mem.data[p]
+
+proc `[]=`*(mem: var WasmMemory, p: WasmPtr, data: uint8) {.inline.} =
+  let p = p.int
+  assert p >= 0 and p < mem.len
+  mem.data[p] = data
+
+proc `[]=`*(mem: var WasmMemory, p: int, data: uint8) {.inline.} =
+  assert p >= 0 and p < mem.len
+  mem.data[p] = data
+
+proc getRawPtr*(mem: WasmMemory, p: WasmPtr): ptr UncheckedArray[uint8] =
+  let p = p.int
+  assert p >= 0 and p < mem.len
+  return cast[ptr UncheckedArray[uint8]](mem.data[p].addr)
+
+proc getTypedPtr*[T](mem: WasmMemory, p: WasmPtr): ptr T =
+  let p = p.int
+  assert p >= 0 and p + sizeof(T) <= mem.len
+  return cast[ptr T](mem.data[p].addr)
+
+template getOpenArray*[T](mem: WasmMemory, address: WasmPtr, length: int): openArray[T] =
+  block:
+    let p = address.int
+    assert p >= 0 and p + sizeof(T) <= mem.len
+    cast[ptr UncheckedArray[T]](mem.data[p].addr).toOpenArray(0, length - 1)
+
+proc realloc*(fun: FuncT, store: ptr ContextT, address: WasmPtr, originalLen: int32, alignment: int32, byteSize: int32): WasmtimeResult[WasmPtr] =
+  var t: ptr WasmTrapT = nil
+  var args: array[4, ValT]
+  args[0].kind = WASMTIME_I32
+  args[0].of_field.i32 = address.int32 # original ptr
+  args[1].kind = WASMTIME_I32
+  args[1].of_field.i32 = originalLen # original len
+  args[2].kind = WASMTIME_I32
+  args[2].of_field.i32 = alignment # alignment
+  args[3].kind = WASMTIME_I32
+  args[3].of_field.i32 = byteSize # byte size
+  var results: array[1, ValT]
+  let err = fun.addr.call(store, args, results, t.addr)
+  if err != nil:
+    return err.toResult(WasmPtr)
+  assert results[0].kind == WASMTIME_I32
+  return results[0].of_field.i32.WasmPtr.ok
+
+proc dealloc*(fun: FuncT, store: ptr ContextT, address: WasmPtr, originalLen: int32, alignment: int32): WasmtimeResult[void] =
+  var t: ptr WasmTrapT = nil
+  var args: array[4, ValT]
+  args[0].kind = WASMTIME_I32
+  args[0].of_field.i32 = address.int32 # original ptr
+  args[1].kind = WASMTIME_I32
+  args[1].of_field.i32 = originalLen # original len
+  args[2].kind = WASMTIME_I32
+  args[2].of_field.i32 = alignment # alignment
+  return fun.addr.call(store, args, [], t.addr).toResult(void)
+
+proc stackAlloc*(fun: FuncT, store: ptr ContextT, size: int32, alignment: int32): WasmtimeResult[WasmPtr] =
+  var t: ptr WasmTrapT = nil
+  var args: array[2, ValT]
+  args[0].kind = WASMTIME_I32
+  args[0].of_field.i32 = size # size
+  args[1].kind = WASMTIME_I32
+  args[1].of_field.i32 = alignment # alignment
+  var results: array[1, ValT]
+  let err = fun.addr.call(store, args, results, t.addr)
+  if err != nil:
+    return err.toResult(WasmPtr)
+  assert results[0].kind == WASMTIME_I32
+  return results[0].of_field.i32.WasmPtr.ok
+
+proc stackSave*(fun: FuncT, store: ptr ContextT): WasmtimeResult[uint64] =
+  var t: ptr WasmTrapT = nil
+  var results: array[1, ValT]
+  let err = fun.addr.call(store, [], results, t.addr)
+  if err != nil:
+    return err.toResult(uint64)
+  assert results[0].kind == WASMTIME_I64
+  return cast[uint64](results[0].of_field.i64).ok
+
+proc stackRestore*(fun: FuncT, store: ptr ContextT, point: uint64): WasmtimeResult[void] =
+  var t: ptr WasmTrapT = nil
+  var args: array[1, ValT]
+  args[0].kind = WASMTIME_I64
+  args[0].of_field.i64 = cast[int64](point)
+  return fun.addr.call(store, args, [], t.addr).toResult(void)

@@ -1,3 +1,8 @@
 switch("d", "nimWasmtimeWasi")
 switch("debugger", "native")
 switch("lineDir", "off")
+# begin Nimble config (version 2)
+--noNimblePath
+when withDir(thisDir(), system.fileExists("nimble.paths")):
+  include "nimble.paths"
+# end Nimble config
