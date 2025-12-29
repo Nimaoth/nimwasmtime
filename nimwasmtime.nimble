@@ -32,6 +32,8 @@ let wasmtimeFeatures = [
   ("WASMTIME_FEATURE_WINCH", true),
 ]
 
+import std/[strutils, os]
+
 task nimgen, "Nimgen":
   if gorgeEx(cmd & "nimgen").exitCode != 0:
     withDir(".."):
@@ -69,9 +71,9 @@ import std/strformat
 proc getCommandLineParams(): string =
   defer:
     echo "Additional command line params: ", result
-  if commandLineParams.len < 3:
+  if commandLineParams().len < 3:
     return ""
-  return commandLineParams[3..^1].join(" ")
+  return commandLineParams()[3..^1].join(" ")
 
 task buildWasmComponent, "":
   exec &"nim c -d:debug --skipParentCfg {getCommandLineParams()} \"--passL:-o tests/wasm/plugin1.m.wasm\" ./tests/wasm/plugin1.nim"
