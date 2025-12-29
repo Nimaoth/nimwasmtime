@@ -10,7 +10,6 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 2.0.8"
-requires "https://github.com/Nimaoth/nimgen >= 0.5.4"
 
 var
   cmd = when defined(Windows): "cmd /c " else: ""
