@@ -114,16 +114,17 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
       nameStr = fun.name.replace('-', '_'),
       instance = ident"instance",
       context = ident"context",
-      f = genSym(nskLet, "f"),
+      f = ident("f"),
       funcs = ident"funcs",
       ):
 
-    let f = instance.getExport(context, nameStr)
-    if f.isSome:
-      assert f.get.kind == WASMTIME_EXTERN_FUNC
-      funcs.name = f.get.of_field.func_field
-    else:
-      echo "Failed to find exported function '", nameStr, "'"
+    block:
+      let f = instance.getExport(context, nameStr)
+      if f.isSome:
+        assert f.get.kind == WASMTIME_EXTERN_FUNC
+        funcs.name = f.get.of_field.func_field
+      else:
+        echo "Failed to find exported function '", nameStr, "'"
 
   collectExportsBody.add getExportCode
 
