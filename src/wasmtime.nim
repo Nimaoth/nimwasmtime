@@ -1041,13 +1041,25 @@ proc to*(a: ValT, T: typedesc): T =
     assert a.kind == WASMTIME_I32
     result = a.of_field.i32.int8
 
+  elif T is uint8:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.uint8
+
   elif T is int16:
     assert a.kind == WASMTIME_I32
     result = a.of_field.i32.int16
 
+  elif T is uint16:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.uint16
+
   elif T is int32:
     assert a.kind == WASMTIME_I32
     result = a.of_field.i32
+
+  elif T is uint32:
+    assert a.kind == WASMTIME_I32
+    result = a.of_field.i32.uint32
 
   elif T is WasmPtr:
     assert a.kind == WASMTIME_I32
@@ -1056,6 +1068,10 @@ proc to*(a: ValT, T: typedesc): T =
   elif T is int64:
     assert a.kind == WASMTIME_I64
     result = a.of_field.i64
+
+  elif T is uint64:
+    assert a.kind == WASMTIME_I64
+    result = a.of_field.i64.uint64
 
   elif T is float32:
     assert a.kind == WASMTIME_F32

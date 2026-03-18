@@ -116,6 +116,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
       context = ident"context",
       f = ident("f"),
       funcs = ident"funcs",
+      errors = ident"result",
       ):
 
     block:
@@ -124,7 +125,7 @@ proc genExport*(ctx: WitContext, collectExportsBody: NimNode, funcList: NimNode,
         assert f.get.kind == WASMTIME_EXTERN_FUNC
         funcs.name = f.get.of_field.func_field
       else:
-        echo "Failed to find exported function '", nameStr, "'"
+        errors.add  "Failed to find exported function '" & $nameStr & "'"
 
   collectExportsBody.add getExportCode
 
@@ -485,7 +486,7 @@ macro importWitImpl(witPath: static[string], cacheFile: static[string], nameMap:
       funcs = ident"funcs",
       err = ident"err"):
 
-    proc name*(funcs: var funcsType, instance: InstanceT, context: ptr ContextT) =
+    proc name*(funcs: var funcsType, instance: InstanceT, context: ptr ContextT): seq[string] =
       funcs.mContext = context
       funcs.mMemory = instance.getExport(context, "memory")
       funcs.mRealloc = instance.getExport(context, "cabi_realloc")
